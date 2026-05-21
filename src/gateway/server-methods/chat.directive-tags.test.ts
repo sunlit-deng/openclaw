@@ -77,6 +77,7 @@ const mockState = vi.hoisted(() => ({
   maxActiveSaveMediaCalls: 0,
   sandboxWorkspace: null as { workspaceDir: string; containerWorkdir?: string } | null,
   stageSandboxMediaError: null as Error | null,
+  postDispatchCleanupError: null as Error | null,
   stagedRelativePaths: null as string[] | null,
   hasBeforeAgentRunHooks: false,
   dispatchBlockedByBeforeAgentRun: false,
@@ -254,6 +255,26 @@ vi.mock("../../plugins/hook-runner-global.js", () => ({
       hookName === "before_agent_run" && mockState.hasBeforeAgentRunHooks,
   }),
 }));
+
+vi.mock("../../infra/diagnostics-timeline.js", async () => {
+  const original = await vi.importActual<typeof import("../../infra/diagnostics-timeline.js")>(
+    "../../infra/diagnostics-timeline.js",
+  );
+  const measureDiagnosticsTimelineSpan: typeof original.measureDiagnosticsTimelineSpan = async (
+    name,
+    run,
+    options,
+  ) => {
+    if (name === "gateway.chat_send.post_dispatch" && mockState.postDispatchCleanupError) {
+      throw mockState.postDispatchCleanupError;
+    }
+    return await original.measureDiagnosticsTimelineSpan(name, run, options);
+  };
+  return {
+    ...original,
+    measureDiagnosticsTimelineSpan: vi.fn(measureDiagnosticsTimelineSpan),
+  };
+});
 
 vi.mock("../../sessions/transcript-events.js", () => ({
   emitSessionTranscriptUpdate: vi.fn(
@@ -559,6 +580,7 @@ function createScopedCliClient(
 function createChatContext(): Pick<
   GatewayRequestContext,
   | "broadcast"
+  | "broadcastToConnIds"
   | "nodeSendToSession"
   | "agentRunSeq"
   | "chatAbortControllers"
@@ -572,12 +594,14 @@ function createChatContext(): Pick<
   | "addChatRun"
   | "removeChatRun"
   | "dedupe"
+  | "getSessionEventSubscriberConnIds"
   | "loadGatewayModelCatalog"
   | "registerToolEventRecipient"
   | "logGateway"
 > {
   return {
     broadcast: vi.fn() as unknown as GatewayRequestContext["broadcast"],
+    broadcastToConnIds: vi.fn() as unknown as GatewayRequestContext["broadcastToConnIds"],
     nodeSendToSession: vi.fn() as unknown as GatewayRequestContext["nodeSendToSession"],
     agentRunSeq: new Map<string, number>(),
     chatAbortControllers: new Map(),
@@ -591,6 +615,7 @@ function createChatContext(): Pick<
     addChatRun: vi.fn(),
     removeChatRun: vi.fn(),
     dedupe: new Map(),
+    getSessionEventSubscriberConnIds: vi.fn(() => new Set<string>()),
     loadGatewayModelCatalog: async () =>
       mockState.modelCatalog ?? [
         {
@@ -715,6 +740,7 @@ describe("chat directive tag stripping for non-streaming final payloads", () => 
     bindingMocks.resolveByConversation.mockReturnValue(null);
     mockState.sandboxWorkspace = null;
     mockState.stageSandboxMediaError = null;
+    mockState.postDispatchCleanupError = null;
     mockState.stagedRelativePaths = null;
     mockState.unstagedSources = null;
     mockState.deleteMediaBufferCalls = [];
@@ -4243,6 +4269,32 @@ describe("chat directive tag stripping for non-streaming final payloads", () => 
     expect(response?.[0]).toBe(false);
     expect(response?.[1]).toBeUndefined();
     expect(response?.[2]?.code).toBe(ErrorCodes.UNAVAILABLE);
+  });
+
+  it("caches completed agent runs when post-dispatch cleanup fails", async () => {
+    createTranscriptFixture("openclaw-chat-send-cleanup-error-dedupe-");
+    mockState.triggerAgentRunStart = true;
+    mockState.postDispatchCleanupError = new Error("cleanup failed after dispatch");
+    const respond = vi.fn();
+    const context = createChatContext();
+
+    await runNonStreamingChatSend({
+      context,
+      respond,
+      idempotencyKey: "idem-cleanup-error-dedupe",
+      message: "describe image",
+      waitFor: "none",
+    });
+
+    await waitForAssertion(() => {
+      expect(context.logGateway.warn).toHaveBeenCalledWith(
+        expect.stringContaining("webchat post-dispatch cleanup failed after agent run completion"),
+      );
+    });
+    expect(context.dedupe.get("chat:idem-cleanup-error-dedupe")?.payload).toMatchObject({
+      runId: "idem-cleanup-error-dedupe",
+      status: "ok",
+    });
   });
 
   it("persists chat.send attachments one at a time", async () => {

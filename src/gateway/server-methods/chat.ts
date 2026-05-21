@@ -2106,6 +2106,21 @@ export function resolveChatDispatchErrorFailureMode(params: {
   return "fail-session";
 }
 
+function cacheCompletedChatRun(params: {
+  context: Pick<GatewayRequestContext, "dedupe">;
+  runId: string;
+}) {
+  setGatewayDedupeEntry({
+    dedupe: params.context.dedupe,
+    key: `chat:${params.runId}`,
+    entry: {
+      ts: Date.now(),
+      ok: true,
+      payload: { runId: params.runId, status: "ok" as const },
+    },
+  });
+}
+
 export const chatHandlers: GatewayRequestHandlers = {
   "chat.history": async ({ params, respond, context }) => {
     if (!validateChatHistoryParams(params)) {
@@ -3524,28 +3539,7 @@ export const chatHandlers: GatewayRequestHandlers = {
                 await emitUserTranscriptUpdateAfterAgentRun();
               }
               if (!context.chatAbortedRuns.has(clientRunId)) {
-                const returnedAgentError = shouldBroadcastAgentError
-                  ? errorShape(
-                      ErrorCodes.UNAVAILABLE,
-                      returnedAgentErrorMessage ?? "agent returned an error payload",
-                    )
-                  : undefined;
-                setGatewayDedupeEntry({
-                  dedupe: context.dedupe,
-                  key: `chat:${clientRunId}`,
-                  entry: {
-                    ts: Date.now(),
-                    ok: !shouldBroadcastAgentError,
-                    payload: shouldBroadcastAgentError
-                      ? {
-                          runId: clientRunId,
-                          status: "error" as const,
-                          summary: returnedAgentErrorMessage ?? "agent returned an error payload",
-                        }
-                      : { runId: clientRunId, status: "ok" as const },
-                    ...(returnedAgentError ? { error: returnedAgentError } : {}),
-                  },
-                });
+                cacheCompletedChatRun({ context, runId: clientRunId });
               }
             },
             {
@@ -3579,6 +3573,7 @@ export const chatHandlers: GatewayRequestHandlers = {
             return;
           }
           if (failureMode === "skip-completed-agent-cleanup") {
+            cacheCompletedChatRun({ context, runId: clientRunId });
             context.logGateway.warn(
               `webchat post-dispatch cleanup failed after agent run completion: ${formatForLog(err)}`,
             );
