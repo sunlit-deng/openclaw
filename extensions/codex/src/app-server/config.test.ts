@@ -793,6 +793,41 @@ allowed_sandbox_modes = ["read-only", "workspace-write"]
     });
   });
 
+  it("overrides explicit app-server policy fields for ask mode", () => {
+    const configRuntime = resolveRuntimeForTest({
+      pluginConfig: {
+        appServer: {
+          mode: "yolo",
+          approvalPolicy: "never",
+          sandbox: "danger-full-access",
+          approvalsReviewer: "auto_review",
+        },
+      },
+      execMode: "ask",
+      env: {},
+    });
+    const envRuntime = resolveRuntimeForTest({
+      pluginConfig: {},
+      execMode: "ask",
+      env: {
+        OPENCLAW_CODEX_APP_SERVER_MODE: "yolo",
+        OPENCLAW_CODEX_APP_SERVER_APPROVAL_POLICY: "never",
+        OPENCLAW_CODEX_APP_SERVER_SANDBOX: "danger-full-access",
+      },
+    });
+
+    expectRuntimePolicy(configRuntime, {
+      approvalPolicy: "on-request",
+      sandbox: "workspace-write",
+      approvalsReviewer: "user",
+    });
+    expectRuntimePolicy(envRuntime, {
+      approvalPolicy: "on-request",
+      sandbox: "workspace-write",
+      approvalsReviewer: "user",
+    });
+  });
+
   it("fails closed when normalized OpenClaw ask mode cannot use user approvals", () => {
     expect(() =>
       resolveRuntimeForTest({

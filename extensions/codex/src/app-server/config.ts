@@ -416,6 +416,13 @@ export function resolveCodexAppServerRuntimeOptions(
           platform: params.platform,
           hostName: params.hostName,
         });
+  const forcedPolicy = forceUserReviewer
+    ? {
+        approvalPolicy: defaultPolicy?.approvalPolicy ?? "on-request",
+        sandbox: defaultPolicy?.sandbox ?? "workspace-write",
+        approvalsReviewer: defaultPolicy?.approvalsReviewer ?? "user",
+      }
+    : undefined;
   const policyMode = explicitPolicyMode ?? normalizedPolicyMode ?? defaultPolicy?.mode ?? "yolo";
   const serviceTier = normalizeCodexServiceTier(config.serviceTier);
   if (transport === "websocket" && !url) {
@@ -450,16 +457,19 @@ export function resolveCodexAppServerRuntimeOptions(
         }
       : {}),
     approvalPolicy:
+      forcedPolicy?.approvalPolicy ??
       resolveApprovalPolicy(config.approvalPolicy) ??
       resolveApprovalPolicy(env.OPENCLAW_CODEX_APP_SERVER_APPROVAL_POLICY) ??
       defaultPolicy?.approvalPolicy ??
       (policyMode === "guardian" ? "on-request" : "never"),
     sandbox:
+      forcedPolicy?.sandbox ??
       resolveSandbox(config.sandbox) ??
       resolveSandbox(env.OPENCLAW_CODEX_APP_SERVER_SANDBOX) ??
       defaultPolicy?.sandbox ??
       (policyMode === "guardian" ? "workspace-write" : "danger-full-access"),
     approvalsReviewer:
+      forcedPolicy?.approvalsReviewer ??
       resolveApprovalsReviewer(config.approvalsReviewer) ??
       defaultPolicy?.approvalsReviewer ??
       (policyMode === "guardian" ? "auto_review" : "user"),
