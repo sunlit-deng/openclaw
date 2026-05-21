@@ -252,12 +252,13 @@ function buildSourceReplyPayloadFromMessageToolSend(params: {
 }): MessagingToolSourceReplyPayload | undefined {
   const args = sanitizeMessageToolSendArgs(params.args);
   const pendingText = params.pendingText ? sanitizeMessageToolText(params.pendingText) : undefined;
-  const rawText =
+  const messageText =
     pendingText ??
     readStringValue(args.text) ??
     readStringValue(args.message) ??
-    readStringValue(args.content) ??
-    readStringValue(args.caption);
+    readStringValue(args.content);
+  const captionText = readStringValue(args.caption);
+  const rawText = messageText?.trim() ? messageText : (captionText ?? messageText);
   const parsedText =
     rawText === undefined ? undefined : parseReplyDirectives(rawText.replaceAll("\\n", "\n"));
   const text = parsedText?.text ?? rawText;

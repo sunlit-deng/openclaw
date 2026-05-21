@@ -1269,6 +1269,7 @@ describe("messaging tool media URL tracking", () => {
       args: {
         action: "send",
         mediaUrl: "file:///reply.png",
+        message: "   ",
         caption: "caption from webchat",
       },
     });
