@@ -16,6 +16,7 @@ import {
   type NativeHookRelayEvent,
   type NativeHookRelayRegistrationHandle,
 } from "openclaw/plugin-sdk/agent-harness-runtime";
+import { loadExecApprovals } from "openclaw/plugin-sdk/infra-runtime";
 import { handleCodexAppServerApprovalRequest } from "./approval-bridge.js";
 import { refreshCodexAppServerAuthTokens } from "./auth-bridge.js";
 import { isCodexAppServerApprovalRequest, type CodexAppServerClient } from "./client.js";
@@ -210,6 +211,7 @@ export async function runCodexAppServerSideQuestion(
     config: params.cfg,
     agentId: sessionAgentId,
     execOverrides: resolveSideSessionExecOverrides(params.sessionEntry),
+    approvalDefaults: loadExecApprovals().defaults,
   });
   const appServer = resolveCodexAppServerRuntimeOptions({
     pluginConfig,

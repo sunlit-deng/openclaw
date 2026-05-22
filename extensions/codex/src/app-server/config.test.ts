@@ -1151,6 +1151,70 @@ allowed_sandbox_modes = ["read-only", "workspace-write"]
     ).toThrow("legacy full exec security with ask requires Codex app-server danger-full-access");
   });
 
+  it("applies host exec approval security floors before starting Codex app-server", () => {
+    const execPolicy = resolveOpenClawExecPolicyForCodexAppServer({
+      config: {
+        tools: {
+          exec: {
+            mode: "full",
+          },
+        },
+      },
+      approvalDefaults: {
+        security: "deny",
+      },
+    });
+
+    expect(execPolicy.mode).toBe("deny");
+    expect(() =>
+      resolveRuntimeForTest({
+        pluginConfig: {
+          appServer: {
+            mode: "yolo",
+            approvalPolicy: "never",
+            sandbox: "danger-full-access",
+          },
+        },
+        execPolicy,
+      }),
+    ).toThrow("Codex app-server local execution is not available when tools.exec.mode=deny");
+  });
+
+  it("applies host exec approval ask floors before starting Codex app-server", () => {
+    const execPolicy = resolveOpenClawExecPolicyForCodexAppServer({
+      config: {
+        tools: {
+          exec: {
+            mode: "full",
+          },
+        },
+      },
+      approvalDefaults: {
+        ask: "always",
+      },
+    });
+
+    expect(execPolicy.mode).toBe("ask");
+    expectRuntimePolicy(
+      resolveRuntimeForTest({
+        pluginConfig: {
+          appServer: {
+            mode: "yolo",
+            approvalPolicy: "never",
+            sandbox: "workspace-write",
+            approvalsReviewer: "auto_review",
+          },
+        },
+        execPolicy,
+      }),
+      {
+        approvalPolicy: "on-request",
+        sandbox: "danger-full-access",
+        approvalsReviewer: "user",
+      },
+    );
+  });
+
   it("treats ask-only legacy overrides as normalized mode overrides", () => {
     const config = {
       tools: {

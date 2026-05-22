@@ -53,13 +53,8 @@ import {
   type NativeHookRelayRegistrationHandle,
 } from "openclaw/plugin-sdk/agent-harness-runtime";
 import { markAuthProfileBlockedUntil, resolveAgentDir } from "openclaw/plugin-sdk/agent-runtime";
-import {
-  emitTrustedDiagnosticEvent,
-  hasPendingInternalDiagnosticEvent,
-  onInternalDiagnosticEvent,
-  type DiagnosticEventPayload,
-} from "openclaw/plugin-sdk/diagnostic-runtime";
-import { isToolAllowed } from "openclaw/plugin-sdk/sandbox";
+import { emitTrustedDiagnosticEvent } from "openclaw/plugin-sdk/diagnostic-runtime";
+import { loadExecApprovals } from "openclaw/plugin-sdk/infra-runtime";
 import { pathExists } from "openclaw/plugin-sdk/security-runtime";
 import { defaultCodexAppInventoryCache } from "./app-inventory-cache.js";
 import { handleCodexAppServerApprovalRequest } from "./approval-bridge.js";
@@ -954,6 +949,7 @@ export async function runCodexAppServerAttempt(
     pluginConfig,
     execPolicy: resolveOpenClawExecPolicyForCodexAppServer({
       execOverrides: params.execOverrides,
+      approvalDefaults: loadExecApprovals().defaults,
       config: params.config,
       agentId: sessionAgentId,
     }),

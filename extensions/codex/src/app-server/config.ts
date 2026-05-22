@@ -15,6 +15,10 @@ type CodexAppServerPolicyMode = "yolo" | "guardian";
 type OpenClawExecMode = "deny" | "allowlist" | "ask" | "auto" | "full";
 type OpenClawExecSecurity = "deny" | "allowlist" | "full";
 type OpenClawExecAsk = "off" | "on-miss" | "always";
+type OpenClawExecApprovalDefaultsForCodexAppServer = {
+  security?: OpenClawExecSecurity;
+  ask?: OpenClawExecAsk;
+};
 export type OpenClawExecPolicyForCodexAppServer = {
   mode?: OpenClawExecMode;
   security: OpenClawExecSecurity;
@@ -1101,6 +1105,7 @@ export function resolveOpenClawExecModeForCodexAppServer(params: {
     security?: unknown;
     ask?: unknown;
   };
+  approvalDefaults?: OpenClawExecApprovalDefaultsForCodexAppServer;
   config?: unknown;
   agentId?: string;
 }): OpenClawExecMode | undefined {
@@ -1114,6 +1119,7 @@ export function resolveOpenClawExecPolicyForCodexAppServer(params: {
     security?: unknown;
     ask?: unknown;
   };
+  approvalDefaults?: OpenClawExecApprovalDefaultsForCodexAppServer;
   config?: unknown;
   agentId?: string;
 }): OpenClawExecPolicyForCodexAppServer {
@@ -1122,7 +1128,7 @@ export function resolveOpenClawExecPolicyForCodexAppServer(params: {
     agentId: params.agentId,
   });
   const overridePolicy = applyOpenClawExecPolicyLayer(basePolicy, params.execOverrides);
-  return overridePolicy;
+  return applyOpenClawExecApprovalDefaults(overridePolicy, params.approvalDefaults);
 }
 
 function resolveEffectiveOpenClawExecModeForCodexAppServer(params: {
@@ -1189,6 +1195,30 @@ function applyOpenClawExecPolicyLayer(
   };
 }
 
+function applyOpenClawExecApprovalDefaults(
+  base: OpenClawExecPolicy,
+  approvalDefaults?: OpenClawExecApprovalDefaultsForCodexAppServer,
+): OpenClawExecPolicy {
+  if (!approvalDefaults) {
+    return base;
+  }
+  const nextSecurity = approvalDefaults.security
+    ? minOpenClawExecSecurity(base.security, approvalDefaults.security)
+    : base.security;
+  const nextAsk = approvalDefaults.ask
+    ? maxOpenClawExecAsk(base.ask, approvalDefaults.ask)
+    : base.ask;
+  if (nextSecurity === base.security && nextAsk === base.ask) {
+    return base;
+  }
+  return {
+    mode: resolveOpenClawExecModeFromPolicy({ security: nextSecurity, ask: nextAsk }),
+    security: nextSecurity,
+    ask: nextAsk,
+    touched: true,
+  };
+}
+
 function resolveOpenClawExecPolicyForMode(
   mode: OpenClawExecMode,
 ): Omit<OpenClawExecPolicy, "touched"> {
@@ -1221,6 +1251,19 @@ function resolveOpenClawExecModeFromPolicy(params: {
     return "full";
   }
   return "ask";
+}
+
+function minOpenClawExecSecurity(
+  left: OpenClawExecSecurity,
+  right: OpenClawExecSecurity,
+): OpenClawExecSecurity {
+  const order: Record<OpenClawExecSecurity, number> = { deny: 0, allowlist: 1, full: 2 };
+  return order[left] <= order[right] ? left : right;
+}
+
+function maxOpenClawExecAsk(left: OpenClawExecAsk, right: OpenClawExecAsk): OpenClawExecAsk {
+  const order: Record<OpenClawExecAsk, number> = { off: 0, "on-miss": 1, always: 2 };
+  return order[left] >= order[right] ? left : right;
 }
 
 function readExecMode(value: unknown): OpenClawExecMode | undefined {

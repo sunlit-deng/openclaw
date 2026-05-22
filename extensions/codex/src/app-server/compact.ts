@@ -10,6 +10,7 @@ import {
   type CompactEmbeddedPiSessionParams,
   type EmbeddedPiCompactResult,
 } from "openclaw/plugin-sdk/agent-harness-runtime";
+import { loadExecApprovals } from "openclaw/plugin-sdk/infra-runtime";
 import {
   defaultCodexAppServerClientFactory,
   type CodexAppServerClientFactory,
@@ -347,6 +348,7 @@ async function compactCodexNativeThread(
     execPolicy: resolveOpenClawExecPolicyForCodexAppServer({
       config: params.config,
       agentId: sessionAgentId,
+      approvalDefaults: loadExecApprovals().defaults,
     }),
   });
   const binding = await readCodexAppServerBinding(params.sessionFile, { config: params.config });
