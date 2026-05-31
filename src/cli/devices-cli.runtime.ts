@@ -64,7 +64,7 @@ type DeviceTokenSummary = {
 };
 
 type PendingDevice = Record<string, unknown> & {
-  requestId?: string;
+  requestId: string;
   deviceId?: string;
   publicKey?: string;
   displayName?: string;
@@ -79,7 +79,7 @@ type PendingDevice = Record<string, unknown> & {
 };
 
 type PairedDevice = Record<string, unknown> & {
-  deviceId?: string;
+  deviceId: string;
   publicKey?: string;
   displayName?: string;
   roles?: string[];
@@ -344,13 +344,21 @@ async function approvePairingWithFallback(
 function parseDevicePairingList(value: unknown): DevicePairingList {
   const obj = isRecord(value) ? value : {};
   return {
-    pending: Array.isArray(obj["pending"]) ? obj["pending"].filter(isRecord) : [],
-    paired: Array.isArray(obj["paired"]) ? obj["paired"].filter(isRecord) : [],
+    pending: Array.isArray(obj["pending"]) ? obj["pending"].filter(isPendingDevice) : [],
+    paired: Array.isArray(obj["paired"]) ? obj["paired"].filter(isPairedDevice) : [],
   };
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+function isPendingDevice(value: unknown): value is PendingDevice {
+  return isRecord(value) && typeof value["requestId"] === "string";
+}
+
+function isPairedDevice(value: unknown): value is PairedDevice {
+  return isRecord(value) && typeof value["deviceId"] === "string";
 }
 
 function normalizeDeviceRoles(request: PendingDevice): string[] {
@@ -766,7 +774,7 @@ export async function runDevicesListCommand(opts: DevicesRpcOpts): Promise<void>
           { key: "IP", header: "IP", minWidth: 12 },
         ],
         rows: list.paired.map((device) => ({
-          Device: sanitizeForLog(device.displayName || device.deviceId),
+          Device: sanitizeForLog(device.displayName || device.deviceId || ""),
           Roles: device.roles?.length
             ? device.roles.map((role) => sanitizeForLog(role)).join(", ")
             : "",

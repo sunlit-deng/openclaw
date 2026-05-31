@@ -765,7 +765,7 @@ export function registerExecApprovalsCli(program: Command) {
           await saveSnapshotTargeted({ opts, source, nodeId, native, baseHash, targetLabel });
           return;
         }
-        const file = normalizeExecApprovals(parsed);
+        const file = normalizeExecApprovals(parsed as ExecApprovalsFile);
         file.version = 1;
         await saveSnapshotTargeted({ opts, source, nodeId, file, baseHash, targetLabel });
       } catch (err) {

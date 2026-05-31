@@ -25,6 +25,7 @@ import {
   formatValidationErrors,
   MIN_PROBE_PROTOCOL_VERSION,
   PROTOCOL_VERSION,
+  type RequestFrame,
   validateConnectParams,
   validateRequestFrame,
 } from "../../../../packages/gateway-protocol/src/index.js";
@@ -168,6 +169,10 @@ import {
 import { isUnauthorizedRoleError, UnauthorizedFloodGuard } from "./unauthorized-flood-guard.js";
 
 type SubsystemLogger = ReturnType<typeof createSubsystemLogger>;
+type ConnectRequestFrame = RequestFrame & {
+  method: "connect";
+  params: ConnectParams;
+};
 
 const DEVICE_SIGNATURE_SKEW_MS = 2 * 60 * 1000;
 const DEVICE_CREDENTIAL_INVALIDATING_METHODS = new Set([
@@ -191,6 +196,14 @@ function isReleasedVersion(version: string): boolean {
 let cachedLocalNodeId: string | null | undefined;
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+function isConnectRequestFrame(frame: unknown): frame is ConnectRequestFrame {
+  return (
+    validateRequestFrame(frame) &&
+    frame.method === "connect" &&
+    validateConnectParams(frame.params)
+  );
 }
 
 function resolveLocalNodeId(): string | null {
@@ -532,11 +545,7 @@ export function attachGatewayWsMessageHandler(params: GatewayWsMessageHandlerPar
         // Handshake must be a normal request:
         // { type:"req", method:"connect", params: ConnectParams }.
         const isRequestFrame = validateRequestFrame(parsed);
-        if (
-          !isRequestFrame ||
-          parsed.method !== "connect" ||
-          !validateConnectParams(parsed.params)
-        ) {
+        if (!isConnectRequestFrame(parsed)) {
           const handshakeError = isRequestFrame
             ? parsed.method === "connect"
               ? `invalid connect params: ${formatValidationErrors(validateConnectParams.errors)}`

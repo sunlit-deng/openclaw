@@ -33,12 +33,6 @@ type NativeExecApprovalRule = {
   enabled?: boolean;
 };
 
-type NativeExecApprovalPolicy = {
-  enabled?: boolean;
-  defaultAction?: string;
-  rules?: NativeExecApprovalRule[];
-};
-
 function requireApprovalsBaseHash(
   params: unknown,
   snapshot: ExecApprovalsSnapshot,
