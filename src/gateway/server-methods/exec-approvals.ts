@@ -264,10 +264,10 @@ export const execApprovalsHandlers: GatewayRequestHandlers = {
       if (!respondUnavailableOnNodeInvokeError(respond, res)) {
         return;
       }
-      // node.set returns JSON on the command channel; keep the gateway response
-      // shape aligned with local exec.approvals.set.
-      const payload = safeParseJson(res.payloadJSON ?? null);
-      respond(true, payload, undefined);
+      // Node transports may return structured payloads or JSON strings; keep
+      // node.set aligned with the local exec.approvals.set response shape.
+      const payload = res.payloadJSON ? safeParseJson(res.payloadJSON) : res.payload;
+      respond(true, payload ?? {}, undefined);
     });
   },
 };
