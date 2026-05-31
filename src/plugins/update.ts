@@ -42,7 +42,11 @@ import {
   PLUGIN_INSTALL_ERROR_CODE,
   resolvePluginInstallDir,
 } from "./install.js";
-import { buildNpmResolutionInstallFields, recordPluginInstall } from "./installs.js";
+import {
+  buildNpmResolutionInstallFields,
+  recordPluginInstall,
+  resolveNpmInstallRecordSpec,
+} from "./installs.js";
 import { installPluginFromMarketplace } from "./marketplace.js";
 import {
   getOfficialExternalPluginCatalogEntry,
@@ -1720,7 +1724,11 @@ export async function updateNpmInstalledPlugins(params: {
         {
           pluginId: resolvedPluginId,
           source: "npm",
-          spec: usedOfficialNpmFallback ? officialNpmFallbackRecordSpec : recordSpec,
+          spec: resolveNpmInstallRecordSpec({
+            requestedSpec: usedOfficialNpmFallback ? officialNpmFallbackRecordSpec : recordSpec,
+            resolution: npmResult.npmResolution,
+            pinResolvedRegistrySpec: trustedSourceLinkedOfficialInstall || usedOfficialNpmFallback,
+          }),
           installPath: result.targetDir,
           version: nextVersion,
           ...buildNpmResolutionInstallFields(npmResult.npmResolution),
@@ -2012,7 +2020,11 @@ export async function syncPluginsForUpdateChannel(params: {
         next = recordPluginInstall(next, {
           pluginId: resolvedPluginId,
           source: "npm",
-          spec: installSpec,
+          spec: resolveNpmInstallRecordSpec({
+            requestedSpec: installSpec,
+            resolution: npmResult.npmResolution,
+            pinResolvedRegistrySpec: trustedSourceLinkedOfficialInstall,
+          }),
           installPath: result.targetDir,
           version: nextVersion,
           ...buildNpmResolutionInstallFields(npmResult.npmResolution),

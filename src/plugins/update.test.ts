@@ -599,10 +599,15 @@ describe("updateNpmInstalledPlugins", () => {
         pluginId: "acpx",
         targetDir: installPath,
         version: "2026.5.2-beta.2",
+        npmResolution: {
+          name: "@openclaw/acpx",
+          version: "2026.5.2-beta.2",
+          resolvedSpec: "@openclaw/acpx@2026.5.2-beta.2",
+        },
       }),
     );
 
-    await updateNpmInstalledPlugins({
+    const result = await updateNpmInstalledPlugins({
       config: createNpmInstallConfig({
         pluginId: "acpx",
         spec: "@openclaw/acpx",
@@ -617,6 +622,49 @@ describe("updateNpmInstalledPlugins", () => {
     expect(npmInstallCall()?.spec).toBe("@openclaw/acpx");
     expect(npmInstallCall()?.expectedPluginId).toBe("acpx");
     expect(npmInstallCall()?.trustedSourceLinkedOfficialInstall).toBe(true);
+    expect(result.config.plugins?.installs?.acpx?.spec).toBe("@openclaw/acpx@2026.5.2-beta.2");
+  });
+
+  it("keeps third-party moving npm specs when their updates resolve exact artifacts", async () => {
+    const installPath = createInstalledPackageDir({
+      name: "@martian-engineering/lossless-claw",
+      version: "0.9.0",
+    });
+    mockNpmViewMetadata({
+      name: "@martian-engineering/lossless-claw",
+      version: "0.9.1",
+    });
+    installPluginFromNpmSpecMock.mockResolvedValue(
+      createSuccessfulNpmUpdateResult({
+        pluginId: "lossless-claw",
+        targetDir: installPath,
+        version: "0.9.1",
+        npmResolution: {
+          name: "@martian-engineering/lossless-claw",
+          version: "0.9.1",
+          resolvedSpec: "@martian-engineering/lossless-claw@0.9.1",
+        },
+      }),
+    );
+
+    const result = await updateNpmInstalledPlugins({
+      config: createNpmInstallConfig({
+        pluginId: "lossless-claw",
+        spec: "@martian-engineering/lossless-claw",
+        installPath,
+        resolvedName: "@martian-engineering/lossless-claw",
+        resolvedSpec: "@martian-engineering/lossless-claw@0.9.0",
+        resolvedVersion: "0.9.0",
+      }),
+      pluginIds: ["lossless-claw"],
+    });
+
+    expect(result.config.plugins?.installs?.["lossless-claw"]?.spec).toBe(
+      "@martian-engineering/lossless-claw",
+    );
+    expect(result.config.plugins?.installs?.["lossless-claw"]?.resolvedSpec).toBe(
+      "@martian-engineering/lossless-claw@0.9.1",
+    );
   });
 
   it("does not skip trusted official default updates when latest resolves to the installed prerelease", async () => {
@@ -1468,7 +1516,7 @@ describe("updateNpmInstalledPlugins", () => {
     });
     expectRecordFields(result.config.plugins?.installs?.codex, {
       source: "npm",
-      spec: "@openclaw/codex",
+      spec: "@openclaw/codex@2026.5.4",
       version: "2026.5.4",
       resolvedName: "@openclaw/codex",
       resolvedVersion: "2026.5.4",
@@ -2364,7 +2412,7 @@ describe("updateNpmInstalledPlugins", () => {
     expect(result.config.plugins?.entries?.discord?.enabled).toBeUndefined();
     expectRecordFields(result.config.plugins?.installs?.discord, {
       source: "npm",
-      spec: "@openclaw/discord",
+      spec: "@openclaw/discord@2026.5.16-beta.5",
       installPath: "/tmp/openclaw-plugins/discord",
       version: "2026.5.16-beta.5",
     });
@@ -2436,7 +2484,7 @@ describe("updateNpmInstalledPlugins", () => {
     expect(npmInstallCall()?.spec).toBe("@openclaw/discord");
     expectRecordFields(result.config.plugins?.installs?.discord, {
       source: "npm",
-      spec: "@openclaw/discord",
+      spec: "@openclaw/discord@2026.5.16",
       installPath: "/tmp/openclaw-plugins/discord",
       version: "2026.5.16",
     });
