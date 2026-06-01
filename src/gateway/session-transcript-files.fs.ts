@@ -29,6 +29,8 @@ function classifySessionTranscriptCandidate(
   sessionId: string,
   sessionFile?: string,
 ): "current" | "stale" | "custom" {
+  // Generated transcript filenames encode a session id. If the encoded id no
+  // longer matches, treat the persisted path as a fallback instead of primary.
   const transcriptSessionId = extractGeneratedTranscriptSessionId(sessionFile);
   if (!transcriptSessionId) {
     return "custom";
@@ -208,6 +210,8 @@ export function archiveSessionTranscriptsDetailed(opts: {
   )) {
     const candidatePath = canonicalizePathForComparison(candidate);
     if (storeDir) {
+      // Store-restricted operations may run from maintenance/reset paths; only
+      // mutate transcript files still under the owning session-store directory.
       const relative = path.relative(storeDir, candidatePath);
       if (!relative || relative.startsWith("..") || path.isAbsolute(relative)) {
         continue;
@@ -243,6 +247,8 @@ export function resolveStableSessionEndTranscript(params: {
 }): { sessionFile?: string; transcriptArchived?: boolean } {
   const archivedTranscripts = params.archivedTranscripts ?? [];
   if (archivedTranscripts.length > 0) {
+    // Prefer the archive of the caller's persisted sessionFile when present so
+    // API responses keep pointing at the same logical transcript after rename.
     const preferredPath = params.sessionFile?.trim()
       ? canonicalizePathForComparison(params.sessionFile)
       : undefined;
@@ -302,6 +308,8 @@ export async function cleanupArchivedSessionTranscripts(opts: {
       }
       scanned += 1;
       if (now - timestamp <= opts.olderThanMs) {
+        // `olderThanMs` is strict: files at exactly the retention boundary stay
+        // until a later cleanup tick.
         continue;
       }
       const fullPath = path.join(dir, entry);
