@@ -33,6 +33,20 @@ describe("feed search CLI options", () => {
     );
   });
 
+  it("normalizes bare ClawHub specs in native search hints", () => {
+    const formatted = formatFeedSearchEntry({
+      id: "calendar-helper",
+      type: "plugin",
+      sourceId: "company-approved",
+      feedId: "company-feed",
+      install: {
+        clawhubSpec: "calendar-helper",
+      },
+    });
+
+    expect(formatted).toContain("Install: openclaw plugins install clawhub:calendar-helper");
+  });
+
   it("uses npm install specs in native search hints", () => {
     const formatted = formatFeedSearchEntry({
       id: "calendar-helper",
@@ -75,6 +89,25 @@ describe("feed search CLI options", () => {
       enabled: true,
       sourceIds: [],
     });
+  });
+
+  it("keeps default search disabled when the Feeds plugin is only configured", async () => {
+    mocks.readConfigFileSnapshot.mockResolvedValueOnce({
+      valid: true,
+      config: {
+        plugins: {
+          entries: {
+            feeds: {
+              config: {
+                search: { default: true },
+              },
+            },
+          },
+        },
+      },
+    });
+
+    await expect(resolveCatalogFeedSearchOptions({})).resolves.toEqual({ enabled: false });
   });
 
   it("fails explicit feed search when the Feeds plugin is disabled", async () => {

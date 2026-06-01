@@ -536,6 +536,57 @@ describe("registerPolicyDoctorChecks", () => {
     );
   });
 
+  it("accepts mixed-case native feed search source ids", async () => {
+    const configPath = join(workspaceDir, "openclaw.jsonc");
+    await fs.writeFile(configPath, "{}", "utf-8");
+    await fs.writeFile(
+      join(workspaceDir, "policy.jsonc"),
+      JSON.stringify({
+        feeds: {
+          search: {
+            requireSources: ["Company-Approved"],
+          },
+        },
+      }),
+      "utf-8",
+    );
+
+    const result = await runPolicyChecks(
+      ctx(configPath, {
+        ...cfgWithPolicy(),
+        plugins: {
+          entries: {
+            policy: {
+              enabled: true,
+              config: { enabled: true },
+            },
+            feeds: {
+              enabled: true,
+              config: {
+                search: {
+                  default: true,
+                  sources: ["Company-Approved"],
+                },
+                sources: [
+                  {
+                    id: "Company-Approved",
+                    url: "https://feeds.example.com/company.json",
+                  },
+                ],
+              },
+            },
+          },
+        },
+      }),
+    );
+
+    expect(result.findings).not.toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ checkId: "policy/feeds-search-source-missing" }),
+      ]),
+    );
+  });
+
   it("does not accept feed search sources when native feed search is not default", async () => {
     const configPath = join(workspaceDir, "openclaw.jsonc");
     await fs.writeFile(configPath, "{}", "utf-8");
@@ -642,7 +693,7 @@ describe("registerPolicyDoctorChecks", () => {
     );
   });
 
-  it("accepts default feed search config without an explicit Feeds plugin enabled flag", async () => {
+  it("does not accept default feed search config without an explicit Feeds plugin enabled flag", async () => {
     const configPath = join(workspaceDir, "openclaw.jsonc");
     await fs.writeFile(configPath, "{}", "utf-8");
     await fs.writeFile(
@@ -678,7 +729,7 @@ describe("registerPolicyDoctorChecks", () => {
       }),
     );
 
-    expect(result.findings).not.toEqual(
+    expect(result.findings).toEqual(
       expect.arrayContaining([
         expect.objectContaining({
           checkId: "policy/feeds-search-default-missing",
@@ -900,7 +951,7 @@ describe("registerPolicyDoctorChecks", () => {
     );
   });
 
-  it("satisfies required feed sources from a default-enabled Feeds config", async () => {
+  it("does not satisfy required feed sources from a configured but disabled Feeds plugin", async () => {
     const configPath = join(workspaceDir, "openclaw.jsonc");
     await fs.writeFile(configPath, "{}", "utf-8");
     await fs.writeFile(
@@ -942,7 +993,7 @@ describe("registerPolicyDoctorChecks", () => {
       }),
     );
 
-    expect(result.findings).not.toEqual(
+    expect(result.findings).toEqual(
       expect.arrayContaining([
         expect.objectContaining({
           checkId: "policy/feeds-required-source-missing",

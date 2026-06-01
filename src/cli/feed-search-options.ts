@@ -87,7 +87,7 @@ function formatFeedInstallCommandForSearch(entry: FeedEntryResult): string | und
   const slug = typeof install.slug === "string" ? install.slug.trim() : "";
   if (entry.type === "plugin") {
     const resolvedSpec =
-      clawhubSpec ||
+      (clawhubSpec ? normalizeClawHubSpec(clawhubSpec) : "") ||
       (source === "clawhub" && spec ? normalizeClawHubSpec(spec) : "") ||
       npmSpec ||
       ((source === "npm" || source === "path" || source === "git") && spec ? spec : "");
@@ -176,7 +176,7 @@ function feedPluginEnabledForDefaultSearch(
   const deny = readStringArray(plugins.deny);
   return (
     plugins.enabled !== false &&
-    feeds.enabled !== false &&
+    feeds.enabled === true &&
     config.enabled !== false &&
     !deny.includes("feeds") &&
     (allow.length === 0 || allow.includes("feeds"))

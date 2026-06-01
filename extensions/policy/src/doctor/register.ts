@@ -2503,7 +2503,9 @@ function feedSourceFindings(
   const allowUnsigned = readPolicyBoolean(policy, ["feeds", "sources", "allowUnsigned"]) !== false;
   const requireSearchDefault =
     readPolicyBoolean(policy, ["feeds", "search", "requireDefault"]) === true;
-  const requiredSearchSources = readStringList(policy, ["feeds", "search", "requireSources"]);
+  const requiredSearchSources = readStringList(policy, ["feeds", "search", "requireSources"], {
+    lowercase: false,
+  });
   if (
     required.length === 0 &&
     !requirePinned &&
