@@ -65,6 +65,8 @@ function resolveCursorSeq(cursor: string | undefined): number | undefined {
     return undefined;
   }
   const normalized = cursor.startsWith("seq:") ? cursor.slice(4) : cursor;
+  // Cursor values are exact transcript sequence numbers; reject partial parses
+  // so "seq:2next" cannot accidentally page from message 2.
   if (!/^\d+$/.test(normalized)) {
     return undefined;
   }
@@ -108,6 +110,8 @@ function paginateSessionMessages(
   const cursorSeq = resolveCursorSeq(cursor);
   let endExclusive = messages.length;
   if (typeof cursorSeq === "number") {
+    // Page backward from the first message at or after the cursor sequence.
+    // Messages without OpenClaw seq metadata fall back to their 1-based index.
     endExclusive = messages.findIndex((message, index) => {
       const seq = resolveMessageSeq(message);
       if (typeof seq === "number") {
@@ -150,6 +154,8 @@ export function buildSessionHistorySnapshot(params: {
     params.totalRawMessages > params.rawMessages.length &&
     history.messages.length > 0
   ) {
+    // Recent-tail reads may omit older raw messages before projection. Mark the
+    // display page as partial even when every loaded visible message was used.
     const firstSeq = resolveMessageSeq(history.messages[0]);
     history.hasMore = true;
     if (typeof firstSeq === "number") {
@@ -238,6 +244,8 @@ export class SessionHistorySseState {
     }
     const carriedSeq = asPositiveSafeInteger(update.messageSeq);
     if (carriedSeq !== undefined) {
+      // Duplicate or out-of-order live appends mean the SSE client has missed a
+      // state transition; force a disk refresh instead of appending stale data.
       if (carriedSeq <= this.rawTranscriptSeq) {
         return { shouldRefresh: true };
       }
@@ -265,6 +273,8 @@ export class SessionHistorySseState {
       }
       const projectedMessage = addedMessages[0];
       if (projectedMessage !== undefined) {
+        // message-tool mirrors can be synthesized from a later silent control
+        // reply, so attach the current raw seq when projection did not carry one.
         const emittedMessage: SessionHistoryMessage =
           isMessageToolMirrorMessage(projectedMessage) ||
           resolveMessageSeq(projectedMessage) === undefined
@@ -288,6 +298,8 @@ export class SessionHistorySseState {
     );
     if (!sanitizedMessage) {
       if (projectedMessages.length < this.sentHistory.messages.length) {
+        // A hidden control message can collapse previously buffered projection
+        // state; ask the client to reload the current display page.
         this.sentHistory = buildPaginatedSessionHistory({
           messages: projectedMessages,
           hasMore: false,
@@ -341,6 +353,8 @@ export class SessionHistorySseState {
 
   private async readRawSnapshotAsync(): Promise<SessionHistoryRawSnapshot> {
     if (this.cursor === undefined && typeof this.limit === "number") {
+      // Non-cursor history streams only need a raw tail wide enough for display
+      // projection filters; cursor mode below needs the full transcript.
       const snapshot = await readRecentSessionMessagesWithStatsAsync(
         this.target.sessionId,
         this.target.storePath,
