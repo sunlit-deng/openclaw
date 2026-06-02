@@ -58,6 +58,10 @@ function shouldAcceptInbound(config: EventContext["config"], from: string | unde
   }
 }
 
+/**
+ * Creates a local call record for provider webhooks that arrive before local state exists.
+ * This covers inbound PSTN calls and externally-created provider calls pointed at this webhook.
+ */
 function createWebhookCall(params: {
   ctx: EventContext;
   providerCallId: string;
@@ -107,6 +111,10 @@ function createWebhookCall(params: {
   return callRecord;
 }
 
+/**
+ * Persists a terminal snapshot for an inbound call rejected before it becomes active.
+ * The durable processed-event id keeps redelivery from repeatedly applying policy side effects.
+ */
 function persistRejectedInboundCall(params: {
   ctx: EventContext;
   event: NormalizedEvent;
@@ -135,7 +143,13 @@ function persistRejectedInboundCall(params: {
   persistCallRecord(params.ctx.storePath, rejectedCall);
 }
 
-/** Applies one normalized provider event to active call state with replay dedupe. */
+/**
+ * Applies one normalized provider event to active call state with replay dedupe.
+ *
+ * Unknown calls may be registered from webhook payloads, blocked inbound calls
+ * are persisted as terminal snapshots, and retryable errors deliberately keep
+ * their replay key uncommitted so a later delivery can still recover the call.
+ */
 export function processEvent(ctx: EventContext, event: NormalizedEvent): void {
   const dedupeKey = event.dedupeKey || event.id;
   if (ctx.processedEventIds.has(dedupeKey)) {
