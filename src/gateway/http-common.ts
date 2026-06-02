@@ -42,12 +42,14 @@ export function sendMethodNotAllowed(res: ServerResponse, allow = "POST") {
   sendText(res, 405, "Method Not Allowed");
 }
 
+/** Sends the shared Gateway unauthorized envelope used by HTTP auth helpers. */
 export function sendUnauthorized(res: ServerResponse) {
   sendJson(res, 401, {
     error: { message: "Unauthorized", type: "unauthorized" },
   });
 }
 
+/** Sends a rate-limit auth failure and rounds Retry-After up to whole seconds. */
 export function sendRateLimited(res: ServerResponse, retryAfterMs?: number) {
   if (retryAfterMs && retryAfterMs > 0) {
     res.setHeader("Retry-After", String(Math.ceil(retryAfterMs / 1000)));
@@ -60,6 +62,7 @@ export function sendRateLimited(res: ServerResponse, retryAfterMs?: number) {
   });
 }
 
+/** Projects a Gateway auth result into the public HTTP auth failure envelope. */
 export function sendGatewayAuthFailure(res: ServerResponse, authResult: GatewayAuthResult) {
   if (authResult.rateLimited) {
     sendRateLimited(res, authResult.retryAfterMs);
@@ -74,6 +77,7 @@ export function sendInvalidRequest(res: ServerResponse, message: string) {
   });
 }
 
+/** Builds the shared forbidden body used by JSON and embedded Control UI routes. */
 export function buildMissingScopeForbiddenBody(missingScope: string | undefined) {
   return {
     ok: false,
@@ -88,6 +92,7 @@ export function sendMissingScopeForbidden(res: ServerResponse, missingScope: str
   sendJson(res, 403, buildMissingScopeForbiddenBody(missingScope));
 }
 
+/** Reads a bounded JSON body or writes the matching HTTP error response. */
 export async function readJsonBodyOrError(
   req: IncomingMessage,
   res: ServerResponse,
@@ -96,6 +101,8 @@ export async function readJsonBodyOrError(
   const body = await readJsonBody(req, maxBytes);
   if (!body.ok) {
     if (body.error === "payload too large") {
+      // The body reader may stop before consuming all bytes, so the declared
+      // length is the best available diagnostic size for rejected payload logs.
       const contentLength = parseContentLengthHeader(req.headers?.["content-length"]);
       logRejectedLargePayload({
         surface: "gateway.http.json",
@@ -120,10 +127,12 @@ export async function readJsonBodyOrError(
   return body.value;
 }
 
+/** Writes the OpenAI-compatible streaming sentinel event. */
 export function writeDone(res: ServerResponse) {
   res.write("data: [DONE]\n\n");
 }
 
+/** Starts an SSE response with headers shared by OpenAI and session streams. */
 export function setSseHeaders(res: ServerResponse) {
   res.statusCode = 200;
   res.setHeader("Content-Type", "text/event-stream; charset=utf-8");
@@ -132,6 +141,7 @@ export function setSseHeaders(res: ServerResponse) {
   res.flushHeaders?.();
 }
 
+/** Aborts long-running HTTP work when either request or response socket closes. */
 export function watchClientDisconnect(
   req: IncomingMessage,
   res: ServerResponse,
@@ -148,6 +158,8 @@ export function watchClientDisconnect(
   if (sockets.length === 0) {
     return () => {};
   }
+  // Request and response usually share a socket. De-duplicate so one close
+  // event triggers one abort and one optional disconnect callback.
   const handleClose = () => {
     onDisconnect?.();
     if (!abortController.signal.aborted) {
