@@ -2046,6 +2046,7 @@ describe("workboard controller", () => {
       patch: {
         status: "running",
         metadata: {
+          lifecycleStatusSourceUpdatedAt: staleUpdatedAt,
           stale: expect.objectContaining({
             lastSessionUpdatedAt: staleUpdatedAt,
             reason: "Linked session has not reported recent activity.",

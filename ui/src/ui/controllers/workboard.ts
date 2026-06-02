@@ -1783,17 +1783,17 @@ export async function syncWorkboardLifecycle(params: {
         existingStale.lastSessionUpdatedAt !== stale.lastSessionUpdatedAt ||
         existingStale.reason !== stale.reason;
       if (staleChanged) {
-        patch.metadata = {
+        mergePatchMetadata(patch, {
           stale: {
             ...stale,
             detectedAt: existingStale?.detectedAt ?? stale.detectedAt,
           },
-        };
+        });
       }
     } else if (existingStale) {
-      patch.metadata = {
+      mergePatchMetadata(patch, {
         stale: null,
-      };
+      });
     }
     if (Object.keys(patch).length === 0) {
       continue;
