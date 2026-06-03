@@ -30,6 +30,22 @@ const pluginRegistryMocks = vi.hoisted(() => ({
   ),
 }));
 
+function poisonedSyntheticAuthPlugin(): { syntheticAuthRefs?: string[] } {
+  return Object.defineProperty({}, "syntheticAuthRefs", {
+    get() {
+      throw new Error("synthetic auth metadata exploded");
+    },
+  }) as { syntheticAuthRefs?: string[] };
+}
+
+function poisonedExternalAuthPlugin(): { contracts?: { externalAuthProviders?: string[] } } {
+  return Object.defineProperty({}, "contracts", {
+    get() {
+      throw new Error("external auth metadata exploded");
+    },
+  }) as { contracts?: { externalAuthProviders?: string[] } };
+}
+
 vi.mock("./runtime-state.js", () => ({
   getPluginRegistryState,
 }));
@@ -85,6 +101,25 @@ describe("synthetic auth runtime refs", () => {
     expect(pluginRegistryMocks.loadPluginRegistrySnapshotWithMetadata).toHaveBeenCalledWith({});
   });
 
+  it("skips unreadable persisted synthetic auth plugin metadata", () => {
+    pluginRegistryMocks.loadPluginRegistrySnapshotWithMetadata.mockReturnValue({
+      source: "persisted",
+      snapshot: {
+        plugins: [
+          { syntheticAuthRefs: ["local-provider"] },
+          poisonedSyntheticAuthPlugin(),
+          { syntheticAuthRefs: ["remote-provider"] },
+        ],
+      },
+      diagnostics: [],
+    });
+
+    expect(resolveRuntimeSyntheticAuthProviderRefs()).toEqual([
+      "local-provider",
+      "remote-provider",
+    ]);
+  });
+
   it("loads manifest synthetic auth refs with the current runtime scope", () => {
     const config = { plugins: { allow: ["external-local"] } };
     const env = { OPENCLAW_HOME: "/tmp/openclaw-home" };
@@ -135,6 +170,24 @@ describe("synthetic auth runtime refs", () => {
     expect(pluginRegistryMocks.loadPluginManifestRegistryForInstalledIndex).toHaveBeenCalledWith({
       index: snapshot,
     });
+  });
+
+  it("skips unreadable persisted external auth plugin metadata", () => {
+    pluginRegistryMocks.loadPluginRegistrySnapshotWithMetadata.mockReturnValue({
+      source: "persisted",
+      snapshot: { plugins: [] },
+      diagnostics: [],
+    });
+    pluginRegistryMocks.loadPluginManifestRegistryForInstalledIndex.mockReturnValue({
+      plugins: [
+        { contracts: { externalAuthProviders: ["runtime-provider"] } },
+        poisonedExternalAuthPlugin(),
+        { contracts: { externalAuthProviders: ["external-cli"] } },
+      ],
+      diagnostics: [],
+    });
+
+    expect(resolveRuntimeExternalAuthProviderRefs()).toEqual(["runtime-provider", "external-cli"]);
   });
 
   it("does not derive the registry just to resolve synthetic auth refs", () => {
@@ -247,6 +300,41 @@ describe("synthetic auth runtime refs", () => {
     expect(pluginRegistryMocks.loadPluginRegistrySnapshotWithMetadata).not.toHaveBeenCalled();
   });
 
+  it("skips unreadable active runtime synthetic auth plugin metadata", () => {
+    getPluginRegistryState.mockReturnValue({
+      activeRegistry: {
+        providers: [
+          {
+            provider: {
+              id: "runtime-provider",
+              resolveSyntheticAuth: () => undefined,
+            },
+          },
+        ],
+        cliBackends: [
+          {
+            backend: {
+              id: "runtime-cli",
+              resolveSyntheticAuth: () => undefined,
+            },
+          },
+        ],
+        plugins: [
+          { syntheticAuthRefs: ["manifest-provider"] },
+          poisonedSyntheticAuthPlugin(),
+          { syntheticAuthRefs: ["manifest-cli"] },
+        ],
+      },
+    });
+
+    expect(resolveRuntimeSyntheticAuthProviderRefs()).toEqual([
+      "manifest-provider",
+      "manifest-cli",
+      "runtime-provider",
+      "runtime-cli",
+    ]);
+  });
+
   it("prefers active runtime registry external auth refs when plugins are already loaded", () => {
     getPluginRegistryState.mockReturnValue({
       activeRegistry: {
@@ -282,5 +370,48 @@ describe("synthetic auth runtime refs", () => {
       "runtime-cli",
     ]);
     expect(pluginRegistryMocks.loadPluginRegistrySnapshotWithMetadata).not.toHaveBeenCalled();
+  });
+
+  it("skips unreadable active runtime external auth plugin metadata", () => {
+    getPluginRegistryState.mockReturnValue({
+      activeRegistry: {
+        plugins: [
+          {
+            contracts: {
+              externalAuthProviders: ["manifest-provider"],
+            },
+          },
+          poisonedExternalAuthPlugin(),
+          {
+            contracts: {
+              externalAuthProviders: ["manifest-cli"],
+            },
+          },
+        ],
+        providers: [
+          {
+            provider: {
+              id: "runtime-provider",
+              resolveExternalAuthProfiles: () => [],
+            },
+          },
+        ],
+        cliBackends: [
+          {
+            backend: {
+              id: "runtime-cli",
+              resolveExternalAuthProfiles: () => [],
+            },
+          },
+        ],
+      },
+    });
+
+    expect(resolveRuntimeExternalAuthProviderRefs()).toEqual([
+      "manifest-provider",
+      "manifest-cli",
+      "runtime-provider",
+      "runtime-cli",
+    ]);
   });
 });

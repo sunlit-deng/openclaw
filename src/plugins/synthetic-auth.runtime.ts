@@ -19,6 +19,26 @@ function uniqueProviderRefs(values: readonly string[]): string[] {
   return next;
 }
 
+function readSyntheticAuthRefs(plugin: {
+  syntheticAuthRefs?: readonly string[];
+}): readonly string[] {
+  try {
+    return plugin.syntheticAuthRefs ?? [];
+  } catch {
+    return [];
+  }
+}
+
+function readExternalAuthProviderRefs(plugin: {
+  contracts?: { externalAuthProviders?: readonly string[] };
+}): readonly string[] {
+  try {
+    return plugin.contracts?.externalAuthProviders ?? [];
+  } catch {
+    return [];
+  }
+}
+
 function resolveManifestSyntheticAuthProviderRefState(
   params: SyntheticAuthProviderRefParams = {},
 ): { refs: string[]; complete: boolean } {
@@ -30,9 +50,7 @@ function resolveManifestSyntheticAuthProviderRefState(
     return { refs: [], complete: false };
   }
   return {
-    refs: uniqueProviderRefs(
-      result.snapshot.plugins.flatMap((plugin) => plugin.syntheticAuthRefs ?? []),
-    ),
+    refs: uniqueProviderRefs(result.snapshot.plugins.flatMap(readSyntheticAuthRefs)),
     complete: true,
   };
 }
@@ -55,9 +73,7 @@ function resolveManifestExternalAuthProviderRefs(
   const manifestRegistry = loadPluginManifestRegistryForInstalledIndex({
     index: result.snapshot,
   });
-  return uniqueProviderRefs(
-    manifestRegistry.plugins.flatMap((plugin) => plugin.contracts?.externalAuthProviders ?? []),
-  );
+  return uniqueProviderRefs(manifestRegistry.plugins.flatMap(readExternalAuthProviderRefs));
 }
 
 export function resolveRuntimeSyntheticAuthProviderRefs(
@@ -73,7 +89,7 @@ export function resolveRuntimeSyntheticAuthProviderRefState(
   if (registry) {
     return {
       refs: uniqueProviderRefs([
-        ...registry.plugins.flatMap((plugin) => plugin.syntheticAuthRefs ?? []),
+        ...registry.plugins.flatMap(readSyntheticAuthRefs),
         ...(registry.providers ?? [])
           .filter(
             (entry) =>
@@ -101,7 +117,7 @@ export function resolveRuntimeExternalAuthProviderRefs(
   const registry = getPluginRegistryState()?.activeRegistry;
   if (registry) {
     return uniqueProviderRefs([
-      ...registry.plugins.flatMap((plugin) => plugin.contracts?.externalAuthProviders ?? []),
+      ...registry.plugins.flatMap(readExternalAuthProviderRefs),
       ...(registry.providers ?? [])
         .filter(
           (entry) =>
