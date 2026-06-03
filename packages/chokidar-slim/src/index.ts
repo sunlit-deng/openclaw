@@ -1,48 +1,10 @@
 /*!
  * chokidar-slim — a single-file, OpenClaw-owned trim of chokidar.
+ * DO NOT EDIT THIS IF POSSIBLE.
  *
- * Source: chokidar v5.0.0 — https://github.com/paulmillr/chokidar
- *         MIT License, (c) 2012 Paul Miller (https://paulmillr.com).
- *         Upstream `src/index.ts` + `src/handler.ts` are merged verbatim here,
- *         then trimmed. `readdirp` stays an external dependency (the same
- *         version chokidar pulled in) rather than being re-inlined.
- *
- * Why this file exists:
- *   The memory watcher needs a deterministic "the paths I just added have
- *   finished populating the watched-path map" signal, which chokidar does not
- *   expose (upstream paulmillr/chokidar#1378, #1438, #1451). Rather than fork
- *   the whole package, OpenClaw owns this trimmed copy and adds the missing
- *   async-settlement primitive on top of unchanged chokidar semantics.
- *
- * Added (the only behavioral additions over upstream):
- *   - FSWatcher.addAsync(paths): resolves after the exact same internal
- *     `_addToNodeFs` work `.add()` schedules in the background (including the
- *     recursive parent re-add chokidar chains after the first Promise.all) and
- *     reports the resulting watched map + entry count.
- *   - FSWatcher.whenReady(): promise mirror of the one-shot `ready` event.
- *   - watchAsync(paths, options): `watch()` whose promise settles like addAsync.
- *   `.add()`/`watch()` keep their synchronous return types unchanged so existing
- *   event-only callers are unaffected; the async path is just `.add()`'s work
- *   factored into `_addInternal()` and surfaced as a promise.
- *
- * Removed (unused by every OpenClaw caller and unlikely to ever be — these are
- * the only deletions vs. upstream; everything else is byte-for-byte chokidar):
- *   - unwatch() and the `_ignoredPaths` mutation machinery + MatcherObject
- *     support (only unwatch() ever populated that set, so it was dead).
- *   - the `cwd` option and all path-relativization it drove.
- *   - the `raw` event and its rawEmitter plumbing.
- *   - `alwaysStat`, `ignorePermissionErrors`, and `binaryInterval` options plus
- *     the ~150-entry binary-extension table that only `binaryInterval` used.
- *   - CHOKIDAR_USEPOLLING / CHOKIDAR_INTERVAL env overrides and the IBM i
- *     forced-polling special case.
- *   - the `persistent: false` one-shot fs.watch branch (no caller sets it).
- *
- * Kept (every surface an OpenClaw caller relies on): watch/FSWatcher/add/close/
- * getWatched/on; events all|ready|error|add|change|addDir|unlink|unlinkDir;
- * options ignoreInitial|ignored|awaitWriteFinish|usePolling|interval|
- * followSymlinks|depth|persistent|atomic; recursive traversal via readdirp,
- * symlink following, atomic editor-write normalization, and polling via
- * fs.watchFile.
+ * Sources: chokidar v5.0.0 `src/index.ts` + `src/handler.ts`, with the small
+ * readdirp traversal it used folded in. MIT License, (c) 2012 Paul Miller.
+ * Trimmed for OpenClaw callers and extended with addAsync/whenReady/watchAsync.
  */
 import { EventEmitter } from "node:events";
 import {
@@ -55,8 +17,9 @@ import {
   type WatchListener,
 } from "node:fs";
 import { lstat, open, readdir, realpath as fsrealpath, stat } from "node:fs/promises";
+import { type as osType } from "node:os";
 import * as sp from "node:path";
-import { type EntryInfo, readdirp, type ReaddirpOptions, ReaddirpStream } from "readdirp";
+import { Readable } from "node:stream";
 
 export type Path = string;
 
@@ -70,6 +33,7 @@ const isWindows: boolean = pl === "win32";
 const isMacos: boolean = pl === "darwin";
 const isLinux: boolean = pl === "linux";
 const isFreeBSD: boolean = pl === "freebsd";
+const isIBMi = osType() === "OS400";
 
 export const EVENTS = {
   ALL: "all",
@@ -85,6 +49,146 @@ export type EventName = (typeof EVENTS)[keyof typeof EVENTS];
 
 const EV = EVENTS;
 const THROTTLE_MODE_WATCH = "watch";
+
+export interface EntryInfo {
+  path: string;
+  fullPath: string;
+  stats: Stats;
+  basename: string;
+}
+
+type ReaddirpFilter = (entryInfo: EntryInfo) => boolean;
+type ReaddirpOptions = {
+  fileFilter?: ReaddirpFilter;
+  directoryFilter?: ReaddirpFilter;
+  lstat?: boolean;
+  highWaterMark?: number;
+};
+
+const RECURSIVE_ERROR_CODE = "READDIRP_RECURSIVE_ERROR";
+const NORMAL_READDIR_ERRORS = new Set(["ENOENT", "EPERM", "EACCES", "ELOOP", RECURSIVE_ERROR_CODE]);
+const TRUE_FILTER: ReaddirpFilter = () => true;
+
+const hasErrorCode = (error: unknown): error is Error & { code: string } =>
+  error instanceof Error && "code" in error && typeof error.code === "string";
+
+class ReaddirpStream extends Readable {
+  reading: boolean;
+
+  private readonly fileFilter: ReaddirpFilter;
+  private readonly directoryFilter: ReaddirpFilter;
+  private files?: string[];
+  private readonly root: Path;
+  private readonly statMethod: typeof lstat;
+
+  constructor(root: Path, options: Partial<ReaddirpOptions> = {}) {
+    super({
+      objectMode: true,
+      autoDestroy: true,
+      highWaterMark: options.highWaterMark,
+    });
+
+    this.fileFilter = options.fileFilter ?? TRUE_FILTER;
+    this.directoryFilter = options.directoryFilter ?? TRUE_FILTER;
+    this.root = sp.resolve(root);
+    this.statMethod = options.lstat ? lstat : stat;
+    this.reading = false;
+  }
+
+  async _read(batch: number): Promise<void> {
+    if (this.reading) return;
+    this.reading = true;
+    try {
+      while (!this.destroyed && batch > 0) {
+        this.files ??= await this.exploreDir();
+        if (this.files.length === 0) {
+          this.push(null);
+          break;
+        }
+
+        const entries = await Promise.all(
+          this.files.splice(0, batch).map((name) => this.formatEntry(name)),
+        );
+        for (const entry of entries) {
+          if (!entry || this.destroyed) continue;
+          const entryType = await this.getEntryType(entry);
+          const filter = entryType === "directory" ? this.directoryFilter : this.fileFilter;
+          if (filter(entry)) {
+            this.push(entry);
+            batch--;
+          }
+        }
+      }
+    } catch (error) {
+      this.destroy(error as Error);
+    } finally {
+      this.reading = false;
+    }
+  }
+
+  private async exploreDir(): Promise<string[]> {
+    try {
+      return await readdir(this.root);
+    } catch (error) {
+      this.onReaddirError(error);
+      return [];
+    }
+  }
+
+  private async formatEntry(basename: string): Promise<EntryInfo | undefined> {
+    try {
+      const fullPath = sp.join(this.root, basename);
+      return {
+        path: sp.relative(this.root, fullPath),
+        fullPath,
+        basename,
+        stats: await this.statMethod(fullPath),
+      };
+    } catch (error) {
+      this.onReaddirError(error);
+      return undefined;
+    }
+  }
+
+  private onReaddirError(error: unknown): void {
+    if (hasErrorCode(error) && NORMAL_READDIR_ERRORS.has(error.code) && !this.destroyed) {
+      this.emit("warn", error);
+    } else {
+      this.destroy(error as Error);
+    }
+  }
+
+  private async getEntryType(entry: EntryInfo): Promise<"file" | "directory" | undefined> {
+    const { stats } = entry;
+    if (stats.isFile()) return "file";
+    if (stats.isDirectory()) return "directory";
+    if (!stats.isSymbolicLink()) return undefined;
+
+    try {
+      const targetPath = await fsrealpath(entry.fullPath);
+      const targetStats = await lstat(targetPath);
+      if (targetStats.isFile()) return "file";
+      if (targetStats.isDirectory()) {
+        const targetPrefixLength = targetPath.length;
+        if (
+          entry.fullPath.startsWith(targetPath) &&
+          entry.fullPath.substring(targetPrefixLength, targetPrefixLength + 1) === sp.sep
+        ) {
+          const recursiveError = new Error(
+            `Circular symlink detected: "${entry.fullPath}" points to "${targetPath}"`,
+          ) as Error & { code: string };
+          recursiveError.code = RECURSIVE_ERROR_CODE;
+          this.onReaddirError(recursiveError);
+          return undefined;
+        }
+        return "directory";
+      }
+    } catch (error) {
+      this.onReaddirError(error);
+    }
+    return undefined;
+  }
+}
 
 const statMethods = { lstat, stat };
 
@@ -483,6 +587,7 @@ export class NodeFsHandler {
 
     const previous = this.fsw._getWatchedDir(wh.path);
     const current = new Set<string>();
+    const pendingEntries: Array<Promise<void>> = [];
 
     let stream = this.fsw._readdirp(directory, {
       fileFilter: (entry: EntryInfo) => wh.filterPath(entry),
@@ -490,45 +595,55 @@ export class NodeFsHandler {
     });
     if (!stream) return;
     stream
-      .on(STR_DATA, async (entry) => {
-        if (this.fsw.closed) {
-          stream = undefined;
-          return;
-        }
-        const item = entry.path;
-        let path = sp.join(directory, item);
-        current.add(item);
+      .on(STR_DATA, (entry) => {
+        const pendingEntry = (async () => {
+          if (this.fsw.closed) {
+            stream = undefined;
+            return;
+          }
+          const item = entry.path;
+          let path = sp.join(directory, item);
+          current.add(item);
 
-        if (
-          entry.stats.isSymbolicLink() &&
-          (await this._handleSymlink(entry, directory, path, item))
-        ) {
-          return;
-        }
+          if (
+            entry.stats.isSymbolicLink() &&
+            (await this._handleSymlink(entry, directory, path, item))
+          ) {
+            return;
+          }
 
-        if (this.fsw.closed) {
-          stream = undefined;
-          return;
-        }
-        // Files that present in current directory snapshot
-        // but absent in previous are added to watch list and
-        // emit `add` event.
-        if (item === target || (!target && !previous.has(item))) {
-          this.fsw._incrReadyCount();
+          if (this.fsw.closed) {
+            stream = undefined;
+            return;
+          }
+          // Files that present in current directory snapshot
+          // but absent in previous are added to watch list and
+          // emit `add` event.
+          if (item === target || (!target && !previous.has(item))) {
+            this.fsw._incrReadyCount();
 
-          // ensure relativeness of path is preserved in case of watcher reuse
-          path = sp.join(dir, sp.relative(dir, path));
+            // ensure relativeness of path is preserved in case of watcher reuse
+            path = sp.join(dir, sp.relative(dir, path));
 
-          this._addToNodeFs(path, initialAdd, wh, depth + 1);
-        }
+            await this._addToNodeFs(path, initialAdd, wh, depth + 1);
+          }
+        })();
+        pendingEntries.push(pendingEntry);
+        void pendingEntry.catch(() => undefined);
       })
       .on(EV.ERROR, this._boundHandleError);
 
     return new Promise((resolve, reject) => {
       if (!stream) return reject();
-      stream.once(STR_END, () => {
+      stream.once(STR_END, async () => {
         if (this.fsw.closed) {
           stream = undefined;
+          return;
+        }
+        try {
+          await Promise.all(pendingEntries);
+        } catch (error) {
+          reject(error);
           return;
         }
         const wasThrottled = throttler ? throttler.clear() : false;
@@ -934,6 +1049,7 @@ export type AddResult = {
 };
 
 const countWatchedEntries = (watched: Record<string, string[]>): number =>
+  Object.keys(watched).length +
   Object.values(watched).reduce((total, children) => total + children.length, 0);
 
 export interface FSWatcherEventMap {
@@ -1009,9 +1125,22 @@ export class FSWatcher extends EventEmitter<FSWatcherEventMap> {
         awf === true ? DEF_AWF : typeof awf === "object" ? { ...DEF_AWF, ...awf } : false,
     };
 
+    // Always default to polling on IBM i because fs.watch() is not available on IBM i.
+    if (isIBMi) opts.usePolling = true;
     // Editor atomic write normalization enabled by default with fs.watch
     if (opts.atomic === undefined) opts.atomic = !opts.usePolling;
-
+    // opts.atomic = typeof _opts.atomic === 'number' ? _opts.atomic : 100;
+    // Global override. Useful for developers, who need to force polling for all
+    // instances of chokidar, regardless of usage / dependency depth
+    const envPoll = process.env.CHOKIDAR_USEPOLLING;
+    if (envPoll !== undefined) {
+      const envLower = envPoll.toLowerCase();
+      if (envLower === "false" || envLower === "0") opts.usePolling = false;
+      else if (envLower === "true" || envLower === "1") opts.usePolling = true;
+      else opts.usePolling = !!envLower;
+    }
+    const envInterval = process.env.CHOKIDAR_INTERVAL;
+    if (envInterval) opts.interval = Number.parseInt(envInterval, 10);
     // This is done to emit ready only once, but each 'add' will increase that?
     let readyCalls = 0;
     this._emitReady = () => {
@@ -1482,8 +1611,8 @@ export class FSWatcher extends EventEmitter<FSWatcherEventMap> {
 
   _readdirp(root: Path, opts?: Partial<ReaddirpOptions>): ReaddirpStream | undefined {
     if (this.closed) return;
-    const options = { type: EV.ALL, alwaysStat: true, lstat: true, ...opts, depth: 0 };
-    let stream: ReaddirpStream | undefined = readdirp(root, options);
+    const options = { type: EV.ALL, lstat: true, ...opts, depth: 0 };
+    let stream: ReaddirpStream | undefined = new ReaddirpStream(root, options);
     this._streams.add(stream);
     stream.once(STR_CLOSE, () => {
       stream = undefined;

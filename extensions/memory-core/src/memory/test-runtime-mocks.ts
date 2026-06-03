@@ -2,7 +2,7 @@
 import { vi } from "vitest";
 
 // Unit tests: avoid importing the real watcher implementation (native fsevents, etc.).
-vi.mock("chokidar-slim", () => ({
+vi.mock("chokidar", () => ({
   default: {
     watch: () => ({ on: () => {}, close: async () => {}, whenReady: async () => {} }),
   },

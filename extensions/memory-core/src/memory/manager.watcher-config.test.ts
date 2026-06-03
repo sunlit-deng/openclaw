@@ -1046,6 +1046,7 @@ describe("memory watcher config", () => {
       expect.stringContaining("Memory file watching is tracking 2002 paths."),
     );
     chokidarWatcher.emit("ready");
+    await Promise.resolve();
 
     expect(memoryLoggerWarn).toHaveBeenCalledWith(
       expect.stringContaining("Memory file watching is tracking 2002 paths."),

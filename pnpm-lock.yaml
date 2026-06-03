@@ -259,7 +259,7 @@ importers:
       '@vitest/coverage-v8':
         specifier: 4.1.7
         version: 4.1.7(@vitest/browser@4.1.7)(vitest@4.1.7)
-      chokidar-slim:
+      chokidar:
         specifier: workspace:*
         version: link:packages/chokidar-slim
       esbuild:
@@ -461,7 +461,7 @@ importers:
       '@lit/context':
         specifier: 1.1.6
         version: 1.1.6
-      chokidar-slim:
+      chokidar:
         specifier: workspace:*
         version: link:../../packages/chokidar-slim
       lit:
@@ -1017,7 +1017,7 @@ importers:
 
   extensions/memory-core:
     dependencies:
-      chokidar-slim:
+      chokidar:
         specifier: workspace:*
         version: link:../../packages/chokidar-slim
       json5:
@@ -1808,11 +1808,7 @@ importers:
         specifier: 2.9.0
         version: 2.9.0
 
-  packages/chokidar-slim:
-    dependencies:
-      readdirp:
-        specifier: 5.0.0
-        version: 5.0.0
+  packages/chokidar-slim: {}
 
   packages/gateway-client:
     dependencies:

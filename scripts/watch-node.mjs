@@ -166,7 +166,7 @@ const printFriendlyWatchStartupError = (err) => {
 };
 
 const loadChokidar = async () => {
-  const mod = await import("chokidar-slim");
+  const mod = await import("chokidar");
   return mod.default ?? mod;
 };
 

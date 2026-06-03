@@ -538,7 +538,7 @@ describe("watch-node script", () => {
   it("prints recovery guidance when the watcher fails with invalid package config", async () => {
     const error = Object.assign(
       new Error(
-        'Invalid package config /tmp/openclaw/.pnpm/chokidar-slim/package.json while importing "chokidar-slim" from /tmp/openclaw/scripts/watch-node.mjs.',
+        'Invalid package config /tmp/openclaw/.pnpm/chokidar/package.json while importing "chokidar" from /tmp/openclaw/scripts/watch-node.mjs.',
       ),
       { code: "ERR_INVALID_PACKAGE_CONFIG" },
     );
@@ -566,7 +566,7 @@ describe("watch-node script", () => {
         [
           "[openclaw] gateway:watch could not start because a dependency package config looks corrupted.",
         ],
-        ["[openclaw] Invalid package config: /tmp/openclaw/.pnpm/chokidar-slim/package.json"],
+        ["[openclaw] Invalid package config: /tmp/openclaw/.pnpm/chokidar/package.json"],
         ["[openclaw] This usually means a file in node_modules is empty or truncated."],
         ["[openclaw] Recommended recovery:"],
         ["[openclaw]   rm -rf node_modules"],
@@ -582,7 +582,7 @@ describe("watch-node script", () => {
   });
 
   it("does not log non-package-config watcher import errors before rethrowing", async () => {
-    const error = Object.assign(new Error("Cannot find package 'chokidar-slim'"), {
+    const error = Object.assign(new Error("Cannot find package 'chokidar'"), {
       code: "ERR_MODULE_NOT_FOUND",
     });
     const child = createKillableChild();

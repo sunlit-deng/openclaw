@@ -412,7 +412,7 @@ describe("getMemorySearchManager caching", () => {
     const agentId = "qmd-open-cooldown";
     const cfg = createQmdCfg(agentId);
     const nowSpy = vi.spyOn(Date, "now").mockReturnValue(1_000);
-    createQmdManagerMock.mockRejectedValueOnce(new Error("Cannot find package 'chokidar-slim'"));
+    createQmdManagerMock.mockRejectedValueOnce(new Error("Cannot find package 'chokidar'"));
 
     try {
       const first = await getMemorySearchManager({ cfg, agentId });
@@ -439,7 +439,7 @@ describe("getMemorySearchManager caching", () => {
     const agentId = "qmd-open-cooldown-scoped-close";
     const cfg = createQmdCfg(agentId);
     const nowSpy = vi.spyOn(Date, "now").mockReturnValue(1_000);
-    createQmdManagerMock.mockRejectedValueOnce(new Error("Cannot find package 'chokidar-slim'"));
+    createQmdManagerMock.mockRejectedValueOnce(new Error("Cannot find package 'chokidar'"));
 
     try {
       const first = await getMemorySearchManager({ cfg, agentId });
@@ -460,7 +460,7 @@ describe("getMemorySearchManager caching", () => {
     const agentId = "qmd-open-status-bypass";
     const cfg = createQmdCfg(agentId);
     const nowSpy = vi.spyOn(Date, "now").mockReturnValue(1_000);
-    createQmdManagerMock.mockRejectedValueOnce(new Error("Cannot find package 'chokidar-slim'"));
+    createQmdManagerMock.mockRejectedValueOnce(new Error("Cannot find package 'chokidar'"));
 
     try {
       const first = await getMemorySearchManager({ cfg, agentId });

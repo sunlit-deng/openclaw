@@ -5,7 +5,7 @@
   "description": "OpenClaw core memory search plugin",
   "type": "module",
   "dependencies": {
-    "chokidar-slim": "workspace:*",
+    "chokidar": "workspace:*",
     "json5": "2.2.3",
     "typebox": "1.1.39"
   },

@@ -1,6 +1,6 @@
 // Memory Core plugin module implements manager behavior.
 import type { DatabaseSync } from "node:sqlite";
-import type { FSWatcher } from "chokidar-slim";
+import type { FSWatcher } from "chokidar";
 import { formatErrorMessage } from "openclaw/plugin-sdk/error-runtime";
 import { listRegisteredMemoryEmbeddingProviderAdapters } from "openclaw/plugin-sdk/memory-core-host-embedding-registry";
 import {

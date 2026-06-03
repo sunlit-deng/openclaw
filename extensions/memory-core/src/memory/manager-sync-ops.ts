@@ -4,7 +4,7 @@ import fsSync from "node:fs";
 import fs from "node:fs/promises";
 import path from "node:path";
 import type { DatabaseSync } from "node:sqlite";
-import chokidar, { FSWatcher } from "chokidar-slim";
+import chokidar, { FSWatcher } from "chokidar";
 import { formatErrorMessage } from "openclaw/plugin-sdk/error-runtime";
 import { classifyMemoryMultimodalPath } from "openclaw/plugin-sdk/memory-core-host-engine-embeddings";
 import {
@@ -875,9 +875,7 @@ export abstract class MemoryManagerSyncOps {
     this.warnIfMemoryWatchPressure(directoryCount, "directories");
   }
 
-  private warnAfterMemoryChokidarAdd(
-    result: Promise<{ watchedEntryCount: number }>,
-  ): void {
+  private warnAfterMemoryChokidarAdd(result: Promise<{ watchedEntryCount: number }>): void {
     void result.then(
       ({ watchedEntryCount }) => {
         if (!this.closed) this.warnIfMemoryWatchPressure(watchedEntryCount, "paths");
