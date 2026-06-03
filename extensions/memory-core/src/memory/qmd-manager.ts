@@ -5,7 +5,7 @@ import fs from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import readline from "node:readline";
-import chokidar, { type FSWatcher } from "chokidar";
+import chokidar, { type FSWatcher } from "chokidar-slim";
 import { formatErrorMessage } from "openclaw/plugin-sdk/error-runtime";
 import { withFileLock } from "openclaw/plugin-sdk/file-lock";
 import {
@@ -1709,7 +1709,7 @@ export class QmdMemoryManager implements MemorySearchManager {
     watcher.on("add", markDirty);
     watcher.on("change", markDirty);
     watcher.on("unlink", markDirty);
-    watcher.once("ready", () => {
+    void watcher.whenReady().then(() => {
       this.warnIfWatchPressure(countChokidarWatchedEntries(watcher));
       log.info(
         `qmd watcher ready for agent "${this.agentId}" paths=${watchPathList.length} durationMs=${Date.now() - startTime}`,

@@ -23,6 +23,9 @@ const { watchMock } = vi.hoisted(() => ({
     return Object.assign(watcher, {
       close: vi.fn(async () => undefined),
       getWatched: vi.fn(() => watcher.watchedEntries),
+      whenReady: vi.fn(
+        () => new Promise((resolve) => watcher.once("ready", () => resolve(watcher))),
+      ),
     });
   }),
 }));
@@ -181,7 +184,7 @@ vi.mock("node:child_process", async () => {
   };
 });
 
-vi.mock("chokidar", () => ({
+vi.mock("chokidar-slim", () => ({
   default: { watch: watchMock },
   watch: watchMock,
 }));

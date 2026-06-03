@@ -29,6 +29,9 @@ const {
   function createMockChokidarWatcher() {
     const handlers = new Map<ChokidarEvent, ChokidarCallback[]>();
     const onceHandlers = new Map<ChokidarEvent, ChokidarCallback[]>();
+    const countWatchedEntries = () =>
+      Object.keys(watcher.watchedEntries).length +
+      Object.values(watcher.watchedEntries).reduce((total, entries) => total + entries.length, 0);
     const watcher = {
       watchedEntries: {} as Record<string, string[]>,
       on: vi.fn((event: ChokidarEvent, callback: ChokidarCallback) => {
@@ -40,8 +43,20 @@ const {
         return watcher;
       }),
       add: vi.fn((_path: string | string[]) => watcher),
+      addAsync: vi.fn(async (path: string | string[]) => {
+        watcher.add(path);
+        return {
+          watcher,
+          requestedPaths: Array.isArray(path) ? path : [path],
+          watched: watcher.watchedEntries,
+          watchedEntryCount: countWatchedEntries(),
+        };
+      }),
       close: vi.fn(async () => undefined),
       getWatched: vi.fn(() => watcher.watchedEntries),
+      whenReady: vi.fn(
+        () => new Promise((resolve) => watcher.once("ready", () => resolve(watcher))),
+      ),
       emit: (event: ChokidarEvent, ...args: unknown[]) => {
         for (const callback of handlers.get(event) ?? []) {
           callback(...args);
@@ -559,13 +574,8 @@ describe("memory watcher config", () => {
         await fs.mkdir(path.join(root, `topic-${i}`));
       }
       const cfg = createWatcherConfig({ extraPaths: [] });
-      vi.useFakeTimers();
 
       await expectWatcherManager(cfg);
-      expect(memoryLoggerWarn).not.toHaveBeenCalledWith(
-        expect.stringContaining("Memory file watching is tracking 2002 directories."),
-      );
-      await vi.advanceTimersByTimeAsync(10_000);
 
       expect(memoryLoggerWarn).toHaveBeenCalledWith(
         expect.stringContaining("Memory file watching is tracking 2002 directories."),
@@ -1022,7 +1032,6 @@ describe("memory watcher config", () => {
   it("warns when chokidar memory watching tracks many paths", async () => {
     await setupWatcherWorkspace({ name: "notes.md", contents: "hello" });
     const cfg = createWatcherConfig();
-    vi.useFakeTimers();
 
     await expectWatcherManager(cfg);
 
@@ -1036,7 +1045,7 @@ describe("memory watcher config", () => {
     expect(memoryLoggerWarn).not.toHaveBeenCalledWith(
       expect.stringContaining("Memory file watching is tracking 2002 paths."),
     );
-    await vi.advanceTimersByTimeAsync(10_000);
+    chokidarWatcher.emit("ready");
 
     expect(memoryLoggerWarn).toHaveBeenCalledWith(
       expect.stringContaining("Memory file watching is tracking 2002 paths."),

@@ -34,7 +34,7 @@ const watchMock = vi.fn(() => {
 
 let refreshModule: typeof import("./refresh.js");
 
-vi.mock("chokidar", () => ({
+vi.mock("chokidar-slim", () => ({
   default: { watch: watchMock },
 }));
 
