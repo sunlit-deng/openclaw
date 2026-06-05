@@ -34,6 +34,15 @@ export function normalizeCodexDynamicToolName(name: string): string {
   return DYNAMIC_TOOL_NAME_ALIASES[normalized] ?? normalized;
 }
 
+/** Reads and normalizes a dynamic tool name without trusting plugin-owned getters. */
+export function readCodexDynamicToolName(tool: { name: string }): string {
+  try {
+    return normalizeCodexDynamicToolName(tool.name);
+  } catch {
+    return "";
+  }
+}
+
 /** Returns true for private QA runs that force the Codex runtime profile. */
 export function isForcedPrivateQaCodexRuntime(
   env: CodexDynamicToolProfileEnv = process.env,
@@ -104,5 +113,8 @@ export function filterCodexDynamicTools<T extends { name: string }>(
   }
   return excludes.size === 0
     ? tools
-    : tools.filter((tool) => !excludes.has(normalizeCodexDynamicToolName(tool.name)));
+    : tools.filter((tool) => {
+        const name = readCodexDynamicToolName(tool);
+        return Boolean(name) && !excludes.has(name);
+      });
 }

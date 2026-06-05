@@ -24,6 +24,7 @@ import {
   filterCodexDynamicTools,
   isForcedPrivateQaCodexRuntime,
   normalizeCodexDynamicToolName,
+  readCodexDynamicToolName,
 } from "./dynamic-tool-profile.js";
 import { resolveCodexNativeExecutionPolicy } from "./native-execution-policy.js";
 import type { CodexSandboxPolicy, CodexTurnEnvironmentParams } from "./protocol.js";
@@ -487,7 +488,7 @@ function isCodexMemoryFlushRun(
 
 function filterCodexMemoryFlushDynamicTools<T extends { name: string }>(tools: T[]): T[] {
   return tools.filter((tool) =>
-    CODEX_MEMORY_FLUSH_DYNAMIC_TOOL_ALLOW.has(normalizeCodexDynamicToolName(tool.name)),
+    CODEX_MEMORY_FLUSH_DYNAMIC_TOOL_ALLOW.has(readCodexDynamicToolName(tool)),
   );
 }
 
@@ -565,10 +566,8 @@ export function addSandboxShellDynamicToolsIfAvailable(
   ) {
     return filteredTools;
   }
-  const execTool = allTools.find((tool) => normalizeCodexDynamicToolName(tool.name) === "exec");
-  const processTool = allTools.find(
-    (tool) => normalizeCodexDynamicToolName(tool.name) === "process",
-  );
+  const execTool = allTools.find((tool) => readCodexDynamicToolName(tool) === "exec");
+  const processTool = allTools.find((tool) => readCodexDynamicToolName(tool) === "process");
   if (!execTool || !processTool) {
     return filteredTools;
   }
@@ -652,12 +651,10 @@ function addNodeShellDynamicToolsIfNeeded(
     if (isCodexDynamicToolExcluded(input.pluginConfig, [toolName])) {
       continue;
     }
-    if (next.some((tool) => normalizeCodexDynamicToolName(tool.name) === toolName)) {
+    if (next.some((tool) => readCodexDynamicToolName(tool) === toolName)) {
       continue;
     }
-    const tool = allTools.find(
-      (candidate) => normalizeCodexDynamicToolName(candidate.name) === toolName,
-    );
+    const tool = allTools.find((candidate) => readCodexDynamicToolName(candidate) === toolName);
     if (!tool) {
       continue;
     }
@@ -687,7 +684,7 @@ export function filterCodexDynamicToolsForAllowlist<T extends { name: string }>(
     toolsAllow.map((name) => normalizeCodexDynamicToolName(name)).filter(Boolean),
   );
   return tools.filter((tool) => {
-    const normalized = normalizeCodexDynamicToolName(tool.name);
+    const normalized = readCodexDynamicToolName(tool);
     return (
       allowSet.has(normalized) ||
       (normalized === "sandbox_exec" && allowSet.has("exec")) ||

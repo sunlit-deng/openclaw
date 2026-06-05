@@ -96,6 +96,31 @@ function createRuntimeDynamicTool(name: string): RuntimeDynamicToolForTest {
   };
 }
 
+function createUnreadableNameDynamicTool(): RuntimeDynamicToolForTest {
+  return Object.defineProperty(
+    {
+      label: "broken",
+      description: "broken test tool",
+      parameters: {
+        type: "object",
+        properties: {},
+        additionalProperties: false,
+      },
+      execute: vi.fn(async () => ({
+        content: [{ type: "text" as const, text: "broken" }],
+        details: {},
+      })),
+    },
+    "name",
+    {
+      enumerable: true,
+      get() {
+        throw new Error("name exploded");
+      },
+    },
+  ) as RuntimeDynamicToolForTest;
+}
+
 async function buildDynamicToolsForTest(
   params: EmbeddedRunAttemptParams,
   workspaceDir: string,
@@ -157,6 +182,12 @@ describe("Codex app-server dynamic tool build", () => {
       "heartbeat_respond",
       "sessions_spawn",
     ]);
+  });
+
+  it("skips unreadable dynamic tool names during Codex-owned tool filtering", () => {
+    const tools = [createUnreadableNameDynamicTool(), createRuntimeDynamicTool("message")];
+
+    expect(filterCodexDynamicTools(tools, {}).map((tool) => tool.name)).toEqual(["message"]);
   });
 
   it("applies additional Codex dynamic tool excludes without exposing Codex-native tools", () => {
@@ -518,6 +549,26 @@ describe("Codex app-server dynamic tool build", () => {
     ]);
   });
 
+  it("skips unreadable dynamic tool names while adding sandbox shell aliases", () => {
+    const execTool = createRuntimeDynamicTool("exec");
+    const processTool = createRuntimeDynamicTool("process");
+    const workspaceDir = path.join(tempDir, "workspace");
+
+    const tools = addSandboxShellDynamicToolsIfAvailable(
+      [],
+      [createUnreadableNameDynamicTool(), execTool, processTool],
+      {
+        params: createParams(path.join(tempDir, "session.jsonl"), workspaceDir),
+        sandbox: { enabled: true, backendId: "ssh" },
+        nativeToolSurfaceEnabled: false,
+        sessionAgentId: "main",
+        pluginConfig: {},
+      } as never,
+    );
+
+    expect(tools.map((tool) => tool.name)).toEqual(["sandbox_exec", "sandbox_process"]);
+  });
+
   it("passes auth profiles into Codex dynamic tool construction", async () => {
     const sessionFile = path.join(tempDir, "session.jsonl");
     const workspaceDir = path.join(tempDir, "workspace");
@@ -704,6 +755,14 @@ describe("Codex app-server dynamic tool build", () => {
         (tool) => tool.name,
       ),
     ).toEqual(["exec", "sandbox_exec", "sandbox_process", "apply_patch", "read"]);
+  });
+
+  it("skips unreadable dynamic tool names during Codex toolsAllow filtering", () => {
+    const tools = [createUnreadableNameDynamicTool(), createRuntimeDynamicTool("message")];
+
+    expect(
+      filterCodexDynamicToolsForAllowlist(tools, ["message"]).map((tool) => tool.name),
+    ).toEqual(["message"]);
   });
 
   it("treats an explicit empty Codex dynamic toolsAllow as no tools", () => {
