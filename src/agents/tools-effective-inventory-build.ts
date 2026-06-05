@@ -292,6 +292,10 @@ export function buildRuntimeCompatibleToolInventory(params: {
   modelId?: string;
   modelApi?: string | null;
   runtimeModel?: ProviderRuntimeModel;
+  preNormalizationDiagnostics?: readonly {
+    diagnostics: readonly RuntimeToolSchemaDiagnostic[];
+    sourceTools: readonly AnyAgentTool[];
+  }[];
 }): {
   entries: EffectiveToolInventoryEntry[];
   notices: EffectiveToolInventoryNotice[];
@@ -319,6 +323,14 @@ export function buildRuntimeCompatibleToolInventory(params: {
   return {
     entries: buildEffectiveToolInventoryEntries(projection.tools, rawToolsByName),
     notices: [
+      ...(params.preNormalizationDiagnostics ?? []).flatMap((entry) =>
+        buildUnsupportedToolSchemaNotices({
+          diagnostics: entry.diagnostics,
+          tools: entry.sourceTools,
+          rawToolsByName,
+          fallbackToolsByIndex: entry.sourceTools,
+        }),
+      ),
       ...buildUnsupportedToolSchemaNotices({
         diagnostics: sourceProjectionDiagnostics,
         tools: params.tools,

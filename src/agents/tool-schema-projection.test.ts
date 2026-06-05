@@ -5,6 +5,7 @@ import {
   filterProviderNormalizableTools,
   filterRuntimeCompatibleTools,
   inspectRuntimeToolInputSchemas,
+  projectProviderNormalizableToolInputSchemas,
   projectRuntimeCompatibleToolInputSchemas,
   projectRuntimeToolInputSchema,
 } from "./tool-schema-projection.js";
@@ -222,6 +223,42 @@ describe("runtime tool input schema projection", () => {
     });
   });
 
+  it("projects provider-normalizable schemas before provider-specific cleanup", () => {
+    const volatileSchema = {
+      type: "object",
+      toJSON() {
+        return {
+          type: "object",
+          properties: { target: { $dynamicRef: "#target" } },
+        };
+      },
+    };
+    Object.defineProperty(volatileSchema, "properties", {
+      enumerable: true,
+      get() {
+        throw new Error("schema revoked after projection");
+      },
+    });
+    const dynamicSchema = {
+      name: "fuzzplugin_dynamic_ref",
+      parameters: volatileSchema,
+    };
+
+    expect(projectProviderNormalizableToolInputSchemas([dynamicSchema])).toEqual({
+      tools: [
+        {
+          tool: dynamicSchema,
+          toolName: "fuzzplugin_dynamic_ref",
+          schema: {
+            type: "object",
+            properties: { target: { $dynamicRef: "#target" } },
+          },
+        },
+      ],
+      diagnostics: [],
+    });
+  });
+
   it("keeps missing parameter schemas for provider-specific normalization", () => {
     const parameterFree = {
       name: "fuzzplugin_parameter_free",
@@ -230,6 +267,17 @@ describe("runtime tool input schema projection", () => {
 
     expect(filterProviderNormalizableTools([parameterFree])).toEqual({
       tools: [parameterFree],
+      diagnostics: [],
+    });
+    expect(projectProviderNormalizableToolInputSchemas([parameterFree])).toEqual({
+      tools: [
+        {
+          tool: parameterFree,
+          toolName: "fuzzplugin_parameter_free",
+          schema: {},
+          parameterSchemaMissing: true,
+        },
+      ],
       diagnostics: [],
     });
   });

@@ -468,17 +468,29 @@ describe("resolveEffectiveToolInventory", () => {
   });
 
   it("preserves plugin ownership for pre-normalization schema quarantines", async () => {
+    const healthy = mockTool({ name: "exec", label: "Exec", description: "Run shell commands" });
+    const invalid = mockTool({
+      name: "fuzzplugin_move_angles",
+      label: "Fuzzplugin Move Angles",
+      description: "Move fixture joints",
+      parameters: { type: "array", items: { type: "number" } },
+    });
     const { resolveEffectiveToolInventory: resolveEffectiveToolInventoryLocal12 } =
       await loadHarness({
-        tools: [
-          mockTool({ name: "exec", label: "Exec", description: "Run shell commands" }),
-          mockTool({
-            name: "fuzzplugin_move_angles",
-            label: "Fuzzplugin Move Angles",
-            description: "Move fixture joints",
-            parameters: { type: "array", items: { type: "number" } },
-          }),
-        ],
+        tools: [healthy],
+        createToolsMock: vi.fn((options) => {
+          options?.onProviderNormalizationSchemaDiagnostics?.(
+            [
+              {
+                toolName: "fuzzplugin_move_angles",
+                toolIndex: 1,
+                violations: ['fuzzplugin_move_angles.parameters.type must be "object"'],
+              },
+            ],
+            [healthy, invalid],
+          );
+          return [healthy];
+        }),
         pluginMeta: { fuzzplugin_move_angles: { pluginId: "fuzzplugin" } },
       });
 

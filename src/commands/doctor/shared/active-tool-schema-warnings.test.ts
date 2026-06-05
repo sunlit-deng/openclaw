@@ -35,11 +35,11 @@ vi.mock("../../../agents/embedded-agent-runner/model.js", () => ({
 
 vi.mock("../../../agents/agent-tools.js", () => ({
   createOpenClawCodingTools: (options?: Parameters<typeof createOpenClawCodingTools>[0]) => {
-    toolState.createTools(options);
+    const tools = toolState.createTools(options);
     if (toolState.throwError) {
       throw toolState.throwError;
     }
-    return toolState.tools;
+    return Array.isArray(tools) ? tools : toolState.tools;
   },
 }));
 
@@ -115,6 +115,44 @@ describe("active tool schema doctor warnings", () => {
     expect(toolState.createTools).toHaveBeenCalledWith(
       expect.objectContaining({ toolPolicyAuditLogLevel: "debug" }),
     );
+  });
+
+  it("warns with plugin ownership for tools quarantined during active tool construction", () => {
+    const message = tool("message", { type: "object", properties: {} });
+    const invalid = tool("fuzzplugin_move_angles", {
+      type: "array",
+      items: { type: "number" },
+    });
+    toolState.tools = [message];
+    toolState.pluginIds = { fuzzplugin_move_angles: "fuzzplugin" };
+    toolState.createTools.mockImplementationOnce((options) => {
+      options?.onProviderNormalizationSchemaDiagnostics?.(
+        [
+          {
+            toolName: "fuzzplugin_move_angles",
+            toolIndex: 1,
+            violations: ['fuzzplugin_move_angles.parameters.type must be "object"'],
+          },
+        ],
+        [message, invalid],
+      );
+      return [message];
+    });
+
+    expect(
+      collectActiveToolSchemaProjectionWarnings({
+        cfg: {
+          plugins: {
+            entries: {
+              fuzzplugin: { enabled: true },
+            },
+          },
+        },
+        env: { HOME: "/tmp/openclaw-test" },
+      }),
+    ).toEqual([
+      '- agents.main: active tool "fuzzplugin_move_angles" from plugin "fuzzplugin" has unsupported runtime input schema (fuzzplugin_move_angles.parameters.type must be "object"). OpenClaw will quarantine this tool at runtime; fix or disable the plugin, or remove the tool from active allowlists.',
+    ]);
   });
 
   it("warns about unreadable active tool entries without crashing", () => {

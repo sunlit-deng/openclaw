@@ -24,7 +24,7 @@ import {
 } from "../infra/exec-approvals.js";
 import { resolveMergedSafeBinProfileFixtures } from "../infra/exec-safe-bin-runtime-policy.js";
 import { logWarn } from "../logger.js";
-import { getPluginToolMeta } from "../plugins/tools.js";
+import { copyPluginToolMeta, getPluginToolMeta } from "../plugins/tools.js";
 import { createLazyImportLoader } from "../shared/lazy-promise.js";
 import type { SkillSnapshot } from "../skills/types.js";
 import { resolveGatewayMessageChannel } from "../utils/message-channel.js";
@@ -65,7 +65,7 @@ import { describeExecTool, describeProcessTool } from "./bash-tools.descriptions
 import type { ExecToolDefaults } from "./bash-tools.exec-types.js";
 import type { ProcessToolDefaults } from "./bash-tools.process.js";
 import { execSchema, processSchema } from "./bash-tools.schemas.js";
-import { listChannelAgentTools } from "./channel-tools.js";
+import { copyChannelAgentToolMeta, listChannelAgentTools } from "./channel-tools.js";
 import { shouldSuppressManagedWebSearchTool } from "./codex-native-web-search.js";
 import { resolveImageSanitizationLimits } from "./image-sanitization.js";
 import {
@@ -105,6 +105,11 @@ import {
   resolveToolProfilePolicy,
 } from "./tool-policy.js";
 import {
+  projectProviderNormalizableToolInputSchemas,
+  type RuntimeToolSchemaDiagnostic,
+} from "./tool-schema-projection.js";
+import { logRuntimeToolSchemaQuarantine } from "./tool-schema-quarantine.js";
+import {
   createToolSearchTools,
   resolveToolSearchConfig,
   TOOL_CALL_RAW_TOOL_NAME,
@@ -130,6 +135,63 @@ function readAgentToolName(tool: AnyAgentTool): string | undefined {
   } catch {
     return undefined;
   }
+}
+
+function logProviderNormalizationSchemaQuarantine(params: {
+  projection: ReturnType<typeof projectProviderNormalizableToolInputSchemas<AnyAgentTool>>;
+  tools: readonly AnyAgentTool[];
+  runId?: string;
+  sessionKey?: string;
+  sessionId?: string;
+}): void {
+  if (params.projection.diagnostics.length === 0) {
+    return;
+  }
+  if (params.runId) {
+    logRuntimeToolSchemaQuarantine({
+      diagnostics: params.projection.diagnostics,
+      tools: params.tools,
+      runId: params.runId,
+      ...(params.sessionKey ? { sessionKey: params.sessionKey } : {}),
+      ...(params.sessionId ? { sessionId: params.sessionId } : {}),
+    });
+    return;
+  }
+  const summary = params.projection.diagnostics
+    .map((diagnostic) => `${diagnostic.toolName}: ${diagnostic.violations.join(", ")}`)
+    .join("; ");
+  logWarn(
+    `[tools] quarantined ${params.projection.diagnostics.length} unsupported tool schema${params.projection.diagnostics.length === 1 ? "" : "s"} before model runtime projection: ${summary}. Run openclaw doctor for details.`,
+  );
+}
+
+function withProjectedToolParameters(
+  tool: AnyAgentTool,
+  parameters: unknown,
+): AnyAgentTool | undefined {
+  let prototype: object | null;
+  try {
+    prototype = Reflect.getPrototypeOf(tool);
+  } catch {
+    return undefined;
+  }
+  let descriptors: PropertyDescriptorMap;
+  try {
+    descriptors = Object.getOwnPropertyDescriptors(tool);
+  } catch {
+    return undefined;
+  }
+  descriptors.parameters = {
+    configurable: true,
+    enumerable: true,
+    value: parameters,
+    writable: true,
+  };
+  const stable = Object.create(prototype) as AnyAgentTool;
+  Object.defineProperties(stable, descriptors);
+  copyPluginToolMeta(tool, stable);
+  copyChannelAgentToolMeta(tool as never, stable as never);
+  return stable;
 }
 
 function readOnlyAgentWorkspaceMount(
@@ -572,6 +634,11 @@ export function createOpenClawCodingTools(options?: {
   onYield?: (message: string) => Promise<void> | void;
   /** Optional instrumentation callback for tool preparation stage timing. */
   recordToolPrepStage?: (name: string) => void;
+  /** Receives tool schemas quarantined before provider-specific normalization. */
+  onProviderNormalizationSchemaDiagnostics?: (
+    diagnostics: readonly RuntimeToolSchemaDiagnostic[],
+    sourceTools: readonly AnyAgentTool[],
+  ) => void;
   /** Lower routine policy-removal audits for diagnostic-only tool probes. */
   toolPolicyAuditLogLevel?: "info" | "debug";
   /** Live observer called after wrapped tool outcomes are recorded. */
@@ -1172,13 +1239,35 @@ export function createOpenClawCodingTools(options?: {
   // Always normalize tool JSON Schemas before handing them to OpenClaw model runtime.
   // Without this, some providers (notably OpenAI) will reject root-level union schemas.
   // Provider-specific cleaning: Gemini needs constraint keywords stripped, but Anthropic expects them.
-  const normalized = subagentFiltered.map((tool) =>
-    normalizeToolParameters(tool, {
-      modelProvider: options?.modelProvider,
-      modelId: options?.modelId,
-      modelCompat: options?.modelCompat,
-    }),
-  );
+  const providerNormalizable = projectProviderNormalizableToolInputSchemas(subagentFiltered);
+  logProviderNormalizationSchemaQuarantine({
+    projection: providerNormalizable,
+    tools: subagentFiltered,
+    runId: options?.runId,
+    sessionKey: options?.sessionKey,
+    sessionId: options?.sessionId,
+  });
+  if (providerNormalizable.diagnostics.length > 0) {
+    options?.onProviderNormalizationSchemaDiagnostics?.(
+      providerNormalizable.diagnostics,
+      subagentFiltered,
+    );
+  }
+  const normalized = providerNormalizable.tools.flatMap((projected) => {
+    if (projected.parameterSchemaMissing) {
+      return [projected.tool];
+    }
+    const tool = withProjectedToolParameters(projected.tool, projected.schema);
+    return tool
+      ? [
+          normalizeToolParameters(tool, {
+            modelProvider: options?.modelProvider,
+            modelId: options?.modelId,
+            modelCompat: options?.modelCompat,
+          }),
+        ]
+      : [];
+  });
   options?.recordToolPrepStage?.("schema-normalization");
   const withHooks = normalized.map((tool) =>
     wrapToolWithBeforeToolCallHook(

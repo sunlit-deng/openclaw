@@ -27,6 +27,7 @@ export type RuntimeToolInputSchemaProjectedTool<
   readonly tool: TTool;
   readonly toolName: string;
   readonly schema: RuntimeToolInputSchemaJson;
+  readonly parameterSchemaMissing?: boolean;
 };
 
 /** Diagnostic for one incompatible runtime tool schema. */
@@ -275,8 +276,15 @@ function projectToolSchema<TTool extends Pick<AnyAgentTool, "name" | "parameters
   tool: TTool,
   toolIndex: number,
   options: RuntimeToolProjectionOptions,
+  mode: ToolSchemaInspectionMode,
 ):
-  | { ok: true; tool: TTool; toolName: string; schema: RuntimeToolInputSchemaJson }
+  | {
+      ok: true;
+      tool: TTool;
+      toolName: string;
+      schema: RuntimeToolInputSchemaJson;
+      parameterSchemaMissing?: boolean;
+    }
   | { ok: false; diagnostic: RuntimeToolSchemaDiagnostic } {
   const schemaLabel = options.schemaLabel ?? "parameters";
   const nameRead = readToolProjectionField(tool, "name");
@@ -296,12 +304,35 @@ function projectToolSchema<TTool extends Pick<AnyAgentTool, "name" | "parameters
       },
     };
   }
+  if (mode === "provider-normalizable" && parametersRead.value === undefined) {
+    if (descriptorViolations.length > 0) {
+      return {
+        ok: false,
+        diagnostic: {
+          toolName,
+          toolIndex,
+          violations: descriptorViolations,
+        },
+      };
+    }
+    return { ok: true, tool, toolName, schema: {}, parameterSchemaMissing: true };
+  }
 
   const projection = projectRuntimeToolInputSchema(
     parametersRead.value,
     `${toolName}.${schemaLabel}`,
   );
-  const violations = [...descriptorViolations, ...projection.violations];
+  const projectionViolations =
+    mode === "runtime"
+      ? projection.violations
+      : projection.violations.filter(
+          (violation) =>
+            violation !== `${toolName}.${schemaLabel}.$dynamicRef` &&
+            violation !== `${toolName}.${schemaLabel}.$dynamicAnchor` &&
+            !violation.endsWith(".$dynamicRef") &&
+            !violation.endsWith(".$dynamicAnchor"),
+        );
+  const violations = [...descriptorViolations, ...projectionViolations];
   if (violations.length > 0) {
     return {
       ok: false,
@@ -357,6 +388,24 @@ export function projectRuntimeCompatibleToolInputSchemas<
   tools: readonly TTool[],
   options: RuntimeToolProjectionOptions = {},
 ): RuntimeToolInputSchemaProjectionInspection<TTool> {
+  return projectCompatibleToolInputSchemas(tools, options, "runtime");
+}
+
+/** Projects and filters tools to schemas providers can normalize before dispatch. */
+export function projectProviderNormalizableToolInputSchemas<
+  TTool extends Pick<AnyAgentTool, "name" | "parameters">,
+>(
+  tools: readonly TTool[],
+  options: RuntimeToolProjectionOptions = {},
+): RuntimeToolInputSchemaProjectionInspection<TTool> {
+  return projectCompatibleToolInputSchemas(tools, options, "provider-normalizable");
+}
+
+function projectCompatibleToolInputSchemas<TTool extends Pick<AnyAgentTool, "name" | "parameters">>(
+  tools: readonly TTool[],
+  options: RuntimeToolProjectionOptions,
+  mode: ToolSchemaInspectionMode,
+): RuntimeToolInputSchemaProjectionInspection<TTool> {
   const diagnostics: RuntimeToolSchemaDiagnostic[] = [];
   const projectedTools: RuntimeToolInputSchemaProjectedTool<TTool>[] = [];
   for (const entry of readRuntimeToolEntries(tools)) {
@@ -364,12 +413,13 @@ export function projectRuntimeCompatibleToolInputSchemas<
       diagnostics.push(entry.diagnostic);
       continue;
     }
-    const projection = projectToolSchema(entry.tool, entry.toolIndex, options);
+    const projection = projectToolSchema(entry.tool, entry.toolIndex, options, mode);
     if (projection.ok) {
       projectedTools.push({
         tool: projection.tool,
         toolName: projection.toolName,
         schema: projection.schema,
+        ...(projection.parameterSchemaMissing ? { parameterSchemaMissing: true } : {}),
       });
       continue;
     }

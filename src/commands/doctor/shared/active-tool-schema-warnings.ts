@@ -79,21 +79,23 @@ function formatDiagnostic(params: {
 }
 
 function buildReadableToolsByName(
-  tools: readonly AnyAgentTool[],
+  ...toolLists: readonly (readonly AnyAgentTool[])[]
 ): ReadonlyMap<string, AnyAgentTool> {
   const toolsByName = new Map<string, AnyAgentTool>();
-  let toolCount: number;
-  try {
-    toolCount = tools.length;
-  } catch {
-    return toolsByName;
-  }
-  for (let index = 0; index < toolCount; index += 1) {
+  for (const tools of toolLists) {
+    let toolCount: number;
     try {
-      const tool = tools[index];
-      toolsByName.set(tool.name, tool);
+      toolCount = tools.length;
     } catch {
-      // Unreadable names are surfaced as schema projection diagnostics.
+      continue;
+    }
+    for (let index = 0; index < toolCount; index += 1) {
+      try {
+        const tool = tools[index];
+        toolsByName.set(tool.name, tool);
+      } catch {
+        // Unreadable names are surfaced as schema projection diagnostics.
+      }
     }
   }
   return toolsByName;
@@ -159,6 +161,10 @@ export function collectActiveToolSchemaProjectionWarnings(params: {
       );
     }
     let tools: ReturnType<typeof createOpenClawCodingTools>;
+    const constructionDiagnostics: {
+      diagnostic: RuntimeToolSchemaDiagnostic;
+      sourceTools: readonly AnyAgentTool[];
+    }[] = [];
     try {
       tools = createOpenClawCodingTools({
         agentId,
@@ -172,6 +178,11 @@ export function collectActiveToolSchemaProjectionWarnings(params: {
         modelContextWindowTokens: runtimeModelContext.modelContextWindowTokens,
         allowGatewaySubagentBinding: true,
         toolPolicyAuditLogLevel: "debug",
+        onProviderNormalizationSchemaDiagnostics: (diagnostics, sourceTools) => {
+          for (const diagnostic of diagnostics) {
+            constructionDiagnostics.push({ diagnostic, sourceTools });
+          }
+        },
       });
     } catch (error) {
       warnings.push(
@@ -182,7 +193,10 @@ export function collectActiveToolSchemaProjectionWarnings(params: {
       continue;
     }
 
-    const rawToolsByName = buildReadableToolsByName(tools);
+    const rawToolsByName = buildReadableToolsByName(
+      tools,
+      ...constructionDiagnostics.map((entry) => entry.sourceTools),
+    );
     const preNormalizationDiagnostics: {
       diagnostic: RuntimeToolSchemaDiagnostic;
       sourceTools: readonly AnyAgentTool[];
@@ -211,6 +225,20 @@ export function collectActiveToolSchemaProjectionWarnings(params: {
         ),
       );
       continue;
+    }
+    for (const { diagnostic, sourceTools } of constructionDiagnostics) {
+      const pluginId = resolveDiagnosticPluginId({
+        tools: sourceTools,
+        rawToolsByName,
+        diagnostic,
+      });
+      warnings.push(
+        formatDiagnostic({
+          agentId,
+          diagnostic,
+          ...(pluginId ? { pluginId } : {}),
+        }),
+      );
     }
     for (const { diagnostic, sourceTools } of preNormalizationDiagnostics) {
       const pluginId = resolveDiagnosticPluginId({

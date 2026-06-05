@@ -581,6 +581,115 @@ describe("createOpenClawCodingTools", () => {
     }
   });
 
+  it("quarantines hostile plugin schemas before provider normalization", () => {
+    const createOpenClawToolsMock = vi.mocked(createOpenClawTools);
+    createOpenClawToolsMock.mockClear();
+    const hostileProperties = {};
+    Object.defineProperty(hostileProperties, "angle", {
+      enumerable: true,
+      get() {
+        throw new Error("schema revoked");
+      },
+    });
+    const volatileButSerializableSchema = {
+      type: "object",
+      required: ["mode"],
+      toJSON() {
+        return {
+          type: "object",
+          properties: { mode: { type: "string" } },
+          required: ["mode"],
+        };
+      },
+    };
+    Object.defineProperty(volatileButSerializableSchema, "properties", {
+      enumerable: true,
+      get() {
+        throw new Error("live schema revoked");
+      },
+    });
+    const serializableTool = {
+      name: "serializable_plugin_tool",
+      description: "Serializable hostile sibling",
+      parameters: volatileButSerializableSchema,
+      execute: vi.fn(),
+    };
+    class ParameterFreePluginTool {
+      name = "parameter_free_plugin_tool";
+      description = "Parameter-free sibling";
+      parameters = undefined;
+      async execute() {
+        return { text: "ok" };
+      }
+    }
+    const parameterFreeTool = new ParameterFreePluginTool() as never;
+    const resolvePluginToolsSpy = vi
+      .spyOn(openClawPluginTools, "resolveOpenClawPluginToolsForOptions")
+      .mockReturnValue([
+        {
+          name: "dofbot_move_angles",
+          description: "Move robot angles",
+          parameters: {
+            type: "object",
+            properties: hostileProperties,
+            required: ["angle"],
+          },
+          execute: vi.fn(),
+        },
+        serializableTool,
+        parameterFreeTool,
+        {
+          name: "healthy_plugin_tool",
+          description: "Healthy sibling",
+          parameters: {
+            type: "object",
+            properties: { query: { type: "string" } },
+            required: ["query"],
+          },
+          execute: vi.fn(),
+        },
+      ] as never);
+
+    try {
+      const tools = createOpenClawCodingTools({
+        config: testConfig,
+        includeCoreTools: false,
+        runtimeToolAllowlist: [
+          "dofbot_move_angles",
+          "serializable_plugin_tool",
+          "parameter_free_plugin_tool",
+          "healthy_plugin_tool",
+        ],
+        runId: "run-schema-normalization-quarantine",
+        toolConstructionPlan: {
+          includeBaseCodingTools: false,
+          includeShellTools: false,
+          includeChannelTools: false,
+          includeOpenClawTools: false,
+          includePluginTools: true,
+        },
+      });
+
+      expect(createOpenClawToolsMock).not.toHaveBeenCalled();
+      expect(toolNameList(tools)).toEqual([
+        "serializable_plugin_tool",
+        "parameter_free_plugin_tool",
+        "healthy_plugin_tool",
+      ]);
+      const serializable = requireTool(tools, "serializable_plugin_tool");
+      const parameterFree = requireTool(tools, "parameter_free_plugin_tool");
+      expect(serializable.parameters).toEqual({
+        type: "object",
+        properties: { mode: { type: "string" } },
+        required: ["mode"],
+      });
+      expect(parameterFree.parameters).toBeUndefined();
+      expect(parameterFree.execute).toEqual(expect.any(Function));
+    } finally {
+      resolvePluginToolsSpy.mockRestore();
+    }
+  });
+
   it("forwards auth profiles to plugin-only tool construction", () => {
     const createOpenClawToolsMock = vi.mocked(createOpenClawTools);
     createOpenClawToolsMock.mockClear();
