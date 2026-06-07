@@ -128,6 +128,30 @@ describe("listSessionFilesForAgent listing cache", () => {
     expect(baseNames(secondCall)).toEqual(["a.jsonl"]);
   });
 
+  it("returns an isolated copy so caller mutation cannot corrupt the cache", async () => {
+    writeSession("a.jsonl");
+    const readdirSpy = vi.spyOn(fsPromises, "readdir");
+
+    // Concurrent burst exercises the in-flight originator + joiner return paths;
+    // a shared reference here would poison the snapshot for everyone.
+    const [a, b] = await Promise.all([
+      listSessionFilesForAgent("main"),
+      listSessionFilesForAgent("main"),
+    ]);
+    a.length = 0;
+    b.push("/phantom.jsonl");
+
+    // Sequential cache hit exercises the snapshot return path.
+    const cached = await listSessionFilesForAgent("main");
+    cached.length = 0;
+
+    const afterMutation = await listSessionFilesForAgent("main");
+
+    // One scan total; no caller's mutation leaked into the cached snapshot.
+    expect(readdirSpy).toHaveBeenCalledTimes(1);
+    expect(baseNames(afterMutation)).toEqual(["a.jsonl"]);
+  });
+
   it("refreshes the snapshot after the TTL elapses", async () => {
     vi.useFakeTimers({ toFake: ["Date"] });
     writeSession("a.jsonl");
