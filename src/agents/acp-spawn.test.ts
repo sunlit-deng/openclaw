@@ -1689,7 +1689,8 @@ describe("spawnAcpDirect", () => {
         agentSessionKey: "agent:main:matrix:channel:!room:example",
         agentChannel: "matrix",
         agentAccountId: "default",
-        agentTo: "channel:!room:example",
+        agentTo: "room:!room:example",
+        agentGroupId: "!room:example",
       },
     );
     expect(result.status, JSON.stringify(result)).toBe("accepted");
