@@ -63,11 +63,13 @@ Docs: https://docs.openclaw.ai
 - Release/CI/E2E: Codex npm plugin live assertions now cap transcript discovery and diagnostic log reads so failure proof stays bounded.
 - Release/CI/E2E: browser snapshot, release-scenario, release-user-journey, Telegram desktop/RTT/package, web-search, Parallels update, plugin update, doctor switch, and upgrade-survivor diagnostics now stream or bound log/artifact reads so failed proof stays inspectable without unbounded output.
 - Release/CI/E2E: ClawHub publish jobs prepare dependencies after checking out the target ref, and Docker store seed package discovery now targets the intended production packages. (#91547)
+- Release/CI/E2E: QA Lab capability-flip release validation now marks intentional `tools.deny` restores as array replacements, so beta validation fails only on real capability regressions.
 - Tests/state isolation: QA Lab valid-tool-call metrics now require runtime tool-call evidence when runtime parity data is available instead of counting tool-backed scenario pass status alone.
 - Tests/state isolation: QA Lab runtime parity now fails planned-only tool-call rows without matching tool results instead of treating matching mock plans as real tool evidence.
 - Tests/state isolation: QA Lab runtime parity now treats matching controlled tool errors as equivalent and falls back to transcript tool results when mock debug rows miss async image-generation starts.
 - Tests/state isolation: QA suites now fail closed on skipped summaries, missing runtime tool proof, planned-only rows, loose release limits, missing live/provider artifacts, failed agent reply markers, and package Telegram summary failures.
 - Tests/state isolation: provider, media, auth, cron, task, session, sandbox, Gateway, and Codex timeout fixtures now scope more home/state/env data per test, reducing cross-test leakage and making release validation failures less noisy. (#90027, #89974)
+- Sessions: the beta SQLite downgrade rescue now skips extra pre-reads for active non-empty JSON session stores, preserving cache race detection while still restoring missing or empty beta session files.
 
 ## 2026.6.2
 
