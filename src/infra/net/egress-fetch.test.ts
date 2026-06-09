@@ -16,6 +16,16 @@ const { agentCtor, fetchRuntimeMock } = vi.hoisted(() => ({
   }),
   fetchRuntimeMock: vi.fn(),
 }));
+const { captureHttpExchangeMock, isDebugProxyGlobalFetchPatchInstalledMock } = vi.hoisted(() => ({
+  captureHttpExchangeMock: vi.fn(),
+  isDebugProxyGlobalFetchPatchInstalledMock: vi.fn(() => false),
+}));
+
+vi.mock("../../proxy-capture/runtime.js", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("../../proxy-capture/runtime.js")>()),
+  captureHttpExchange: captureHttpExchangeMock,
+  isDebugProxyGlobalFetchPatchInstalled: isDebugProxyGlobalFetchPatchInstalledMock,
+}));
 
 class MockEnvHttpProxyAgent {
   close = vi.fn(async () => undefined);
@@ -47,6 +57,9 @@ function pendingFetchThatRejectsOnAbort(): typeof fetch {
 beforeEach(() => {
   fetchRuntimeMock.mockReset();
   agentCtor.mockClear();
+  captureHttpExchangeMock.mockClear();
+  isDebugProxyGlobalFetchPatchInstalledMock.mockReset();
+  isDebugProxyGlobalFetchPatchInstalledMock.mockReturnValue(false);
   (globalThis as Record<string, unknown>)[TEST_UNDICI_RUNTIME_DEPS_KEY] = {
     Agent: agentCtor,
     EnvHttpProxyAgent: MockEnvHttpProxyAgent,
@@ -58,6 +71,7 @@ beforeEach(() => {
 afterEach(() => {
   vi.useRealTimers();
   vi.unstubAllEnvs();
+  vi.unstubAllGlobals();
   Reflect.deleteProperty(globalThis as object, TEST_UNDICI_RUNTIME_DEPS_KEY);
 });
 
@@ -245,6 +259,92 @@ describe("fetchUntrustedUrl", () => {
     expect(fetchImpl).toHaveBeenCalledWith(
       "https://[2606:4700:4700::1111]/cdn-cgi/trace",
       expect.objectContaining({ redirect: "manual" }),
+    );
+    await result.release();
+  });
+
+  it("uses a direct dispatcher instead of ambient env proxies in direct mode", async () => {
+    vi.stubEnv("HTTPS_PROXY", "http://127.0.0.1:3128");
+    const fetchImpl = vi.fn(async () => new Response("ok"));
+
+    const result = await fetchUntrustedUrl({
+      url: "https://example.com/data",
+      fetchImpl,
+      lookupFn: publicLookup(),
+      proxyEnabled: false,
+    });
+
+    expect(fetchImpl).toHaveBeenCalledTimes(1);
+    const init = fetchImpl.mock.calls[0]?.[1] as { dispatcher?: unknown } | undefined;
+    expect(agentCtor).toHaveBeenCalledTimes(1);
+    expect(init?.dispatcher).toBe(agentCtor.mock.instances[0]);
+    await result.release();
+  });
+
+  it("pins direct dispatchers to the validated address set", async () => {
+    const lookupFn = vi
+      .fn()
+      .mockResolvedValueOnce([{ address: "93.184.216.34", family: 4 }])
+      .mockResolvedValueOnce([{ address: "127.0.0.1", family: 4 }]) as unknown as LookupFn;
+    const fetchImpl = vi.fn(async () => new Response("ok"));
+
+    const result = await fetchUntrustedUrl({
+      url: "https://example.com/data",
+      fetchImpl,
+      lookupFn,
+      proxyEnabled: false,
+    });
+
+    expect(lookupFn).toHaveBeenCalledTimes(1);
+    expect(fetchImpl).toHaveBeenCalledTimes(1);
+    const agentOptions = agentCtor.mock.calls[0]?.[0] as
+      | { connect?: { lookup?: unknown } }
+      | undefined;
+    const lookup = agentOptions?.connect?.lookup;
+    expect(typeof lookup).toBe("function");
+    await new Promise<void>((resolve, reject) => {
+      (
+        lookup as (
+          host: string,
+          options: { all: true },
+          callback: (error: Error | null, records?: unknown) => void,
+        ) => void
+      )("example.com", { all: true }, (error, records) => {
+        if (error) {
+          reject(error);
+          return;
+        }
+        expect(records).toEqual([{ address: "93.184.216.34", family: 4 }]);
+        resolve();
+      });
+    });
+    await result.release();
+  });
+
+  it("captures direct-dispatched untrusted fetches when debug proxy capture is enabled", async () => {
+    vi.stubEnv("OPENCLAW_DEBUG_PROXY_ENABLED", "1");
+    vi.stubEnv("OPENCLAW_DEBUG_PROXY_DB_PATH", "/tmp/openclaw-egress-fetch-test.sqlite");
+    vi.stubEnv("OPENCLAW_DEBUG_PROXY_BLOB_DIR", "/tmp/openclaw-egress-fetch-test-blobs");
+    fetchRuntimeMock.mockResolvedValueOnce(new Response("ok"));
+
+    const result = await fetchUntrustedUrl({
+      url: "https://example.com/data",
+      lookupFn: publicLookup(),
+      proxyEnabled: false,
+    });
+
+    expect(fetchRuntimeMock).toHaveBeenCalledTimes(1);
+    expect(captureHttpExchangeMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        url: "https://example.com/data",
+        method: "GET",
+        response: result.response,
+        transport: "http",
+        meta: {
+          captureOrigin: "untrusted-url-fetch",
+        },
+      }),
+      expect.objectContaining({ enabled: true }),
     );
     await result.release();
   });

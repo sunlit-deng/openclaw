@@ -16,7 +16,9 @@ import {
 import {
   closeDispatcher,
   createPinnedDispatcher,
+  createPinnedLookup,
   isBlockedHostnameOrIp,
+  type PinnedHostnameOverride,
   resolvePinnedHostnameWithPolicy,
   SsrFBlockedError,
   type LookupFn,
@@ -39,6 +41,7 @@ export type HttpEgressMode =
       kind: "untrustedUrl";
       lookupFn?: LookupFn;
       proxyEnabled?: boolean;
+      directPins?: Map<string, PinnedHostnameOverride>;
     };
 
 export type FetchWithEgressPolicyOptions = {
@@ -88,6 +91,10 @@ export type FetchWithResponseReleaseResult = {
 const DEFAULT_MAX_REDIRECTS = 10;
 const REDIRECT_STATUSES = new Set([301, 302, 303, 307, 308]);
 
+function isTruthyEnvValue(value: string | undefined): boolean {
+  return value === "1" || value === "true" || value === "yes" || value === "on";
+}
+
 function resolveDispatcherTimeoutMs(timeoutMs: number | undefined): number | undefined {
   return timeoutMs ?? globalUndiciStreamTimeoutMs;
 }
@@ -111,19 +118,22 @@ async function assertUntrustedUrlAllowed(params: {
   lookupFn?: LookupFn;
   proxyEnabled?: boolean;
   operation: string;
-}): Promise<void> {
+  directPins?: Map<string, PinnedHostnameOverride>;
+}): Promise<PinnedHostnameOverride | undefined> {
   assertHttpUrl(params.url, params.operation);
   // This is a stock safety guard for default direct mode. The high-assurance
   // egress boundary is proxy.enabled plus the operator's external proxy policy.
   if (params.proxyEnabled ?? resolveManagedProxyEnabled()) {
-    return;
+    return undefined;
   }
   const hostname = normalizeHostname(params.url.hostname);
   if (isBlockedHostnameOrIp(hostname)) {
     throw new SsrFBlockedError("Blocked hostname or private/internal/special-use IP address");
   }
   if (parseCanonicalIpAddress(hostname)) {
-    return;
+    const pin = { hostname, addresses: [hostname] };
+    params.directPins?.set(params.url.toString(), pin);
+    return pin;
   }
   const lookupFn = params.lookupFn ?? dnsLookup;
   const records = normalizeLookupResults((await lookupFn(hostname, { all: true })) as LookupResult);
@@ -135,6 +145,10 @@ async function assertUntrustedUrlAllowed(params: {
       throw new SsrFBlockedError("Blocked: resolves to private/internal/special-use IP address");
     }
   }
+  const addresses = [...new Set(records.map((record) => record.address))];
+  const pin = { hostname, addresses };
+  params.directPins?.set(params.url.toString(), pin);
+  return pin;
 }
 
 async function validateEgressUrl(params: {
@@ -156,6 +170,7 @@ async function validateEgressUrl(params: {
       lookupFn: params.mode.lookupFn,
       proxyEnabled: params.mode.proxyEnabled,
       operation: params.operation,
+      directPins: params.mode.directPins,
     });
   }
 }
@@ -226,6 +241,48 @@ async function cancelResponseBody(response: Response | undefined): Promise<void>
   await Promise.resolve(cancel.call(body)).catch(() => undefined);
 }
 
+async function captureDefaultEgressHttpExchange(params: {
+  url: string;
+  init: DispatcherAwareRequestInit;
+  response: Response;
+  capturedByGlobalFetchPatch: boolean;
+  captureOrigin: string;
+}): Promise<void> {
+  if (!isTruthyEnvValue(process.env.OPENCLAW_DEBUG_PROXY_ENABLED)) {
+    return;
+  }
+  const [
+    { resolveDebugProxySettings },
+    { captureHttpExchange, isDebugProxyGlobalFetchPatchInstalled },
+  ] = await Promise.all([
+    import("../../proxy-capture/env.js"),
+    import("../../proxy-capture/runtime.js"),
+  ]);
+  const settings = resolveDebugProxySettings();
+  if (!settings.enabled) {
+    return;
+  }
+  if (params.capturedByGlobalFetchPatch && isDebugProxyGlobalFetchPatchInstalled()) {
+    return;
+  }
+  captureHttpExchange(
+    {
+      url: params.url,
+      method: params.init.method ?? "GET",
+      requestHeaders: params.init.headers as Headers | Record<string, string> | undefined,
+      requestBody:
+        (params.init as (RequestInit & { body?: BodyInit | Buffer | string | null }) | undefined)
+          ?.body ?? null,
+      response: params.response,
+      transport: "http",
+      meta: {
+        captureOrigin: params.captureOrigin,
+      },
+    },
+    settings,
+  );
+}
+
 export function resolveEgressDispatcherPolicy(params: {
   url: string;
   dispatcherPolicy?: PinnedDispatcherPolicy;
@@ -259,10 +316,22 @@ export async function createEgressDispatcher(params: {
   }
   const timeoutMs = resolveDispatcherTimeoutMs(params.timeoutMs);
   if (dispatcherPolicy.pinnedHostname) {
-    const pinned = await resolvePinnedHostnameWithPolicy(params.url.hostname, {
-      lookupFn: params.lookupFn,
-      policy: params.policy,
-    });
+    const normalizedHostname = normalizeHostname(params.url.hostname);
+    const normalizedPinnedHostname = normalizeHostname(dispatcherPolicy.pinnedHostname.hostname);
+    const pinned =
+      normalizedPinnedHostname === normalizedHostname
+        ? {
+            hostname: normalizedHostname,
+            addresses: [...dispatcherPolicy.pinnedHostname.addresses],
+            lookup: createPinnedLookup({
+              hostname: normalizedHostname,
+              addresses: [...dispatcherPolicy.pinnedHostname.addresses],
+            }),
+          }
+        : await resolvePinnedHostnameWithPolicy(params.url.hostname, {
+            lookupFn: params.lookupFn,
+            policy: params.policy,
+          });
     return createPinnedDispatcher(pinned, dispatcherPolicy, params.policy, timeoutMs);
   }
   if (dispatcherPolicy.mode === "direct") {
@@ -490,15 +559,57 @@ export async function fetchOperatorConfiguredEndpoint(
 }
 
 export async function fetchUntrustedUrl(
-  params: Omit<FetchWithEgressPolicyOptions, "mode"> & {
+  params: Omit<FetchWithEgressPolicyOptions, "mode" | "useEnvProxy"> & {
     lookupFn?: LookupFn;
     proxyEnabled?: boolean;
   },
 ): Promise<FetchWithResponseReleaseResult> {
-  const { lookupFn, proxyEnabled, ...rest } = params;
+  const { lookupFn, proxyEnabled, onResponse, operation, ...rest } = params;
+  const shouldUseEnvProxy = proxyEnabled ?? resolveManagedProxyEnabled();
+  const directPins = new Map<string, PinnedHostnameOverride>();
+  // Ambient env proxies can resolve/rewrite outside the stock direct-mode guard.
+  // In direct mode, install a per-request direct dispatcher to bypass globals too.
+  const dispatcherPolicy = shouldUseEnvProxy
+    ? rest.dispatcherPolicy
+    : async (url: URL) => {
+        const resolvedPolicy = await resolvePolicyForUrl(rest.dispatcherPolicy, url);
+        if (resolvedPolicy?.pinnedHostname) {
+          return resolvedPolicy;
+        }
+        if (resolvedPolicy && resolvedPolicy.mode !== "direct") {
+          return resolvedPolicy;
+        }
+        const pinnedHostname =
+          directPins.get(url.toString()) ??
+          (await assertUntrustedUrlAllowed({
+            url,
+            lookupFn,
+            proxyEnabled: false,
+            operation: operation ?? "untrusted-url-fetch",
+            directPins,
+          }));
+        return {
+          ...(resolvedPolicy ?? { mode: "direct" as const }),
+          ...(pinnedHostname ? { pinnedHostname } : {}),
+        };
+      };
+  const captureOrigin = operation ?? "untrusted-url-fetch";
   return await fetchWithEgressPolicy({
     ...rest,
-    mode: { kind: "untrustedUrl", lookupFn, proxyEnabled },
-    operation: params.operation ?? "untrusted-url-fetch",
+    mode: { kind: "untrustedUrl", lookupFn, proxyEnabled, directPins },
+    operation: captureOrigin,
+    dispatcherPolicy,
+    onResponse:
+      onResponse ??
+      (async ({ url, init, response, capturedByGlobalFetchPatch }) => {
+        await captureDefaultEgressHttpExchange({
+          url,
+          init,
+          response,
+          capturedByGlobalFetchPatch,
+          captureOrigin,
+        });
+      }),
+    useEnvProxy: shouldUseEnvProxy,
   });
 }
