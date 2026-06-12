@@ -4,6 +4,14 @@ import Testing
 
 @Suite(.serialized)
 struct ExecApprovalsStoreRefactorTests {
+    private var realTemporaryDirectory: URL {
+        let path = FileManager().temporaryDirectory.path
+        if path.hasPrefix("/var/") {
+            return URL(fileURLWithPath: "/private\(path)", isDirectory: true)
+        }
+        return FileManager().temporaryDirectory.resolvingSymlinksInPath()
+    }
+
     private func withLockedEnv(
         _ values: [String: String?],
         _ body: () async throws -> Void) async throws
@@ -43,7 +51,7 @@ struct ExecApprovalsStoreRefactorTests {
     private func withTempStateDir(
         _ body: @escaping @Sendable (URL) async throws -> Void) async throws
     {
-        let root = FileManager().temporaryDirectory.resolvingSymlinksInPath()
+        let root = self.realTemporaryDirectory
             .appendingPathComponent("openclaw-state-\(UUID().uuidString)", isDirectory: true)
         let home = root.appendingPathComponent("home", isDirectory: true)
         let stateDir = root.appendingPathComponent("state", isDirectory: true)
@@ -60,7 +68,7 @@ struct ExecApprovalsStoreRefactorTests {
     private func withTempHomeAndStateDir(
         _ body: @escaping @Sendable (URL, URL) async throws -> Void) async throws
     {
-        let root = FileManager().temporaryDirectory.resolvingSymlinksInPath()
+        let root = self.realTemporaryDirectory
             .appendingPathComponent("openclaw-home-state-\(UUID().uuidString)", isDirectory: true)
         let home = root.appendingPathComponent("home", isDirectory: true)
         let stateDir = root.appendingPathComponent("state", isDirectory: true)
