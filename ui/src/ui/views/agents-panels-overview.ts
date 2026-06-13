@@ -249,9 +249,9 @@ function renderMemoryTiersCard(isLoading: boolean) {
         <div class="card-title">Memory Tiers</div>
         <div class="card-sub">Corpus configuration and retrieval tiers.</div>
         <div style="display: flex; flex-direction: column; gap: 10px; margin-top: 16px;">
-          <div class="skeleton skeleton-block" style="animation-delay: 0ms;"></div>
-          <div class="skeleton skeleton-block" style="animation-delay: 60ms;"></div>
-          <div class="skeleton skeleton-block" style="animation-delay: 120ms;"></div>
+          <div class="skeleton skeleton-block stagger-1"></div>
+          <div class="skeleton skeleton-block stagger-2"></div>
+          <div class="skeleton skeleton-block stagger-3"></div>
         </div>
       </section>
     `;
@@ -275,18 +275,9 @@ function renderRoleContractsCard(isLoading: boolean) {
         <div class="card-title">Role Contracts</div>
         <div class="card-sub">Active soul files and persona bindings.</div>
         <div style="display: flex; flex-direction: column; gap: 10px; margin-top: 16px;">
-          <div
-            class="skeleton skeleton-line skeleton-line--long"
-            style="animation-delay: 0ms;"
-          ></div>
-          <div
-            class="skeleton skeleton-line skeleton-line--medium"
-            style="animation-delay: 80ms;"
-          ></div>
-          <div
-            class="skeleton skeleton-line skeleton-line--short"
-            style="animation-delay: 160ms;"
-          ></div>
+          <div class="skeleton skeleton-line skeleton-line--long stagger-1"></div>
+          <div class="skeleton skeleton-line skeleton-line--medium stagger-2"></div>
+          <div class="skeleton skeleton-line skeleton-line--short stagger-3"></div>
         </div>
       </section>
     `;
