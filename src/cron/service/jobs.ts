@@ -210,6 +210,13 @@ function shouldRepairFutureCronNextRunAtMs(params: {
     return false;
   }
 
+  // Startup overflow catch-up deferrals are intentional non-natural slots.
+  // Protect them from repair by list/status/empty-due-tick recompute passes
+  // until their staggered catch-up tick fires.  See #93935.
+  if (state.pendingCatchupDeferralJobIds.has(job.id)) {
+    return false;
+  }
+
   // Error retries may intentionally use a non-cron future timestamp while
   // backoff is pending. Once the retry window has elapsed, stale future cron
   // slots should be eligible for the same repair as ordinary schedule state.
@@ -679,6 +686,17 @@ export function recomputeNextRunsForMaintenance(
   const recomputeExpired = opts?.recomputeExpired ?? false;
   const repairFutureCronNextRunAtMs = opts?.repairFutureCronNextRunAtMs ?? true;
   const skipFutureRepairJobIds = opts?.skipFutureRepairJobIds;
+
+  // Self-clean expired catch-up deferral markers so the set doesn't grow
+  // unbounded.  Once nowMs has passed the deferral's nextRunAtMs the slot
+  // is either executing or past-due, so the protection is no longer needed.
+  const nowMs = opts?.nowMs ?? state.deps.nowMs();
+  for (const jobId of state.pendingCatchupDeferralJobIds) {
+    const job = state.store?.jobs.find((j) => j.id === jobId);
+    if (!job || (hasScheduledNextRunAtMs(job.state.nextRunAtMs) && nowMs >= job.state.nextRunAtMs)) {
+      state.pendingCatchupDeferralJobIds.delete(jobId);
+    }
+  }
   return walkSchedulableJobs(
     state,
     ({ job, nowMs: now }) => {

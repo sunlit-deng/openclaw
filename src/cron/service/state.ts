@@ -228,6 +228,7 @@ export function createCronServiceState(deps: CronServiceDeps): CronServiceState 
     pendingQuarantineConfigJobs: [],
     lastQuarantineFailureWarnKey: null,
     storeLoadedAtMs: null,
+    pendingCatchupDeferralJobIds: new Set<string>(),
   };
 }
 

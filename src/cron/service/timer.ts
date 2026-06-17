@@ -1843,10 +1843,11 @@ async function applyStartupCatchupOutcomes(
           if (typeof deferred.delayMs === "number") {
             job.state.nextRunAtMs = baseNow + deferred.delayMs + offset - staggerMs;
             offset += staggerMs;
-            continue;
+          } else {
+            job.state.nextRunAtMs = baseNow + offset;
+            offset += staggerMs;
           }
-          job.state.nextRunAtMs = baseNow + offset;
-          offset += staggerMs;
+          state.pendingCatchupDeferralJobIds.add(jobId);
         }
       }
 
