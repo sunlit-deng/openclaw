@@ -376,7 +376,10 @@ export async function buildStatusText(params: BuildStatusTextParams): Promise<st
     harnessRuntime: effectiveHarness,
     config: cfg,
   });
-  const activeProvider = modelRefs.active.provider || provider;
+  // Prefer session provider override so usage/auth follow the /model selection,
+  // not a stale runtime model identity from a prior run with a different provider.
+  const activeProvider =
+    sessionEntry?.providerOverride?.trim() || modelRefs.active.provider || provider;
   const activeStatusProvider = resolveStatusRuntimeProvider({
     provider: activeProvider,
     effectiveHarness,
