@@ -1191,19 +1191,6 @@ function resetConfigEphemeralState() {
   rawDiffCache = undefined;
 }
 
-function resetContentScroll() {
-  const content = globalThis.document?.querySelector<HTMLElement>(".config-content");
-  if (!content) {
-    return;
-  }
-  if (typeof content.scrollTo === "function") {
-    content.scrollTo({ top: 0, left: 0, behavior: "auto" });
-    return;
-  }
-  content.scrollTop = 0;
-  content.scrollLeft = 0;
-}
-
 function configContextKey(props: ConfigProps): string {
   const include = props.includeSections?.join("\u001f") ?? "";
   const exclude = props.excludeSections?.join("\u001f") ?? "";
@@ -1251,9 +1238,28 @@ export function renderConfig(props: ConfigProps) {
   const rawAvailable = props.rawAvailable ?? true;
   const formMode = showModeToggle && rawAvailable ? props.formMode : "form";
   const requestUpdate = props.onRequestUpdate ?? (() => {});
+  // Scroll helper: target-based (nav clicks) with global fallback (form/raw toggle)
+  const resetContentScroll = (target: EventTarget | null) => {
+    queueMicrotask(() => {
+      const origin = target instanceof Element ? target : null;
+      const content =
+        origin?.closest(".config-main")?.querySelector<HTMLElement>(".config-content") ??
+        globalThis.document?.querySelector<HTMLElement>(".config-content");
+      if (!content) {
+        return;
+      }
+      if (typeof content.scrollTo === "function") {
+        content.scrollTo({ top: 0, left: 0, behavior: "auto" });
+        return;
+      }
+      content.scrollTop = 0;
+      content.scrollLeft = 0;
+    });
+  };
+
   // Reset scroll position when switching between form and raw mode
   if (lastFormModeForScroll !== null && lastFormModeForScroll !== formMode) {
-    queueMicrotask(() => resetContentScroll());
+    resetContentScroll(null);
   }
   lastFormModeForScroll = formMode;
 
@@ -1320,24 +1326,6 @@ export function renderConfig(props: ConfigProps) {
 
   const settingsLayout = props.settingsLayout ?? "tabs";
   const allCategories = [...visibleCategories, ...(otherCategory ? [otherCategory] : [])];
-
-  const resetContentScroll = (target: EventTarget | null) => {
-    queueMicrotask(() => {
-      const origin = target instanceof Element ? target : null;
-      const content = origin
-        ?.closest(".config-main")
-        ?.querySelector<HTMLElement>(".config-content");
-      if (!content) {
-        return;
-      }
-      if (typeof content.scrollTo === "function") {
-        content.scrollTo({ top: 0, left: 0, behavior: "auto" });
-        return;
-      }
-      content.scrollTop = 0;
-      content.scrollLeft = 0;
-    });
-  };
 
   function renderAccordionNav() {
     return html`
