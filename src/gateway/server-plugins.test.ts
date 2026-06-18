@@ -1065,6 +1065,37 @@ describe("loadGatewayPlugins", () => {
     );
   });
 
+  test("allows trusted fallback overrides via plugins.entries.<id>.llm.allowModelOverride", async () => {
+    const serverPlugins = serverPluginsModule;
+    const runtime = await createSubagentRuntime(serverPlugins, {
+      plugins: {
+        entries: {
+          "voice-call": {
+            llm: {
+              allowModelOverride: true,
+              allowedModels: ["anthropic/claude-haiku-4-5"],
+            },
+          },
+        },
+      },
+    });
+    serverPlugins.setFallbackGatewayContext(createTestContext("fallback-llm-policy"));
+    await gatewayRequestScopeModule.withPluginRuntimePluginIdScope("voice-call", () =>
+      runtime.run({
+        sessionKey: "s-llm-policy-override",
+        message: "use llm-policy override",
+        provider: "anthropic",
+        model: "claude-haiku-4-5",
+        deliver: false,
+      }),
+    );
+
+    const params = getRequiredLastDispatchedParams();
+    expect(params.sessionKey).toBe("s-llm-policy-override");
+    expect(params.provider).toBe("anthropic");
+    expect(params.model).toBe("claude-haiku-4-5");
+  });
+
   test("allows trusted fallback model-only overrides when the model ref is canonical", async () => {
     const serverPlugins = serverPluginsModule;
     const runtime = await createSubagentRuntime(serverPlugins, {
