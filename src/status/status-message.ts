@@ -596,10 +596,8 @@ export function buildStatusMessage(args: StatusArgs): string {
     config: args.config,
     state: entry,
   });
-  // Prefer session provider/model override so status reflects the /model selection,
-  // not a stale runtime model identity from a prior run with a different provider.
-  let activeProvider = entry?.providerOverride?.trim() || modelRefs.active.provider;
-  let activeModel = entry?.modelOverride?.trim() || modelRefs.active.model;
+  let activeProvider = modelRefs.active.provider;
+  let activeModel = modelRefs.active.model;
   let contextLookupProvider: string | undefined = activeProvider;
   let contextLookupModel = activeModel;
   const runtimeModelRaw = normalizeOptionalString(entry?.model) ?? "";
@@ -1022,10 +1020,13 @@ export function buildStatusMessage(args: StatusArgs): string {
     typeof outputTokens === "number" ||
     typeof cacheRead === "number" ||
     typeof cacheWrite === "number";
+  // Use selected (override) model for cost so /status usage follows /model selection
+  const costProvider = entry?.providerOverride?.trim() || activeProvider;
+  const costModel = entry?.modelOverride?.trim() || activeModel;
   const costConfig = hasUsage
     ? resolveModelCostConfig({
-        provider: activeProvider,
-        model: activeModel,
+        provider: costProvider,
+        model: costModel,
         config: args.config,
         allowPluginNormalization: false,
       })
