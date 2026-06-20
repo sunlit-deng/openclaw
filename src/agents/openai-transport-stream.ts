@@ -4260,13 +4260,24 @@ export function buildOpenAICompletionsParams(
 ) {
   const compat = getCompat(model);
   const compatDetection = detectOpenAICompletionsCompat(model);
-  const completionsContext = context.systemPrompt
-    ? {
-        ...context,
-        systemPrompt: stripSystemPromptCacheBoundary(context.systemPrompt),
-      }
-    : context;
-  let messages = convertMessages(model as never, completionsContext, compat as never);
+  // Auto-detect disableBoundaryAwareCache for deepseek/xiaomi providers
+  // whose prefix-matching prompt cache breaks with the cache boundary split.
+  const disableBoundaryAwareCache =
+    model.compat?.disableBoundaryAwareCache === true ||
+    compatDetection.capabilities.endpointClass === "deepseek-native" ||
+    compatDetection.capabilities.endpointClass === "xiaomi-native" ||
+    model.provider === "deepseek" ||
+    model.provider === "xiaomi";
+  const completionsContext =
+    context.systemPrompt && !disableBoundaryAwareCache
+      ? {
+          ...context,
+          systemPrompt: stripSystemPromptCacheBoundary(context.systemPrompt),
+        }
+      : context;
+  let messages = convertMessages(model as never, completionsContext, compat as never, {
+    preserveSystemPromptCacheBoundary: disableBoundaryAwareCache,
+  });
   injectToolCallThoughtSignatures(messages as unknown[], context, model);
   sanitizeCompletionsReasoningReplayFields(messages, {
     preserveOpenRouterReasoning:

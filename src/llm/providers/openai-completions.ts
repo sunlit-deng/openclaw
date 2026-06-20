@@ -17,7 +17,11 @@ import {
   type OpenAICompletionsToolChoice,
   type OpenAIToolProjection,
 } from "../../agents/openai-tool-projection.js";
+<<<<<<< HEAD
 import { buildGuardedModelFetch } from "../../agents/provider-transport-fetch.js";
+=======
+import { normalizeStructuredPromptSection } from "../../agents/prompt-cache-stability.js";
+>>>>>>> d3363dab9e... feat: add disableBoundaryAwareCache compat option for prefix-matching prompt cache providers
 import {
   splitSystemPromptCacheBoundary,
   stripSystemPromptCacheBoundary,
@@ -969,13 +973,48 @@ export function convertMessages(
   if (context.systemPrompt) {
     const useDeveloperRole = model.reasoning && compat.supportsDeveloperRole;
     const role = useDeveloperRole ? "developer" : "system";
-    const systemPrompt = options.preserveSystemPromptCacheBoundary
-      ? context.systemPrompt
-      : stripSystemPromptCacheBoundary(context.systemPrompt);
-    params.push({
-      role,
-      content: sanitizeSurrogates(systemPrompt),
-    });
+    let systemPrompt: string;
+    let dynamicSuffix: string | undefined;
+
+    if (compat.disableBoundaryAwareCache) {
+      // Provider (e.g. DeepSeek) uses prefix-matching prompt caching where
+      // any suffix variation in the system prompt breaks the entire prefix match.
+      // Split at the cache boundary, keep only the stable prefix as the system
+      // message, and move the dynamic suffix into the first user message.
+      const split = splitSystemPromptCacheBoundary(context.systemPrompt);
+      systemPrompt = split?.stablePrefix
+        ? sanitizeSurrogates(split.stablePrefix)
+        : sanitizeSurrogates(stripSystemPromptCacheBoundary(context.systemPrompt));
+      dynamicSuffix = split?.dynamicSuffix || undefined;
+    } else if (options.preserveSystemPromptCacheBoundary) {
+      systemPrompt = sanitizeSurrogates(context.systemPrompt);
+    } else {
+      systemPrompt = sanitizeSurrogates(stripSystemPromptCacheBoundary(context.systemPrompt));
+    }
+
+    params.push({ role, content: systemPrompt });
+
+    // For providers that need stable system-prompt prefixes, prepend the dynamic
+    // suffix as context to the first user message instead of embedding it in the
+    // system prompt where it breaks prefix-matching cache.
+    if (dynamicSuffix) {
+      const firstUserIndex = transformedMessages.findIndex((m) => m.role === "user");
+      if (firstUserIndex >= 0) {
+        const msg = transformedMessages[firstUserIndex];
+        const prefix = normalizeStructuredPromptSection(dynamicSuffix);
+        if (typeof msg.content === "string") {
+          transformedMessages[firstUserIndex] = {
+            ...msg,
+            content: `${prefix}\n\n${msg.content}`,
+          };
+        } else {
+          transformedMessages[firstUserIndex] = {
+            ...msg,
+            content: [{ type: "text", text: prefix }, ...msg.content],
+          };
+        }
+      }
+    }
   }
 
   let lastRole: string | null = null;
@@ -1342,6 +1381,7 @@ function detectCompat(model: Model<"openai-completions">): ResolvedOpenAIComplet
     sendSessionAffinityHeaders: false,
     supportsPromptCacheKey: false,
     supportsLongCacheRetention: !(isTogether || isCloudflareWorkersAI || isCloudflareAiGateway),
+    disableBoundaryAwareCache: isDeepSeek || isXiaomi,
   };
 }
 
@@ -1381,5 +1421,7 @@ function getCompat(model: Model<"openai-completions">): ResolvedOpenAICompletion
     supportsPromptCacheKey: model.compat.supportsPromptCacheKey ?? detected.supportsPromptCacheKey,
     supportsLongCacheRetention:
       model.compat.supportsLongCacheRetention ?? detected.supportsLongCacheRetention,
+    disableBoundaryAwareCache:
+      model.compat.disableBoundaryAwareCache ?? detected.disableBoundaryAwareCache,
   };
 }
