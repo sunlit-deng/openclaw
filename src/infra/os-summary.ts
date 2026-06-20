@@ -12,27 +12,52 @@ type OsSummary = {
 
 const cachedOsSummaryByKey = new Map<string, OsSummary>();
 
-function macosVersion(): string {
+/**
+ * Resolve Darwin product version via sw_vers.
+ *
+ * Darwin kernel version and macOS product version are no longer in sync starting
+ * with macOS 26 (Tahoe), where Darwin 25.x maps to macOS 26.x instead of the
+ * historical Darwin N → macOS N+9 formula. Prefer sw_vers over os.release() on
+ * macOS to avoid stale mappings.
+ */
+export function resolveDarwinProductVersion(): string {
   const res = spawnSync("sw_vers", ["-productVersion"], { encoding: "utf-8" });
   const out = normalizeOptionalString(res.stdout) ?? "";
   return out || os.release();
 }
 
+/**
+ * Canonical OS product label for system prompts, diagnostics, and user-facing
+ * display. Uses sw_vers on macOS to get the real product version instead of the
+ * Darwin kernel version that diverged in Tahoe.
+ */
+export function resolveOsProductLabel(): string {
+  const platform = os.platform();
+  if (platform === "darwin") {
+    return `macOS ${resolveDarwinProductVersion()}`;
+  }
+  if (platform === "win32") {
+    return `Windows ${os.release()}`;
+  }
+  return `${os.type()} ${os.release()}`;
+}
+
 /** Resolves a compact OS label for diagnostics, logs, and environment summaries. */
 export function resolveOsSummary(): OsSummary {
   const platform = os.platform();
-  const release = os.release();
+  const rawRelease = os.release();
   const arch = os.arch();
-  const cacheKey = `${platform}\0${release}\0${arch}`;
-  // Cache by stable os.* facts; darwin's sw_vers lookup is comparatively slow
-  // and only needed once per observed platform/release/arch tuple.
+  // Cache key uses raw os.release() (stable per kernel) so sw_vers drift across
+  // minor macOS updates does not invalidate the cache.
+  const cacheKey = `${platform}\0${rawRelease}\0${arch}`;
   const cached = cachedOsSummaryByKey.get(cacheKey);
   if (cached) {
     return cached;
   }
+  const release = platform === "darwin" ? resolveDarwinProductVersion() : rawRelease;
   const label = (() => {
     if (platform === "darwin") {
-      return `macos ${macosVersion()} (${arch})`;
+      return `macos ${release} (${arch})`;
     }
     if (platform === "win32") {
       return `windows ${release} (${arch})`;
