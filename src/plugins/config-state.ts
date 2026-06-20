@@ -74,6 +74,66 @@ function createScopedPluginIdNormalizer(): NormalizePluginId {
     });
 }
 
+const LOSSLESS_CONTEXT_ENGINE_ID = "lossless-claw";
+
+/**
+ * Auto-populate the lossless-claw plugin's {@code llm} policy from
+ * {@code config.summaryModel} when the plugin entry exists but no explicit
+ * {@code llm} block is configured.
+ *
+ * This mirrors the legacy migration path ({@code ensureLosslessLlmPolicy} in
+ * {@code codex-route-warnings.ts}) but runs during every normal config load,
+ * not just during {@code doctor --fix}.  Without this, a correctly configured
+ * {@code summaryModel} is silently ignored at gateway startup: the runtime
+ * LLM policy resolver sees no {@code llm} block and denies every compaction
+ * model-override request until an incidental config hot-reload triggers the
+ * legacy migration.
+ *
+ * Only auto-populates when no explicit {@code llm} block exists — any
+ * operator-configured block (including {@code allowModelOverride: false})
+ * is preserved verbatim so explicit operator intent always wins.
+ */
+function normalizeLosslessLlmPolicy(
+  normalized: NormalizedPluginsConfig,
+  rawConfig?: OpenClawConfig["plugins"],
+): void {
+  const entry = normalized.entries[LOSSLESS_CONTEXT_ENGINE_ID];
+  if (!entry) {
+    return;
+  }
+
+  // Preserve any explicit llm block — operator intent wins.
+  if (entry.llm) {
+    return;
+  }
+
+  const rawEntries = rawConfig?.entries;
+  if (!rawEntries || typeof rawEntries !== "object") {
+    return;
+  }
+  const rawEntry = (rawEntries as Record<string, unknown>)[LOSSLESS_CONTEXT_ENGINE_ID];
+  if (!rawEntry || typeof rawEntry !== "object") {
+    return;
+  }
+  const rawPluginConfig = (rawEntry as Record<string, unknown>).config;
+  if (!rawPluginConfig || typeof rawPluginConfig !== "object") {
+    return;
+  }
+  const summaryModel =
+    typeof (rawPluginConfig as Record<string, unknown>).summaryModel === "string"
+      ? ((rawPluginConfig as Record<string, unknown>).summaryModel as string).trim()
+      : "";
+  if (!summaryModel) {
+    return;
+  }
+
+  entry.llm = {
+    allowModelOverride: true,
+    hasAllowedModelsConfig: true,
+    allowedModels: [summaryModel],
+  };
+}
+
 /** Normalizes user/config plugin ids into the canonical lowercase key form. */
 export function normalizePluginId(id: string): string {
   return normalizePluginIdWithLookup(id, getBundledPluginAliasLookup);
@@ -82,7 +142,9 @@ export function normalizePluginId(id: string): string {
 export const normalizePluginsConfig = (
   config?: OpenClawConfig["plugins"],
 ): NormalizedPluginsConfig => {
-  return normalizePluginsConfigWithResolver(config, createScopedPluginIdNormalizer());
+  const normalized = normalizePluginsConfigWithResolver(config, createScopedPluginIdNormalizer());
+  normalizeLosslessLlmPolicy(normalized, config);
+  return normalized;
 };
 
 export function createPluginActivationSource(params: {

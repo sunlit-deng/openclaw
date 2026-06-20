@@ -678,6 +678,111 @@ describe("resolveEnableState", () => {
   });
 });
 
+describe("normalizeLosslessLlmPolicy", () => {
+  it("auto-populates llm from config.summaryModel when no explicit llm block", () => {
+    const normalized = normalizePluginsConfig({
+      entries: {
+        "lossless-claw": {
+          enabled: true,
+          config: {
+            summaryModel: "google/gemini-2.5-flash",
+          },
+        },
+      },
+    });
+    const entry = normalized.entries["lossless-claw"];
+    expect(entry?.llm?.allowModelOverride).toBe(true);
+    expect(entry?.llm?.hasAllowedModelsConfig).toBe(true);
+    expect(entry?.llm?.allowedModels).toEqual(["google/gemini-2.5-flash"]);
+  });
+
+  it("preserves explicit llm policy verbatim even when summaryModel configured", () => {
+    const normalized = normalizePluginsConfig({
+      entries: {
+        "lossless-claw": {
+          enabled: true,
+          llm: {
+            allowModelOverride: false,
+            allowedModels: ["minimax/MiniMax-M2.7"],
+          },
+          config: {
+            summaryModel: "google/gemini-2.5-flash",
+          },
+        },
+      },
+    });
+    const entry = normalized.entries["lossless-claw"];
+    expect(entry?.llm?.allowModelOverride).toBe(false);
+    expect(entry?.llm?.allowedModels).toEqual(["minimax/MiniMax-M2.7"]);
+  });
+
+  it("auto-populates when llm block is empty (normalizes to undefined)", () => {
+    const normalized = normalizePluginsConfig({
+      entries: {
+        "lossless-claw": {
+          enabled: true,
+          llm: {},
+          config: {
+            summaryModel: "google/gemini-2.5-flash",
+          },
+        },
+      },
+    });
+    const entry = normalized.entries["lossless-claw"];
+    // An empty llm block normalizes to undefined (no meaningful fields),
+    // so the function correctly treats it as "no explicit policy"
+    // and auto-populates from summaryModel.
+    expect(entry?.llm?.allowModelOverride).toBe(true);
+    expect(entry?.llm?.allowedModels).toEqual(["google/gemini-2.5-flash"]);
+  });
+
+  it("does not auto-populate when summaryModel is missing", () => {
+    const normalized = normalizePluginsConfig({
+      entries: {
+        "lossless-claw": {
+          enabled: true,
+          config: {},
+        },
+      },
+    });
+    const entry = normalized.entries["lossless-claw"];
+    expect(entry?.llm).toBeUndefined();
+  });
+
+  it("does not affect unrelated plugin entries", () => {
+    const normalized = normalizePluginsConfig({
+      entries: {
+        "other-plugin": {
+          enabled: true,
+          config: { summaryModel: "some/model" },
+        },
+      },
+    });
+    expect(normalized.entries["lossless-claw"]).toBeUndefined();
+    expect(normalized.entries["other-plugin"]?.llm).toBeUndefined();
+  });
+
+  it("preserves explicit allowModelOverride: true with custom allowedModels", () => {
+    const normalized = normalizePluginsConfig({
+      entries: {
+        "lossless-claw": {
+          enabled: true,
+          llm: {
+            allowModelOverride: true,
+            allowedModels: ["stepfun/step-3.5-flash"],
+          },
+          config: {
+            summaryModel: "google/gemini-2.5-flash",
+          },
+        },
+      },
+    });
+    const entry = normalized.entries["lossless-claw"];
+    expect(entry?.llm?.allowModelOverride).toBe(true);
+    expect(entry?.llm?.allowedModels).toEqual(["stepfun/step-3.5-flash"]);
+  });
+});
+
 describe("resolveMemorySlotDecision", () => {
   it("disables a memory-only plugin when slot points elsewhere", () => {
     const result = resolveMemorySlotDecision({
