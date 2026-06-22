@@ -4259,15 +4259,10 @@ export function buildOpenAICompletionsParams(
   options: OpenAICompletionsOptions | undefined,
 ) {
   const compat = getCompat(model);
-  const compatDetection = detectOpenAICompletionsCompat(model);
-  // Auto-detect disableBoundaryAwareCache for deepseek/xiaomi providers
-  // whose prefix-matching prompt cache breaks with the cache boundary split.
-  const disableBoundaryAwareCache =
-    model.compat?.disableBoundaryAwareCache === true ||
-    compatDetection.capabilities.endpointClass === "deepseek-native" ||
-    compatDetection.capabilities.endpointClass === "xiaomi-native" ||
-    model.provider === "deepseek" ||
-    model.provider === "xiaomi";
+  // disableBoundaryAwareCache is already resolved by getCompat() via
+  //   model.compat.disableBoundaryAwareCache ?? detectCompat(...)
+  // which respects explicit false and auto-detects true for deepseek/xiaomi.
+  const disableBoundaryAwareCache = compat.disableBoundaryAwareCache;
   const completionsContext =
     context.systemPrompt && !disableBoundaryAwareCache
       ? {
