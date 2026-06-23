@@ -3587,6 +3587,7 @@ function detectCompat(model: OpenAIModeModel) {
     requiresReasoningContentOnAssistantMessages:
       compatDefaults.requiresReasoningContentOnAssistantMessages,
     requiresNonEmptyUserOrAssistantMessage: compatDefaults.requiresNonEmptyUserOrAssistantMessage,
+    disableBoundaryAwareCache: compatDefaults.disableBoundaryAwareCache,
   };
 }
 
@@ -3611,6 +3612,7 @@ function getCompat(model: OpenAIModeModel): {
   visibleReasoningDetailTypes: string[];
   requiresReasoningContentOnAssistantMessages: boolean;
   requiresNonEmptyUserOrAssistantMessage: boolean;
+  disableBoundaryAwareCache: boolean;
 } {
   const detected = detectCompat(model);
   const compat = model.compat ?? {};
@@ -3647,6 +3649,10 @@ function getCompat(model: OpenAIModeModel): {
       compat.requiresReasoningContentOnAssistantMessages ??
       detected.requiresReasoningContentOnAssistantMessages,
     requiresNonEmptyUserOrAssistantMessage: detected.requiresNonEmptyUserOrAssistantMessage,
+    disableBoundaryAwareCache:
+      compat.disableBoundaryAwareCache === false
+        ? false
+        : (compat.disableBoundaryAwareCache ?? detected.disableBoundaryAwareCache),
   };
 }
 
@@ -4259,8 +4265,9 @@ export function buildOpenAICompletionsParams(
   options: OpenAICompletionsOptions | undefined,
 ) {
   const compat = getCompat(model);
-  // disableBoundaryAwareCache is already resolved by getCompat() via
-  //   model.compat.disableBoundaryAwareCache ?? detectCompat(...)
+  const compatDetection = detectOpenAICompletionsCompat(model);
+  // disableBoundaryAwareCache is already resolved by getCompat() (transport layer)
+  // via model.compat.disableBoundaryAwareCache ?? detectCompat()
   // which respects explicit false and auto-detects true for deepseek/xiaomi.
   const disableBoundaryAwareCache = compat.disableBoundaryAwareCache;
   const completionsContext =
