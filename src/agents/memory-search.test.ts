@@ -755,4 +755,29 @@ describe("memory search config", () => {
     const resolved = resolveMemorySearchConfig(cfg, "main");
     expect(resolved?.sources).toContain("sessions");
   });
+
+  it("skips built-in openai adapter when custom baseUrl is configured", () => {
+    const cfg = asConfig({
+      models: {
+        providers: {
+          openai: { baseUrl: "http://127.0.0.1:11434/v1" },
+        },
+      },
+      agents: {
+        defaults: { memorySearch: { provider: "openai" } },
+      },
+    });
+    const resolved = resolveMemorySearchConfig(cfg, "main");
+    expect(resolved?.provider?.embeddingKey).toBe(undefined);
+  });
+
+  it("uses built-in openai adapter when no custom baseUrl is set", () => {
+    const cfg = asConfig({
+      agents: {
+        defaults: { memorySearch: { provider: "openai" } },
+      },
+    });
+    const resolved = resolveMemorySearchConfig(cfg, "main");
+    expect(resolved?.provider).toBeDefined();
+  });
 });
