@@ -1,5 +1,5 @@
 ---
-name: openclaw-pr-workflow
+name: auto-pr-openclaw
 description: Prepare and maintain contributor pull requests for openclaw/openclaw issues with repo-policy intake, per-issue worktrees, focused implementation validation, durable PR-body evidence, official ClawSweeper local-review, and a mandatory human approval gate before any push, PR update, or GitHub comment. Use when Codex is asked to handle an OpenClaw issue, prepare or update an OpenClaw PR, respond to ClawSweeper/Codex review, debug PR CI, or request ClawSweeper re-review for openclaw/openclaw.
 ---
 
@@ -58,13 +58,13 @@ Use this skill for `openclaw/openclaw` contributor work. Keep the process conser
 Create a worktree:
 
 ```powershell
-powershell -ExecutionPolicy Bypass -File E:\Projects\auto-pr\.codex\skills\openclaw-pr-workflow\scripts\new-openclaw-worktree.ps1 -Issue 94432
+powershell -ExecutionPolicy Bypass -File E:\Projects\auto-pr\.codex\skills\auto-pr-openclaw\scripts\new-openclaw-worktree.ps1 -Issue 94432
 ```
 
 Run the pre-push summary from an OpenClaw checkout:
 
 ```powershell
-powershell -ExecutionPolicy Bypass -File E:\Projects\auto-pr\.codex\skills\openclaw-pr-workflow\scripts\openclaw-prepush-check.ps1 `
+powershell -ExecutionPolicy Bypass -File E:\Projects\auto-pr\.codex\skills\auto-pr-openclaw\scripts\openclaw-prepush-check.ps1 `
   -RepoPath C:\path\to\openclaw `
   -Base origin/main `
   -PrBodyDraft C:\path\to\pr-body.md `

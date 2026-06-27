@@ -7,7 +7,7 @@ Personal Codex workflows for preparing OpenClaw pull requests with repeatable lo
 ```text
 .codex/
   skills/
-    openclaw-pr-workflow/   # project-local Codex skill
+    auto-pr-openclaw/   # project-local Codex skill
 scripts/
   install.ps1               # validate the project-local skill
 ```

@@ -1,7 +1,7 @@
 $ErrorActionPreference = "Stop"
 
 $repoRoot = Resolve-Path (Join-Path $PSScriptRoot "..")
-$target = Join-Path $repoRoot ".codex\skills\openclaw-pr-workflow"
+$target = Join-Path $repoRoot ".codex\skills\auto-pr-openclaw"
 
 if (-not (Test-Path -LiteralPath $target)) {
   throw "Project-local skill not found: $target"
@@ -15,4 +15,4 @@ if (Test-Path -LiteralPath $validator) {
   "Skill validator not found at $validator; skipped validation."
 }
 
-"Project-local openclaw-pr-workflow is ready at $target"
+"Project-local auto-pr-openclaw is ready at $target"
