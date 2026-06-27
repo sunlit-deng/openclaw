@@ -2,7 +2,7 @@ param(
   [Parameter(Mandatory = $true)]
   [int]$Issue,
   [string]$Topic = "",
-  [string]$Root = "C:\Users\Yang\Documents\OpenClawWork",
+  [string]$Root = "E:\Projects\OpenClawWork",
   [string]$Base = "origin/main",
   [string]$BranchPrefix = "sunlit/fix",
   [string]$OpenClawRemote = "https://github.com/openclaw/openclaw.git"
@@ -74,4 +74,3 @@ foreach ($file in $files.Keys) {
   outputs = $outputPath
   base = $Base
 } | ConvertTo-Json
-

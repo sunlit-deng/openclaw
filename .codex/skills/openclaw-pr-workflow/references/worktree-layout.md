@@ -3,7 +3,7 @@
 Use one worktree per issue by default.
 
 ```text
-C:\Users\Yang\Documents\OpenClawWork\
+E:\Projects\OpenClawWork\
   repos\
     openclaw\
     clawsweeper\
@@ -43,4 +43,3 @@ Keep generated evidence outside the repository checkout:
 - `ci-notes.md`
 
 Only copy evidence into the PR body or comments after the human gate approves the GitHub write.
-

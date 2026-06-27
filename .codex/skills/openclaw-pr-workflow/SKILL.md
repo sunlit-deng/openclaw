@@ -57,13 +57,13 @@ Use this skill for `openclaw/openclaw` contributor work. Keep the process conser
 Create a worktree:
 
 ```powershell
-powershell -ExecutionPolicy Bypass -File C:\Users\Yang\.codex\skills\openclaw-pr-workflow\scripts\new-openclaw-worktree.ps1 -Issue 94432
+powershell -ExecutionPolicy Bypass -File E:\Projects\auto-pr\.codex\skills\openclaw-pr-workflow\scripts\new-openclaw-worktree.ps1 -Issue 94432
 ```
 
 Run the pre-push summary from an OpenClaw checkout:
 
 ```powershell
-powershell -ExecutionPolicy Bypass -File C:\Users\Yang\.codex\skills\openclaw-pr-workflow\scripts\openclaw-prepush-check.ps1 `
+powershell -ExecutionPolicy Bypass -File E:\Projects\auto-pr\.codex\skills\openclaw-pr-workflow\scripts\openclaw-prepush-check.ps1 `
   -RepoPath C:\path\to\openclaw `
   -Base origin/main `
   -PrBodyDraft C:\path\to\pr-body.md `
@@ -71,4 +71,3 @@ powershell -ExecutionPolicy Bypass -File C:\Users\Yang\.codex\skills\openclaw-pr
 ```
 
 The pre-push script is read-only for the target repository. It reports gate status; it does not run tests, build ClawSweeper, push, comment, or edit tracked files.
-
