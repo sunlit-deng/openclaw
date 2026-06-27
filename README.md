@@ -15,7 +15,7 @@ scripts/
 Recommended OpenClaw working directory layout:
 
 ```text
-E:\Projects\OpenClawWork\
+E:\Projects\auto-pr\workspace\openclaw\
   repos\
     openclaw\               # main clone used for fetch/base
     clawsweeper\            # official openclaw/clawsweeper clone
@@ -30,6 +30,8 @@ E:\Projects\OpenClawWork\
 ```
 
 Use `issue-<number>` by default. If one issue needs multiple candidate PRs, use `issue-<number>-<topic>`.
+
+`workspace/` is local working state and is ignored by git.
 
 ## Use
 

@@ -2,7 +2,7 @@ param(
   [Parameter(Mandatory = $true)]
   [int]$Issue,
   [string]$Topic = "",
-  [string]$Root = "E:\Projects\OpenClawWork",
+  [string]$Root = "E:\Projects\auto-pr\workspace\openclaw",
   [string]$Base = "origin/main",
   [string]$BranchPrefix = "sunlit/fix",
   [string]$OpenClawRemote = "https://github.com/openclaw/openclaw.git"

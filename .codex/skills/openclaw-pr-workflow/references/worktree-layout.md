@@ -3,7 +3,7 @@
 Use one worktree per issue by default.
 
 ```text
-E:\Projects\OpenClawWork\
+E:\Projects\auto-pr\workspace\openclaw\
   repos\
     openclaw\
     clawsweeper\
