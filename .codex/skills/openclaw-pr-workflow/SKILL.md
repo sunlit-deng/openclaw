@@ -13,6 +13,7 @@ Use this skill for `openclaw/openclaw` contributor work. Keep the process conser
 - Use `sunlit-deng <yang.jiajun1@xydigit.com>` for authored and committed changes unless the user explicitly overrides it.
 - Use one worktree per issue by default: `worktrees/issue-<number>` and `outputs/issue-<number>`. Add a topic suffix only when one issue needs multiple candidate PRs.
 - Keep PR explanations durable in the PR body. If a bot or maintainer asks for evidence or context, update the PR body before posting a short pointer comment.
+- Keep PR bodies concise by default: required sections, short human paragraphs, compact evidence bullets, and no report-style filler.
 - When requesting ClawSweeper review, the comment body must be exactly `@clawsweeper re-review`.
 - Never print secrets. Redact tokens, account ids, cookies, private endpoints, and other private values in live proof.
 - For Codex/provider/external API behavior, inspect upstream source or official docs and collect live behavior proof when feasible.

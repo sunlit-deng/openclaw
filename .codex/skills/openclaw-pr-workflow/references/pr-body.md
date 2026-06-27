@@ -2,9 +2,16 @@
 
 Follow `.github/pull_request_template.md` and `CONTRIBUTING.md`.
 
-## Required Shape
+## Style
 
-Use these visible sections:
+- Write like a human contributor, not a report generator.
+- Keep the default PR body short: one short paragraph per required section, plus compact evidence bullets.
+- Prefer concrete nouns and observed facts over process narration.
+- Do not list files or implementation steps unless they clarify risk.
+- Do not add extra sections unless the change genuinely needs them.
+- Keep live proof to the minimum useful facts: what real path ran, status/result, and what was redacted.
+
+## Default Shape
 
 ```md
 Fixes #<issue-number>
@@ -15,19 +22,44 @@ Fixes an issue where users <do X> would <experience Y> when <condition>.
 
 ## Why This Change Was Made
 
-<One or two sentences explaining the shipped solution, key boundaries, and non-goals.>
+<1-2 short sentences. State the fix and any important boundary.>
 
 ## User Impact
 
-<Concrete user/operator/developer benefit.>
+<1 short sentence describing what users/operators/developers can now expect.>
 
 ## Evidence
 
-<Focused tests, CI, screenshots, terminal output, redacted logs, live observations, or artifact links.>
+- <command or live path>: <result>
+- <additional proof only if useful>
 
-## Live Behavior Proof
+<!-- Optional only when real runtime proof matters. -->
+Live proof: <real path>, <status/result>, <redactions>.
 
-<Include when the changed behavior needs real runtime proof. Redact secrets.>
+AI-assisted: built with Codex
+```
+
+## Example
+
+```md
+Fixes #94432
+
+## What Problem This Solves
+
+Fixes an issue where Codex OAuth users could see an unhelpful provider error when ChatGPT returned a Cloudflare challenge.
+
+## Why This Change Was Made
+
+The Codex OAuth calls now use the same browser-like request shape as the working ChatGPT client path, and Cloudflare challenge HTML is classified explicitly.
+
+## User Impact
+
+Users get a clearer auth/challenge failure instead of a generic provider failure.
+
+## Evidence
+
+- `pnpm vitest src/agents/embedded-agent-helpers/provider-error-patterns.test.ts`
+- WHAM usage request with redacted OAuth credentials returned `200` JSON.
 
 AI-assisted: built with Codex
 ```
@@ -44,6 +76,7 @@ AI-assisted: built with Codex
 - Include focused tests and exact commands/results when useful.
 - For runtime, auth, network, provider, browser, CSP, CORS, or external API behavior, include live output, network/log proof, recording, or redacted runtime trace that shows the real path.
 - Do not paste secrets, tokens, cookies, account IDs, private endpoints, or full sensitive response bodies.
+- Move long logs, long command output, and detailed notes into an output artifact; summarize only the key line in the PR body.
 
 ## AI-Assisted Marker
 
@@ -54,4 +87,3 @@ AI-assisted: built with Codex
 ```
 
 Do not create a separate heading just for this marker unless the user explicitly asks.
-
