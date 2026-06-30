@@ -770,7 +770,9 @@ describe("openrouter provider hooks", () => {
 
   it("forwards resolved API keys as explicit OpenRouter auth headers", async () => {
     const provider = await registerSingleProviderPlugin(openrouterPlugin);
-    const baseStreamFn = vi.fn(() => createOpenRouterDoneStreamWithoutGeneration());
+    const baseStreamFn = vi.fn((..._args: unknown[]) =>
+      createOpenRouterDoneStreamWithoutGeneration(),
+    );
 
     const wrapped = provider.wrapStreamFn?.({
       provider: "openrouter",
