@@ -218,14 +218,14 @@ describe("tailscale helpers", () => {
   it("enableTailscaleServe attempts normal first, then sudo", async () => {
     const exec = vi
       .fn()
-      .mockResolvedValueOnce({ stdout: "" }) // reset succeeds
+      .mockResolvedValueOnce({ stdout: "" }) // previous route cleanup succeeds
       .mockRejectedValueOnce(new Error("permission denied")) // serve fails
       .mockResolvedValueOnce({ stdout: "" }); // sudo serve succeeds
 
     await enableTailscaleServe(3000, exec as never);
 
     expect(exec).toHaveBeenCalledTimes(3);
-    expectExecCall(exec, 1, tailscaleBin, ["serve", "reset"], {
+    expectExecCall(exec, 1, tailscaleBin, ["serve", "--https=443", "off"], {
       maxBuffer: 200_000,
       timeoutMs: 15_000,
     });
@@ -245,7 +245,7 @@ describe("tailscale helpers", () => {
     await enableTailscaleServe(3000, exec as never);
 
     expect(exec).toHaveBeenCalledTimes(2);
-    expectExecCall(exec, 1, tailscaleBin, ["serve", "reset"], {
+    expectExecCall(exec, 1, tailscaleBin, ["serve", "--https=443", "off"], {
       maxBuffer: 200_000,
       timeoutMs: 15_000,
     });

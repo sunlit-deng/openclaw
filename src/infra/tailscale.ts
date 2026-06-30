@@ -413,11 +413,12 @@ export async function enableTailscaleServe(
   const tailscaleBin = await getTailscaleBinary();
   // tailscale serve is append-only — stale entries accumulated across gateway
   // restarts cause duplicate proxies and eventually ERR_SSL_PROTOCOL_ERROR /
-  // ERR_CONNECTION_REFUSED. Reset before configuring so each start is clean.
+  // ERR_CONNECTION_REFUSED. Clear only OpenClaw's route before configuring so
+  // operator-managed Serve entries survive gateway restarts.
   await execWithSudoFallback(
     exec,
     tailscaleBin,
-    serviceName ? ["serve", "clear", serviceName] : ["serve", "reset"],
+    serviceName ? ["serve", "clear", serviceName] : ["serve", "--https=443", "off"],
     {
       maxBuffer: 200_000,
       timeoutMs: 15_000,
