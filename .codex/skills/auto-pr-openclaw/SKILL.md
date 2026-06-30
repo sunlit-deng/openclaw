@@ -21,7 +21,8 @@ Use this skill for `openclaw/openclaw` contributor work. Keep the process conser
 ## Workflow
 
 1. **Issue intake**
-   - Create or reuse a per-issue worktree with `scripts/new-openclaw-worktree.ps1`.
+   - Create or reuse a per-issue worktree with `scripts/new-openclaw-worktree.sh` on macOS/Linux or `scripts/new-openclaw-worktree.ps1` on Windows.
+   - For dependency setup, share only the pnpm store across worktrees; keep each worktree's `node_modules` private. Use `scripts/ensure-openclaw-deps.sh` or create the worktree with `--install-dependencies` on macOS/Linux; use the `.ps1` equivalents on Windows.
    - Read the issue or PR, latest comments, current PR diff, CI state, root `AGENTS.md`, relevant scoped `AGENTS.md`, `CONTRIBUTING.md`, and `.github/pull_request_template.md`.
    - Search for duplicate or canonical issues/PRs before implementing or defending a branch.
    - For Codex-related work, inspect the sibling `../codex` checkout or clone `https://github.com/openai/codex.git` before making any dependency-behavior verdict.
@@ -55,7 +56,13 @@ Use this skill for `openclaw/openclaw` contributor work. Keep the process conser
 
 ## Scripts
 
-Create a worktree:
+Create a worktree on macOS/Linux:
+
+```bash
+/Users/yangjiajun/projects/auto-pr/.codex/skills/auto-pr-openclaw/scripts/new-openclaw-worktree.sh --issue 94432 --install-dependencies
+```
+
+Create a worktree on Windows:
 
 ```powershell
 powershell -ExecutionPolicy Bypass -File E:\Projects\auto-pr\.codex\skills\auto-pr-openclaw\scripts\new-openclaw-worktree.ps1 -Issue 94432

@@ -5,7 +5,9 @@ param(
   [string]$Root = "E:\Projects\auto-pr\workspace\openclaw",
   [string]$Base = "origin/main",
   [string]$BranchPrefix = "sunlit/fix",
-  [string]$OpenClawRemote = "https://github.com/openclaw/openclaw.git"
+  [string]$OpenClawRemote = "https://github.com/openclaw/openclaw.git",
+  [switch]$InstallDependencies,
+  [string]$PnpmStorePath = ""
 )
 
 $ErrorActionPreference = "Stop"
@@ -66,6 +68,15 @@ foreach ($file in $files.Keys) {
   }
 }
 
+if ($InstallDependencies) {
+  $ensureDeps = Join-Path $PSScriptRoot "ensure-openclaw-deps.ps1"
+  if ($PnpmStorePath.Trim()) {
+    & $ensureDeps -RepoPath $worktreePath -Root $Root -PnpmStorePath $PnpmStorePath
+  } else {
+    & $ensureDeps -RepoPath $worktreePath -Root $Root
+  }
+}
+
 [pscustomobject]@{
   issue = $Issue
   name = $name
@@ -73,4 +84,5 @@ foreach ($file in $files.Keys) {
   worktree = $worktreePath
   outputs = $outputPath
   base = $Base
+  dependencies = if ($InstallDependencies) { "ensured" } else { "not_requested" }
 } | ConvertTo-Json

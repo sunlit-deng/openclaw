@@ -14,11 +14,11 @@ Follow `.github/pull_request_template.md` and `CONTRIBUTING.md`.
 ## Default Shape
 
 ```md
-Fixes #<issue-number>
-
 ## What Problem This Solves
 
 Fixes an issue where users <do X> would <experience Y> when <condition>.
+
+Fixes #<issue-number>
 
 ## Why This Change Was Made
 
@@ -42,11 +42,11 @@ AI-assisted: built with Codex
 ## Example
 
 ```md
-Fixes #94432
-
 ## What Problem This Solves
 
 Fixes an issue where Codex OAuth users could see an unhelpful provider error when ChatGPT returned a Cloudflare challenge.
+
+Fixes #94432
 
 ## Why This Change Was Made
 
@@ -68,7 +68,7 @@ AI-assisted: built with Codex
 
 - Use `Fixes #<issue>` or `Closes #<issue>` for a fix that should close the issue.
 - Use `Related: #<issue>` only when the PR is related but should not close the issue.
-- Keep the link visible in the PR body, below the template comment or at the start of the body.
+- Keep the link visible as the last line of `## What Problem This Solves`.
 
 ## Evidence
 
