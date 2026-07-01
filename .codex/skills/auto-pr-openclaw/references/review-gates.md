@@ -21,6 +21,7 @@ Use these gates before pushing or updating an OpenClaw PR.
 - Run broader checks only when blast radius justifies it.
 - Run `codex review --base origin/main` when available; address accepted actionable findings before asking for review.
 - For live external behavior, execute the real path when feasible and summarize only redacted proof.
+- If ClawSweeper asks for real behavior proof, update the PR body with copied terminal output from a live or loopback run before requesting re-review. Tests alone usually do not satisfy runtime/resource-safety proof.
 
 ## Official ClawSweeper Local-Review Gate
 
