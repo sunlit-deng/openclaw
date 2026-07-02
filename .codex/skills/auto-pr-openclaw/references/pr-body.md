@@ -33,8 +33,12 @@ Fixes #<issue-number>
 - <command or live path>: <result>
 - <additional proof only if useful>
 
-<!-- Optional only when real runtime proof matters. -->
-Live proof: <real path>, <status/result>, <redactions>.
+<!-- Prefer actual output for runtime/resource/network/provider changes. -->
+
+```text
+$ <redacted command>
+<short terminal/live output showing status, trigger, limit, or negative control>
+```
 
 AI-assisted: built with Codex
 ```
@@ -73,7 +77,7 @@ AI-assisted: built with Codex
 ## Evidence
 
 - Prefer proof that maps directly to the changed behavior.
-- Include focused tests and exact commands/results when useful.
+- Include focused tests and exact commands/results when useful; for behavior claims, prefer copied terminal/live output over paraphrased "passed" summaries.
 - For runtime, auth, network, provider, browser, CSP, CORS, or external API behavior, include live output, network/log proof, recording, or redacted runtime trace that shows the real path.
 - For resource-safety/runtime claims, prefer copied terminal output over prose. When live provider proof is impractical, run a loopback/local proof that exercises the same production helper, tee the command and output to `outputs/<topic>/`, and paste the shortest useful transcript into the PR body.
 - Good terminal proof shows the command, the trigger, and the negative control reviewers care about, for example: overflow error, configured limit, oversized input, bytes observed before cancellation, and `full_response_buffered=no`.

@@ -60,7 +60,7 @@ When the user says remote candidate issues, remote candidates, or asks to screen
 2. **Implementation and evidence**
    - Keep changes focused on one user-visible or operational problem.
    - Run focused tests for the touched surface before broad checks.
-   - Collect real behavior proof for external contributor PRs when the change is not docs-only. Tests and CI supplement proof; they do not replace live proof.
+   - Collect real behavior proof for external contributor PRs when the change is not docs-only. Prefer pasted terminal output, live logs, HTTP/status output, screenshots, or other actual runtime output over prose summaries. Tests and CI supplement proof; they do not replace live proof.
    - Draft or update the PR body using `references/pr-body.md`.
 
 3. **Local review gates**
