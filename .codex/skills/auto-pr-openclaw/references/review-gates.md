@@ -11,6 +11,7 @@ Use these gates before pushing or updating an OpenClaw PR.
 
 ## Duplicate and Canonical Gate
 
+- Use `gh` for GitHub reads by default. Prefer `gh issue view`, `gh pr view`, `gh pr diff`, `gh pr checks`, `gh run view`, and `gh api`; use another GitHub tool only when `gh` is unavailable, unauthenticated, or missing the needed capability.
 - Search linked issues, related PRs, latest comments, and ClawSweeper comments for canonical work.
 - Before claiming a PR is not duplicate, verify current head SHA, actual changed files, and whether sibling PRs solve the same remaining problem.
 
@@ -57,4 +58,4 @@ Before any GitHub write, show the user:
 - unresolved risks or blocked checks
 
 Do not push, update PR body, comment, or request re-review until the user explicitly confirms.
-
+After confirmation, use `gh` for PR body updates, comments, review requests, and other GitHub writes unless `gh` cannot perform the operation.
