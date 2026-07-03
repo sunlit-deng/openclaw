@@ -3,6 +3,7 @@
  * websocket, and dispatching user messages into OpenClaw.
  */
 import type { ChannelGatewayContext } from "openclaw/plugin-sdk/channel-contract";
+import { formatErrorMessage } from "openclaw/plugin-sdk/error-runtime";
 import type { RawData } from "ws";
 import { resolveClickClackInboundAccess } from "./access.js";
 import { resolveClickClackAccount } from "./accounts.js";
@@ -206,7 +207,11 @@ export async function startClickClackGatewayAccount(
             });
           })().catch((e: unknown) =>
             reject(
-              e instanceof Error ? e : new Error(`ClickClack ws message failed: ${String(e)}`, { cause: e }),
+              e instanceof Error
+                ? e
+                : new Error(`ClickClack ws message failed: ${formatErrorMessage(e)}`, {
+                    cause: e,
+                  }),
             ),
           );
         });
