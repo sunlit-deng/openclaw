@@ -1,15 +1,23 @@
 // Daemon diagnostics tests cover service diagnostic collection and formatting.
 import fs from "node:fs";
+import fsPromises from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
-import { afterEach, describe, expect, it } from "vitest";
-import { readLastGatewayErrorLine } from "./diagnostics.js";
+import { afterEach, describe, expect, it, vi } from "vitest";
+import { readGatewayLogTailLines, readLastGatewayErrorLine } from "./diagnostics.js";
 import { resolveGatewayLogPaths, resolveGatewaySupervisorLogPaths } from "./restart-logs.js";
 
 const tempDirs: string[] = [];
 const DIAGNOSTIC_TAIL_BYTES = 256 * 1024;
+type PositionalRead = (
+  buffer: Buffer,
+  offset: number,
+  length: number,
+  position: number,
+) => Promise<{ bytesRead: number; buffer: Buffer }>;
 
 afterEach(() => {
+  vi.restoreAllMocks();
   for (const dir of tempDirs.splice(0)) {
     fs.rmSync(dir, { recursive: true, force: true });
   }
@@ -93,5 +101,27 @@ describe("readLastGatewayErrorLine", () => {
     await expect(readLastGatewayErrorLine(env, { platform: "linux" })).resolves.toBe(
       "gateway stdout current",
     );
+  });
+
+  it("fills short positional reads before decoding the tail", async () => {
+    const dir = makeTempStateDir();
+    const file = path.join(dir, "gateway.log");
+    fs.writeFileSync(file, "old line\nrecent one\nrecent two\n", "utf8");
+    const realOpen = fsPromises.open.bind(fsPromises);
+    vi.spyOn(fsPromises, "open").mockImplementation(async (...args) => {
+      const handle = await realOpen(...args);
+      const realRead = handle.read.bind(handle) as PositionalRead;
+      const shortRead = vi.fn<PositionalRead>((buffer, offset, length, position) =>
+        realRead(buffer, offset, Math.min(length, 3), position),
+      );
+      Object.defineProperty(handle, "read", { configurable: true, value: shortRead });
+      return handle;
+    });
+
+    await expect(readGatewayLogTailLines(file)).resolves.toEqual([
+      "old line",
+      "recent one",
+      "recent two",
+    ]);
   });
 });

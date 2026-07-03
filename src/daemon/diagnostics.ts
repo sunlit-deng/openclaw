@@ -1,5 +1,5 @@
 /** Reads recent gateway service logs for actionable daemon restart diagnostics. */
-import fs from "node:fs/promises";
+import fs, { type FileHandle } from "node:fs/promises";
 import { resolveGatewayLogPaths, resolveGatewaySupervisorLogPaths } from "./restart-logs.js";
 
 // Error patterns worth surfacing from gateway service logs after failed starts.
@@ -13,6 +13,21 @@ const GATEWAY_LOG_ERROR_PATTERNS = [
 
 const GATEWAY_DIAGNOSTIC_LOG_TAIL_BYTES = 256 * 1024;
 
+async function readTailWindow(handle: FileHandle, size: number) {
+  const length = Math.min(size, GATEWAY_DIAGNOSTIC_LOG_TAIL_BYTES);
+  const readStart = size - length;
+  const buffer = Buffer.alloc(length);
+  let bytesRead = 0;
+  while (bytesRead < length) {
+    const result = await handle.read(buffer, bytesRead, length - bytesRead, readStart + bytesRead);
+    if (result.bytesRead === 0) {
+      break;
+    }
+    bytesRead += result.bytesRead;
+  }
+  return { buffer, bytesRead, readStart };
+}
+
 /** Reads complete lines from a bounded gateway log tail. */
 export async function readGatewayLogTailLines(filePath: string): Promise<string[]> {
   const handle = await fs.open(filePath, "r");
@@ -21,10 +36,17 @@ export async function readGatewayLogTailLines(filePath: string): Promise<string[
     if (!stat.isFile() || stat.size <= 0) {
       return [];
     }
-    const bytesToRead = Math.min(stat.size, GATEWAY_DIAGNOSTIC_LOG_TAIL_BYTES);
-    const buffer = Buffer.alloc(bytesToRead);
-    const readStart = stat.size - bytesToRead;
-    const { bytesRead } = await handle.read(buffer, 0, bytesToRead, readStart);
+    let window = await readTailWindow(handle, stat.size);
+    if (window.bytesRead < window.buffer.length) {
+      const refreshedStat = await handle.stat();
+      if (!refreshedStat.isFile() || refreshedStat.size <= 0) {
+        return [];
+      }
+      if (refreshedStat.size !== stat.size) {
+        window = await readTailWindow(handle, refreshedStat.size);
+      }
+    }
+    const { buffer, bytesRead, readStart } = window;
     let textStart = 0;
     if (readStart > 0) {
       const precedingByte = Buffer.alloc(1);
