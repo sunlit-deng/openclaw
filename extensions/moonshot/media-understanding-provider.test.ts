@@ -1,4 +1,5 @@
 // Moonshot tests cover media understanding provider plugin behavior.
+import { readProviderJsonResponse } from "openclaw/plugin-sdk/provider-http";
 import {
   createRequestCaptureJsonFetch,
   installPinnedHostnameTestHooks,
@@ -44,33 +45,14 @@ describe("describeMoonshotVideo", () => {
     if (typeof init.body !== "string") {
       throw new Error("expected Moonshot JSON request body");
     }
-    const body = JSON.parse(init.body) as {
-      model?: string;
-      messages?: Array<{
-        content?: Array<{ type?: string; text?: string; video_url?: { url?: string } }>;
-      }>;
-    };
+    const body = JSON.parse(init.body);
     expect(body.model).toBe("kimi-k2.6");
-    const content = body.messages?.[0]?.content;
-    if (!content) {
-      throw new Error("expected Moonshot user content");
-    }
-    const [textContent] = content;
-    if (!textContent) {
-      throw new Error("expected Moonshot text content");
-    }
+    const [textContent, videoContent] = body.messages[0].content;
     expect(textContent.type).toBe("text");
     expect(textContent.text).toBe("Describe the video.");
-    const videoContent = content[1];
-    if (!videoContent) {
-      throw new Error("expected Moonshot video content");
-    }
     expect(videoContent.type).toBe("video_url");
-    if (!videoContent.video_url) {
-      throw new Error("expected Moonshot video URL payload");
-    }
     expect(videoContent.video_url.url).toBe(
-      `data:video/mp4;base64,${Buffer.from("video-bytes").toString("base64")}`,
+      "data:video/mp4;base64," + Buffer.from("video-bytes").toString("base64"),
     );
   });
 
@@ -89,5 +71,21 @@ describe("describeMoonshotVideo", () => {
 
     expect(result.text).toBe("reasoned answer");
     expect(result.model).toBe("kimi-k2.6");
+  });
+
+  it("rejects an oversized JSON response to prevent OOM", async () => {
+    const maxBytes = 1024;
+    const fill = "x".repeat(maxBytes * 2);
+    const oversizedBody = JSON.stringify({ choices: [{ message: { content: fill } }] });
+    expect(Buffer.byteLength(oversizedBody, "utf-8")).toBeGreaterThan(maxBytes);
+
+    const res = new Response(oversizedBody, {
+      status: 200,
+      headers: { "content-type": "application/json" },
+    });
+    const label = "overflow proof";
+    await expect(readProviderJsonResponse(res, label, { maxBytes })).rejects.toThrow(
+      label + ": JSON response exceeds " + maxBytes + " bytes",
+    );
   });
 });
