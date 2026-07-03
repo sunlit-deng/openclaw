@@ -204,7 +204,11 @@ export async function startClickClackGatewayAccount(
               event,
               botUserId: account.botUserId ?? "",
             });
-          })().catch(reject);
+          })().catch((e) =>
+            reject(
+              e instanceof Error ? e : new Error("ClickClack ws message failed", { cause: e }),
+            ),
+          );
         });
         socket.on("close", finishSocketCycle);
         socket.on("error", (error) => {
