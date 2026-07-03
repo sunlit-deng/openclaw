@@ -272,7 +272,7 @@ describe("ClickClack gateway", () => {
         );
     }).then(
       (v) => ({ ok: true, value: v }),
-      (e) => ({ ok: false, error: e }),
+      (e: unknown) => ({ ok: false, error: e }),
     );
 
     expect(rejection.ok).toBe(false);
