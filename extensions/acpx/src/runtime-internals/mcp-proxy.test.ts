@@ -184,4 +184,58 @@ setTimeout(() => {}, 30_000);
     expect(stderr).toMatch(/EPIPE|write/i);
     expect(stderr).not.toContain("Unhandled 'error' event");
   });
+
+  it("reports proxy stdout pipe failures without an unhandled stream error", async () => {
+    const outputServerPath = await makeTempScript(
+      "output-server.cjs",
+      String.raw`#!/usr/bin/env node
+const { createInterface } = require("node:readline");
+process.stderr.write("ready\n");
+createInterface({ input: process.stdin }).once("line", () => {
+  process.stdout.write("x".repeat(1024 * 1024));
+});
+setTimeout(() => {}, 30_000);
+`,
+    );
+
+    const payload = encodePayload({
+      targetCommand: `${process.execPath} ${outputServerPath}`,
+      mcpServers: [],
+    });
+
+    const child = spawn(process.execPath, [proxyPath, "--payload", payload], {
+      stdio: ["pipe", "pipe", "pipe"],
+      cwd: process.cwd(),
+    });
+
+    let stderr = "";
+    const ready = new Promise<void>((resolve) => {
+      child.stderr.on("data", (chunk) => {
+        stderr += String(chunk);
+        if (stderr.includes("ready\n")) {
+          resolve();
+        }
+      });
+    });
+
+    await ready;
+    child.stdout.destroy();
+    child.stdin.write(
+      `${JSON.stringify({
+        jsonrpc: "2.0",
+        id: 1,
+        method: "session/new",
+        params: { cwd: process.cwd(), mcpServers: [] },
+      })}\n`,
+    );
+    child.stdin.end();
+
+    const exitCode = await new Promise<number | null>((resolve) => {
+      child.once("close", (code) => resolve(code));
+    });
+
+    expect(exitCode).toBe(1);
+    expect(stderr).toMatch(/EPIPE|write/i);
+    expect(stderr).not.toContain("Unhandled 'error' event");
+  });
 });
