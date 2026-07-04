@@ -54,6 +54,7 @@ export type ContainerWebSocketMessage = {
 
 const DEFAULT_TIMEOUT_MS = 10_000;
 const DEFAULT_ATTACHMENT_RESPONSE_MAX_BYTES = 1_048_576;
+const SIGNAL_CONTAINER_WS_MAX_PAYLOAD_BYTES = 1024 * 1024;
 const CONTAINER_TEXT_STYLE_MARKERS: Record<string, string> = {
   BOLD: "**",
   ITALIC: "*",
@@ -176,7 +177,7 @@ function containerReceiveCheck(
       resolve(result);
     };
     try {
-      ws = new WebSocket(wsUrl);
+      ws = new WebSocket(wsUrl, { maxPayload: SIGNAL_CONTAINER_WS_MAX_PAYLOAD_BYTES });
     } catch (err) {
       settle({
         ok: false,
@@ -328,7 +329,7 @@ export async function streamContainerEvents(params: {
     };
 
     try {
-      ws = new WebSocket(wsUrl);
+      ws = new WebSocket(wsUrl, { maxPayload: SIGNAL_CONTAINER_WS_MAX_PAYLOAD_BYTES });
     } catch (err) {
       logError(
         `[signal-ws] failed to create WebSocket: ${err instanceof Error ? err.message : String(err)}`,
