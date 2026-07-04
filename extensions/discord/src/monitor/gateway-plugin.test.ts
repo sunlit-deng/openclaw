@@ -54,6 +54,7 @@ const { GatewayIntents, GatewayPlugin } = vi.hoisted(() => {
 });
 
 vi.mock("../internal/gateway.js", () => ({
+  DISCORD_GATEWAY_WS_MAX_PAYLOAD_BYTES: 1024 * 1024,
   GatewayIntents,
   GatewayPlugin,
 }));
