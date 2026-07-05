@@ -3,6 +3,8 @@ param(
   [string]$Base = "origin/main",
   [string]$PrBodyDraft = "",
   [string]$ClawSweeperReport = "",
+  [string]$PrNumber = "",
+  [string]$GitHubRepo = "openclaw/openclaw",
   [string]$ExpectedAuthorName = "sunlit-deng",
   [string]$ExpectedEmail = "yang.jiajun1@xydigit.com"
 )
@@ -98,11 +100,42 @@ if ($ClawSweeperReport) {
   }
 }
 
+$maintainerEditStatus = "not provided"
+$maintainerEditDetails = @()
+if ($PrNumber) {
+  try {
+    $null = Get-Command gh -ErrorAction Stop
+    $prJson = & gh pr view $PrNumber --repo $GitHubRepo --json maintainerCanModify,headRepositoryOwner,headRefName,url 2>&1
+    if ($LASTEXITCODE -ne 0) {
+      throw "gh pr view failed: $($prJson -join ' ')"
+    }
+    $prInfo = $prJson | ConvertFrom-Json
+    $owner = "unknown"
+    if ($prInfo.headRepositoryOwner -and $prInfo.headRepositoryOwner.login) {
+      $owner = $prInfo.headRepositoryOwner.login
+    }
+    $maintainerEditDetails += "repo: $GitHubRepo"
+    $maintainerEditDetails += "pr: $PrNumber"
+    $maintainerEditDetails += "url: $($prInfo.url)"
+    $maintainerEditDetails += "head: $owner/$($prInfo.headRefName)"
+    if ($null -eq $prInfo.maintainerCanModify) {
+      $maintainerEditStatus = "not checked (maintainerCanModify missing from gh response)"
+    } elseif ($prInfo.maintainerCanModify -eq $true) {
+      $maintainerEditStatus = "ok (maintainerCanModify=true)"
+    } else {
+      $maintainerEditStatus = "not passed (maintainerCanModify=false; re-enable Allow edits and access to secrets by maintainers)"
+    }
+  } catch {
+    $maintainerEditStatus = "not checked ($($_.Exception.Message))"
+  }
+}
+
 $gateProblems = @()
 if ($status.Count -gt 0) { $gateProblems += "working tree is not clean" }
 if ($authorProblems.Count -gt 0) { $gateProblems += "author/committer mismatch" }
 if ($PrBodyDraft -and $prBodyStatus -ne "ok") { $gateProblems += "PR body draft needs attention" }
 if ($ClawSweeperReport -and $clawStatus -notlike "pass *") { $gateProblems += "ClawSweeper local-review did not pass" }
+if ($PrNumber -and $maintainerEditStatus -notlike "ok *") { $gateProblems += "maintainer edit status is not confirmed" }
 
 Section "OpenClaw Pre-Push Check"
 "Repo: $RepoPath"
@@ -137,6 +170,11 @@ if ($PrBodyDraft) { "path: $PrBodyDraft" }
 Section "ClawSweeper Local Review"
 $clawStatus
 if ($ClawSweeperReport) { "path: $ClawSweeperReport" }
+
+Section "Maintainer Edit Access"
+$maintainerEditStatus
+if ($maintainerEditDetails.Count -gt 0) { $maintainerEditDetails }
+if (-not $PrNumber) { "pass -PrNumber <number> to verify maintainerCanModify for an existing fork PR." }
 
 Section "Gate Result"
 if ($gateProblems.Count -eq 0) {

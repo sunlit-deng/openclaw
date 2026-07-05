@@ -23,6 +23,14 @@ Use these gates before pushing or updating an OpenClaw PR.
 - For live external behavior, execute the real path when feasible and summarize only redacted proof.
 - If ClawSweeper asks for real behavior proof, update the PR body with copied terminal output from a live or loopback run before requesting re-review. Tests alone usually do not satisfy runtime/resource-safety proof.
 
+## Maintainer Edit and Secrets Gate
+
+- For existing fork PRs, run `gh pr view <number> --repo openclaw/openclaw --json maintainerCanModify,headRepositoryOwner,headRefName,url` before any push, PR-body update, comment, or re-review request.
+- Treat `maintainerCanModify: false` as a stop unless the user explicitly wants maintainers unable to edit the branch. Ask the user to re-enable the GitHub web checkbox `Allow edits and access to secrets by maintainers`, then re-check before continuing.
+- For new fork PRs, do not pass `--no-maintainer-edit`. On this machine, `gh pr create --maintainer-edit` may fail because maintainer edit is already the default and the installed `gh` only exposes `--no-maintainer-edit`.
+- Immediately after creating a new PR, re-read `maintainerCanModify`. If it is not `true`, stop before requesting ClawSweeper review or CI attention and ask the user to restore the web checkbox.
+- If GitHub does not expose the state through the API, get an explicit web UI confirmation or screenshot from the PR edit page before treating the gate as passed.
+
 ## Official ClawSweeper Local-Review Gate
 
 Use the public `openclaw/clawsweeper` repository. The official local pre-PR path is `pnpm local-review`.
@@ -56,6 +64,7 @@ Before any GitHub write, show the user:
 - PR body draft summary or path
 - live proof summary
 - ClawSweeper local-review report path and result
+- maintainer edit status for existing PRs, or the post-create maintainer edit check plan for new PRs
 - unresolved risks or blocked checks
 
 Do not push, update PR body, comment, or request re-review until the user explicitly confirms.
