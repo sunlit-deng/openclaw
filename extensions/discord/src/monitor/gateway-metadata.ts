@@ -19,7 +19,7 @@ const DISCORD_GATEWAY_INFO_TIMEOUT_ENV = "OPENCLAW_DISCORD_GATEWAY_INFO_TIMEOUT_
 const DISCORD_GATEWAY_METADATA_FALLBACK_LOG_INTERVAL_MS = 60_000;
 const MAX_DISCORD_GATEWAY_METADATA_BYTES = 1 * 1024 * 1024;
 
-type DiscordGatewayMetadataResponse = Pick<Response, "ok" | "status" | "text">;
+type DiscordGatewayMetadataResponse = Pick<Response, "ok" | "status" | "text" | "headers">;
 export type DiscordGatewayFetchInit = Record<string, unknown> & {
   headers?: Record<string, string>;
 };
@@ -35,7 +35,7 @@ export type DiscordGatewayMetadataFetchOptions = {
 type DiscordGatewayMetadataError = Error & { transient?: boolean };
 
 function checkDiscordGatewayContentLength(raw: string | null): void {
-  if (!raw) return;
+  if (!raw) { return; }
   if (!/^\d+$/.test(raw)) {
     throw createGatewayMetadataError({
       detail: "Discord API /gateway/bot response has invalid content-length",
