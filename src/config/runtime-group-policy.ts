@@ -92,7 +92,12 @@ export function resolveAllowlistProviderRuntimeGroupPolicy(
   });
 }
 
-const warnedMissingProviderGroupPolicy = new Set<string>();
+import { createDedupeCache } from "../infra/dedupe.js";
+
+const warnedMissingProviderGroupPolicy = createDedupeCache({
+  ttlMs: 0,
+  maxSize: 4096,
+});
 
 /**
  * Log the missing-provider fail-closed fallback once per provider/account.
@@ -109,10 +114,9 @@ export function warnMissingProviderGroupPolicyFallbackOnce(params: {
     return false;
   }
   const key = `${params.providerKey}:${params.accountId ?? "*"}`;
-  if (warnedMissingProviderGroupPolicy.has(key)) {
+  if (warnedMissingProviderGroupPolicy.check(key)) {
     return false;
   }
-  warnedMissingProviderGroupPolicy.add(key);
   const blockedLabel = normalizeOptionalString(params.blockedLabel) || "group messages";
   params.log(
     `${params.providerKey}: channels.${params.providerKey} is missing; defaulting groupPolicy to "allowlist" (${blockedLabel} blocked until explicitly configured).`,

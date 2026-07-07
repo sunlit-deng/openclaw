@@ -1,5 +1,5 @@
 // Covers runtime group-policy resolution from config and context.
-import { beforeEach, describe, expect, it } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 import {
   GROUP_POLICY_BLOCKED_LABEL,
   resetMissingProviderGroupPolicyFallbackWarningsForTesting,
@@ -98,5 +98,96 @@ describe("warnMissingProviderGroupPolicyFallbackOnce", () => {
     expect(lines).toHaveLength(1);
     expect(lines[0]).toContain("channels.runtime-policy-test is missing");
     expect(lines[0]).toContain("room messages blocked");
+  });
+});
+
+describe("warnedMissingProviderGroupPolicy LRU eviction", () => {
+  let warnOnceFn: typeof warnMissingProviderGroupPolicyFallbackOnce;
+
+  beforeEach(async () => {
+    vi.resetModules();
+    const mod = await import("./runtime-group-policy.js");
+    warnOnceFn = mod.warnMissingProviderGroupPolicyFallbackOnce;
+  });
+
+  it("evicts the least-recently-used entry when the cache exceeds its cap", () => {
+    const CAP = 4096;
+    const noopLog = () => {};
+
+    // Fill the cache to cap via the public API.
+    for (let i = 1; i <= CAP; i++) {
+      warnOnceFn({
+        providerMissingFallbackApplied: true,
+        providerKey: `provider-${i}`,
+        accountId: `account-${i}`,
+        log: noopLog,
+      });
+    }
+
+    // Push past the cap — "provider-1:account-1" was the first seeded entry.
+    for (let i = CAP + 1; i <= CAP + 5; i++) {
+      warnOnceFn({
+        providerMissingFallbackApplied: true,
+        providerKey: `provider-${i}`,
+        accountId: `account-${i}`,
+        log: noopLog,
+      });
+    }
+
+    // Re-warn for the evicted entry — must emit (not deduped).
+    const lines: string[] = [];
+    const result = warnOnceFn({
+      providerMissingFallbackApplied: true,
+      providerKey: "provider-1",
+      accountId: "account-1",
+      log: (m) => lines.push(m),
+    });
+    expect(result).toBe(true);
+    expect(lines).toHaveLength(1);
+    expect(lines[0]).toContain("channels.provider-1 is missing");
+  });
+
+  it("keeps frequently accessed entries from being evicted (LRU touch)", () => {
+    const CAP = 4096;
+    const noopLog = () => {};
+
+    // Seed cache to near-capacity.
+    for (let i = 1; i < CAP; i++) {
+      warnOnceFn({
+        providerMissingFallbackApplied: true,
+        providerKey: `provider-${i}`,
+        accountId: `account-${i}`,
+        log: noopLog,
+      });
+    }
+
+    // Frequently touch "provider-2:account-2" to promote its recency.
+    for (let i = 0; i < 42; i++) {
+      warnOnceFn({
+        providerMissingFallbackApplied: true,
+        providerKey: "provider-2",
+        accountId: "account-2",
+        log: noopLog,
+      });
+    }
+
+    // Push 500 extra entries past the cap.
+    for (let i = CAP; i <= CAP + 500; i++) {
+      warnOnceFn({
+        providerMissingFallbackApplied: true,
+        providerKey: `provider-${i}`,
+        accountId: `account-${i}`,
+        log: noopLog,
+      });
+    }
+
+    // "provider-2:account-2" should still be cached because of LRU touches.
+    const result = warnOnceFn({
+      providerMissingFallbackApplied: true,
+      providerKey: "provider-2",
+      accountId: "account-2",
+      log: () => {},
+    });
+    expect(result).toBe(false);
   });
 });
