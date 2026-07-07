@@ -239,7 +239,7 @@ describe("mattermost websocket monitor", () => {
           }),
         );
         socket.send(largePostEnvelope);
-        socket.send("x".repeat(MATTERMOST_WEBSOCKET_MAX_PAYLOAD_BYTES + 1));
+        socket.send(Buffer.alloc(MATTERMOST_WEBSOCKET_MAX_PAYLOAD_BYTES + 1, 0x78));
       });
     });
 

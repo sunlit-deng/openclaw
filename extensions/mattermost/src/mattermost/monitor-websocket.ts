@@ -44,9 +44,9 @@ export type MattermostWebSocketLike = {
 };
 
 export type MattermostWebSocketFactory = (url: string) => MattermostWebSocketLike;
-// Mattermost permits large post props/cards; keep the transport cap above a
-// valid posted-event envelope while still far below the ws default 100 MiB.
-export const MATTERMOST_WEBSOCKET_MAX_PAYLOAD_BYTES = 4 * 1024 * 1024;
+// Mattermost events can include double-encoded post props plus server/plugin metadata.
+// Keep channel-compatible headroom while bounding ws's 100 MiB default before parsing.
+export const MATTERMOST_WEBSOCKET_MAX_PAYLOAD_BYTES = 16 * 1024 * 1024;
 const MattermostEventPayloadSchema = z.object({
   event: z.string().optional(),
   data: z
