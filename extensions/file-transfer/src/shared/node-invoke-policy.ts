@@ -327,9 +327,17 @@ async function listDirFetchArchiveEntries(
     const tarBin = process.platform !== "win32" ? "/usr/bin/tar" : "tar";
     const child = spawn(tarBin, ["-tzf", "-"], { stdio: ["pipe", "pipe", "pipe"] });
 
-    const ignoreOutputStreamError = () => {};
-    child.stdout.on("error", ignoreOutputStreamError);
-    child.stderr.on("error", ignoreOutputStreamError);
+    const onOutputStreamError = (stream: "stdout" | "stderr", error: Error) => {
+      stopChild();
+      finish({
+        ok: false,
+        code: "ARCHIVE_ENTRIES_UNREADABLE",
+        reason: `tar -tzf ${stream} error: ${error.message}`,
+      });
+    };
+    child.stdout.on("error", (error) => onOutputStreamError("stdout", error));
+    child.stderr.on("error", (error) => onOutputStreamError("stderr", error));
+
 
     const entries: string[] = [];
     let pending = "";
