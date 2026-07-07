@@ -1439,6 +1439,7 @@ describe("gateway server chat", () => {
         run: async () => {
           mutationStarted.resolve();
           await releaseMutation.promise;
+          await writeSessionStore({ entries: {} });
         },
       });
       await mutationStarted.promise;
@@ -1468,7 +1469,6 @@ describe("gateway server chat", () => {
         expect(context.dedupe.has(pendingChatSendDedupeKey(runId))).toBe(true);
       }, FAST_WAIT_OPTS);
 
-      await writeSessionStore({ entries: {} });
       releaseMutation.resolve();
       await mutation;
       await send;
@@ -1509,6 +1509,14 @@ describe("gateway server chat", () => {
         run: async () => {
           mutationStarted.resolve();
           await releaseMutation.promise;
+          await writeSessionStore({
+            entries: {
+              main: {
+                sessionId: "sess-after-reset",
+                updatedAt: Date.now(),
+              },
+            },
+          });
         },
       });
       await mutationStarted.promise;
@@ -1538,14 +1546,6 @@ describe("gateway server chat", () => {
         expect(context.dedupe.has(pendingChatSendDedupeKey(runId))).toBe(true);
       }, FAST_WAIT_OPTS);
 
-      await writeSessionStore({
-        entries: {
-          main: {
-            sessionId: "sess-after-reset",
-            updatedAt: Date.now(),
-          },
-        },
-      });
       releaseMutation.resolve();
       await mutation;
       await send;

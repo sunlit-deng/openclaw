@@ -249,6 +249,8 @@ export type ModelProviderDeclarationConfig = ModelProviderConfig;
 
 /** User config input shape before provider defaults/models are materialized. */
 export type ModelProviderConfigInput = Omit<Partial<ModelProviderConfig>, "models"> & {
+  /** Compatibility alias accepted in authored config and normalized to baseUrl at parse time. */
+  baseURL?: string;
   models?: ModelDefinitionConfig[];
 };
 
