@@ -113,6 +113,10 @@ async function runProcess(
     stdio: ["pipe", "pipe", "pipe"],
   });
   managed.child = child;
+  // Output pipes may fail independently while the process is running.
+  const ignoreOutputStreamError = () => {};
+  child.stdout.on("error", ignoreOutputStreamError);
+  child.stderr.on("error", ignoreOutputStreamError);
   const abortListener = () => child.kill("SIGTERM");
   managed.abortController.signal.addEventListener("abort", abortListener, { once: true });
   child.stdout.on("data", (chunk: Buffer) =>
