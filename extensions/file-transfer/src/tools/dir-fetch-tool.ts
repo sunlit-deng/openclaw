@@ -54,6 +54,11 @@ async function listTarOutputLines<T>(input: {
   return new Promise((resolve) => {
     const tarBin = process.platform !== "win32" ? "/usr/bin/tar" : "tar";
     const child = spawn(tarBin, input.args, { stdio: ["pipe", "pipe", "pipe"] });
+
+    const ignoreOutputStreamError1 = () => {};
+    child.stdout.on("error", ignoreOutputStreamError1);
+    child.stderr.on("error", ignoreOutputStreamError1);
+
     const values: T[] = [];
     let pending = "";
     let outputChars = 0;
@@ -271,6 +276,11 @@ export async function validateTarUncompressedBudget(
   return new Promise((resolve) => {
     const tarBin = process.platform !== "win32" ? "/usr/bin/tar" : "tar";
     const child = spawn(tarBin, ["-xOzf", "-"], { stdio: ["pipe", "pipe", "pipe"] });
+
+    const ignoreOutputStreamError2 = () => {};
+    child.stdout.on("error", ignoreOutputStreamError2);
+    child.stderr.on("error", ignoreOutputStreamError2);
+
     let totalBytes = 0;
     let stderr = "";
     let settled = false;
@@ -385,6 +395,10 @@ async function unpackTar(tarBuffer: Buffer, destDir: string): Promise<void> {
         stdio: ["pipe", "ignore", "pipe"],
       },
     );
+
+    const ignoreOutputStreamError3 = () => {};
+    child.stderr.on("error", ignoreOutputStreamError3);
+
     let stderrOut = "";
     let settled = false;
     const fail = (error: Error): void => {
