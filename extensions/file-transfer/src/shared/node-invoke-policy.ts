@@ -326,6 +326,11 @@ async function listDirFetchArchiveEntries(
   >((resolve) => {
     const tarBin = process.platform !== "win32" ? "/usr/bin/tar" : "tar";
     const child = spawn(tarBin, ["-tzf", "-"], { stdio: ["pipe", "pipe", "pipe"] });
+
+    const ignoreOutputStreamError = () => {};
+    child.stdout.on("error", ignoreOutputStreamError);
+    child.stderr.on("error", ignoreOutputStreamError);
+
     const entries: string[] = [];
     let pending = "";
     let outputBytes = 0;
