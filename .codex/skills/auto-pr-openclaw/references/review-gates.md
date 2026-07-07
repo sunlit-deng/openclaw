@@ -31,6 +31,20 @@ Use these gates before pushing or updating an OpenClaw PR.
 - Immediately after creating a new PR, re-read `maintainerCanModify`. If it is not `true`, stop before requesting ClawSweeper review or CI attention and ask the user to restore the web checkbox.
 - If GitHub does not expose the state through the API, get an explicit web UI confirmation or screenshot from the PR edit page before treating the gate as passed.
 
+## Pre-Re-Review Gate
+
+Use this gate before requesting ClawSweeper re-review to prevent blind re-review loops. The most common anti-pattern is requesting `@clawsweeper re-review` without first adding the proof ClawSweeper already asked for, which wastes review cycles (e.g., 6+ identical re-review rounds in PR 101343).
+
+- Fetch ClawSweeper's current review on the PR. Use `gh pr view <number> --repo openclaw/openclaw --json comments` or `gh api repos/openclaw/openclaw/issues/<number>/comments` and identify the most recent ClawSweeper-authored comment that contains a review verdict.
+- Parse the verdict: look for `clawsweeper-verdict:needs-human`, the overall rating (`🦪 silver shellfish`, `🧂 unranked krab`), and the block reason. Common proof blockers include `"needs real behavior proof"`, `"status: 📣 needs proof"`, `"Contributor proof is still test-run output only"`.
+- **If ClawSweeper blocks on proof and the PR has not added real runtime proof since the last review, stop.** Do not request re-review. Explain to the user what specific proof ClawSweeper asked for and that adding test output alone will not satisfy the gate.
+- **Loop detection by SHA match:** Compare the current head SHA (`git rev-parse HEAD`) against the SHA in ClawSweeper's most recent review (look for `sha=<...>` in `clawsweeper-verdict`). If the SHAs match and the blocker class is unchanged, the re-review request would be a no-op cycle. Explain this to the user and require concrete proof to be added before any re-review.
+- **Check the review history:** ClawSweeper comments include a `Review history` section showing how many re-review cycles the PR has gone through. If the history shows multiple consecutive reviews with the same blocker, stop and surface the pattern before requesting another re-review.
+- Only proceed with `@clawsweeper re-review` when: (a) ClawSweeper's verdict is not blocking on proof, or (b) the requested proof has been genuinely added to the PR body and/or branch since the last review SHA.
+
+When the pre-re-review gate passes, proceed to the Human Gate below before any GitHub write.
+
+
 ## Official ClawSweeper Local-Review Gate
 
 Use the public `openclaw/clawsweeper` repository. The official local pre-PR path is `pnpm local-review`.

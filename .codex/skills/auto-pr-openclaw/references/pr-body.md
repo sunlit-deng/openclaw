@@ -76,13 +76,12 @@ AI-assisted: built with Codex
 
 ## Evidence
 
-- Prefer proof that maps directly to the changed behavior.
-- Include focused tests and exact commands/results when useful; for behavior claims, prefer copied terminal/live output over paraphrased "passed" summaries.
-- For runtime, auth, network, provider, browser, CSP, CORS, or external API behavior, include live output, network/log proof, recording, or redacted runtime trace that shows the real path.
-- For resource-safety/runtime claims, prefer copied terminal output over prose. When live provider proof is impractical, run a loopback/local proof that exercises the same production helper, tee the command and output to `outputs/<topic>/`, and paste the shortest useful transcript into the PR body.
-- Good terminal proof shows the command, the trigger, and the negative control reviewers care about, for example: overflow error, configured limit, oversized input, bytes observed before cancellation, and `full_response_buffered=no`.
+- **Only real runtime proof.** For any change touching runtime, subprocess, stream, network, provider, browser, or external API behavior: the Evidence section must contain live terminal output, logs, recording, or redacted runtime trace that exercises the **real production code path**. Tests alone are supplementary; they do not replace real-path proof.
+- **Test output is not real proof.** ClawSweeper ignores test-run output (e.g., `npx vitest ...` results, pass counts, test names, durations) as evidence of runtime behavior. Tests prove that code is testable; they do not prove the code works correctly in the real sandbox/exec-server/subprocess/network path. If you only have test output in Evidence, ClawSweeper will block with "needs real behavior proof" regardless of how many tests pass. At minimum, add redacted terminal output from a real production-path run showing the behavior before and after the change.
+- **No synthetic checks.** ClawSweeper treats `node -e 'simulate ...'` and similar synthetic stream/error simulations as "thin signal" and will block the PR with 🦪 silver shellfish. The proof must come from the actual sandbox/exec-server/subprocess/network path.
+- **No static tool output.** Do not put `oxlint`, `eslint`, `git diff --stat`, or any lint/format output in Evidence. These belong in pre-push validation gates, not the PR body. ClawSweeper ignores them and their presence dilutes the signal of real proof.
+- Good terminal proof shows the command, the trigger, and the negative control reviewers care about.
 - Use relative commands or redact local paths. Never paste local usernames, tokens, account ids, private URLs, cookies, or full sensitive responses.
-- Do not paste secrets, tokens, cookies, account IDs, private endpoints, or full sensitive response bodies.
 - Move long logs, long command output, and detailed notes into an output artifact; summarize only the key line in the PR body.
 
 ## AI-Assisted Marker

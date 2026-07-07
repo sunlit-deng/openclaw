@@ -82,6 +82,7 @@ When the user says remote candidate issues, remote candidates, or asks to screen
    - Show the user: diff summary, commit author/committer, tests/checks run, PR body draft path or summary, live proof summary, ClawSweeper local-review result, and any unresolved risks.
    - Verify every `sunlit-deng` commit that will be pushed uses author and committer email `yang.jiajun1@xydigit.com`. If any `sunlit-deng` commit uses another email, fix the local commit metadata before asking for push approval. Do not rewrite other contributors' authored commits merely to change their author email.
    - For existing fork PRs, show the current maintainer edit status from `maintainerCanModify`. If it is `false`, stop and ask the user to re-enable `Allow edits and access to secrets by maintainers` in the GitHub web UI before push, PR update, or re-review. For new PRs, show that the PR will be created without `--no-maintainer-edit` and must be checked immediately after creation.
+   - When the PR already has a ClawSweeper review, show ClawSweeper's current verdict and any unresolved blocking findings before asking for push or re-review confirmation.
    - Continue with push/PR/comment only after explicit user confirmation.
    - After confirmation, prefer `git push` for the branch push and `gh pr create/edit/comment/review` or `gh api` for PR and comment writes.
    - After creating or updating a fork PR, re-read `maintainerCanModify`. If it is `false`, stop before requesting review and tell the user the web checkbox must be restored.
@@ -90,7 +91,9 @@ When the user says remote candidate issues, remote candidates, or asks to screen
    - If CI fails, inspect logs and distinguish PR-caused failures from unrelated main/flaky failures with concrete evidence.
    - Prefer `gh pr checks`, `gh run list`, `gh run view`, and `gh run download` for CI investigation.
    - If ClawSweeper misreads stale state, first verify current head SHA and file diff, then update durable PR body if needed.
-   - If re-review is needed after confirmation, post only `@clawsweeper re-review`.
+   - **Pre-re-review gate:** Before posting `@clawsweeper re-review`, read ClawSweeper's current review comment. Use `gh pr view <number> --repo openclaw/openclaw --json comments` and scan the most recent ClawSweeper review body. If ClawSweeper's verdict blocks the PR on proof (look for phrases like "needs real behavior proof", "missing proof", "🦪 silver shellfish", "status: 📣 needs proof"), do NOT request re-review until the requested proof is added to the PR body and the head branch is updated.
+   - **Loop detection:** If the current head SHA matches the SHA in ClawSweeper's most recent review and ClawSweeper still reports the same blocker class (same "needs real behavior proof" verdict, same "🦪" rank), stop before any re-review request. Explain to the user what proof ClawSweeper is asking for and that the branch has not changed since the last review.
+   - If re-review is needed after confirmation and proof has been genuinely added, post only `@clawsweeper re-review`.
 
 ## References
 
