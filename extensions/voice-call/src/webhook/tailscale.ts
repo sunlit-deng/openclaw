@@ -40,6 +40,9 @@ function runTailscaleCommand(
       stdio: ["ignore", "pipe", "ignore"],
     });
 
+    const ignoreOutputStreamError = () => {};
+    proc.stdout.on("error", ignoreOutputStreamError);
+
     let stdout: TailscaleCommandStdout = { bytes: 0, exceeded: false, text: "" };
     let settled = false;
     const finish = (result: { code: number; stdout: string }) => {
