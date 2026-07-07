@@ -215,6 +215,10 @@ async function runCli(params: {
     const env = params.env ? { ...process.env, ...params.env } : process.env;
     const proc = spawn(cmd, args, { cwd: params.cwd, env, stdio: ["pipe", "pipe", "pipe"] });
 
+    const ignoreOutputStreamError = () => {};
+    proc.stdout.on("error", ignoreOutputStreamError);
+    proc.stderr.on("error", ignoreOutputStreamError);
+
     const stdoutChunks: Buffer[] = [];
     const stderrChunks: Buffer[] = [];
     proc.stdout.on("data", (c) => stdoutChunks.push(c));
