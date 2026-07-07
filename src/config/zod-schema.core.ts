@@ -524,6 +524,7 @@ export function isBuiltInModelProviderOverlayId(providerId: string): boolean {
 const ModelProviderSchema = z
   .object({
     baseUrl: z.string().min(1).optional(),
+    baseURL: z.string().min(1).optional(),
     apiKey: SecretInputSchema.optional().register(sensitive),
     auth: z
       .union([z.literal("api-key"), z.literal("aws-sdk"), z.literal("oauth"), z.literal("token")])
@@ -545,14 +546,26 @@ const ModelProviderSchema = z
   })
   .strict();
 
+// baseURL is a compatibility alias for baseUrl. Normalization stays at the
+// providers-record level (single ZodPipe) instead of per-provider so the
+// exported config type does not carry a per-provider transform union that
+// inflates the plugin-sdk declaration bundle. Conflict/required checks run in
+// superRefine before the transform maps baseURL onto the canonical baseUrl.
 const ModelProvidersSchema = z
   .record(z.string(), ModelProviderSchema)
   .superRefine((providers, ctx) => {
     for (const [providerId, provider] of Object.entries(providers)) {
+      if (provider.baseUrl !== undefined && provider.baseURL !== undefined) {
+        ctx.addIssue({
+          code: "custom",
+          path: [providerId, "baseURL"],
+          message: "use either baseUrl or baseURL, not both",
+        });
+      }
       if (isBuiltInModelProviderOverlayId(providerId)) {
         continue;
       }
-      if (!provider.baseUrl) {
+      if (!provider.baseUrl && !provider.baseURL) {
         ctx.addIssue({
           code: "custom",
           path: [providerId, "baseUrl"],
@@ -569,6 +582,17 @@ const ModelProvidersSchema = z
         });
       }
     }
+  })
+  .transform((providers) => {
+    const normalized: Record<string, Omit<z.infer<typeof ModelProviderSchema>, "baseURL">> = {};
+    for (const [providerId, provider] of Object.entries(providers)) {
+      const { baseURL, ...canonical } = provider;
+      normalized[providerId] =
+        baseURL !== undefined && canonical.baseUrl === undefined
+          ? { ...canonical, baseUrl: baseURL }
+          : canonical;
+    }
+    return normalized;
   });
 
 const ModelPricingConfigSchema = z
