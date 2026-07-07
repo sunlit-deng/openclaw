@@ -75,6 +75,9 @@ async function preflightDu(dirPath: string, maxBytes: number): Promise<boolean> 
   return new Promise((resolve) => {
     const du = spawn("du", ["-sk", dirPath], { stdio: ["ignore", "pipe", "ignore"] });
     let output = "";
+
+    const ignoreOutputStreamError = () => {};
+    du.stdout.on("error", ignoreOutputStreamError);
     du.stdout.on("data", (chunk: Buffer) => {
       output += chunk.toString();
     });
@@ -104,6 +107,17 @@ async function listTarEntries(tarBuffer: Buffer): Promise<string[]> {
   // loop for up to 10s. Other in-flight requests continue to be served.
   return new Promise<string[]>((resolve) => {
     const child = spawn("tar", ["-tzf", "-"], { stdio: ["pipe", "pipe", "ignore"] });
+
+    // Fail closed on stdout read errors — partial listing is worse than no listing
+    child.stdout.on("error", () => {
+      if (aborted) {
+        return;
+      }
+      aborted = true;
+      clearTimeout(watchdog);
+      try { child.kill("SIGKILL"); } catch { /* gone */ }
+      resolve([]);
+    });
     let stdoutBuf = "";
     let aborted = false;
     const watchdog = setTimeout(() => {
@@ -268,6 +282,18 @@ export async function handleDirFetch(params: DirFetchParams): Promise<DirFetchRe
     const child = spawn(tarBin, tarArgs, {
       stdio: ["ignore", "pipe", "pipe"],
     });
+
+    // Fail closed on stdout (archive data) read errors — partial archive is worse than ERROR
+    child.stdout.on("error", () => {
+      if (aborted) {
+        return;
+      }
+      aborted = true;
+      clearTimeout(watchdog);
+      try { child.kill("SIGKILL"); } catch { /* already gone */ }
+      resolve("ERROR");
+    });
+    child.stderr.on("error", () => {});
 
     const chunks: Buffer[] = [];
     let totalBytes = 0;
