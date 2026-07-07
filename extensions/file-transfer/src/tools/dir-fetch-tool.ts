@@ -55,9 +55,15 @@ async function listTarOutputLines<T>(input: {
     const tarBin = process.platform !== "win32" ? "/usr/bin/tar" : "tar";
     const child = spawn(tarBin, input.args, { stdio: ["pipe", "pipe", "pipe"] });
 
-    const ignoreOutputStreamError1 = () => {};
-    child.stdout.on("error", ignoreOutputStreamError1);
-    child.stderr.on("error", ignoreOutputStreamError1);
+    // Fail closed on stdout read errors — partial listing silently
+    // accepted as complete could let path/type checks pass with stale data.
+    child.stdout.on("error", () => {
+      if (settled) return;
+      stopChild();
+      finish({ ok: false, reason: `${input.label} stdout error` });
+    });
+    const ignoreOutputStreamError = () => {};
+    child.stderr.on("error", ignoreOutputStreamError);
 
     const values: T[] = [];
     let pending = "";
@@ -277,8 +283,14 @@ export async function validateTarUncompressedBudget(
     const tarBin = process.platform !== "win32" ? "/usr/bin/tar" : "tar";
     const child = spawn(tarBin, ["-xOzf", "-"], { stdio: ["pipe", "pipe", "pipe"] });
 
+    // Fail closed on stdout read errors — a partial byte count could let
+    // oversized archives slip past the uncompressed-budget prevalidation,
+    // leaving the post-extraction walk as the only size defense.
+    child.stdout.on("error", () => {
+      if (settled) return;
+      finish({ ok: false, reason: "tar uncompressed budget stdout error" });
+    });
     const ignoreOutputStreamError2 = () => {};
-    child.stdout.on("error", ignoreOutputStreamError2);
     child.stderr.on("error", ignoreOutputStreamError2);
 
     let totalBytes = 0;
