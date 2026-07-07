@@ -59,7 +59,7 @@ function createParams(
 
 function expectedMaintenanceWarning(reasonText: string): string {
   return (
-    `⚠️ Session maintenance warning: this active session would be evicted (${reasonText}). ` +
+    `\u26A0\uFE0F Session maintenance warning: this active session would be evicted (${reasonText}). ` +
     `Maintenance is set to warn-only, so nothing was reset. ` +
     `To enforce cleanup, set \`session.maintenance.mode: "enforce"\` or increase the limits.`
   );
