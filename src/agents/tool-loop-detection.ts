@@ -160,6 +160,32 @@ function stringField(value: unknown): string | null {
   return typeof value === "string" ? value : null;
 }
 
+function normalizeExitSignal(value: unknown): string | null {
+  if (typeof value === "string") {
+    return value;
+  }
+  if (typeof value === "number") {
+    return String(value);
+  }
+  return null;
+}
+
+// #93917: Fingerprint an exec failure by stable discriminators only, excluding
+// output text. Error output often carries volatile noise (timestamps, PIDs,
+// connection-refused-at-${time}) that defeats no-progress detection. Keeping
+// (exitCode, exitSignal, failureKind) distinguishes genuinely different failure
+// modes so they do not merge into one no-progress streak, while `status` keeps a
+// nonzero "completed" exit distinct from a "failed" outcome with the same code.
+function hashStableExecFailure(status: string, details: Record<string, unknown>): string {
+  return digestStable({
+    status,
+    exitCode: typeof details.exitCode === "number" ? details.exitCode : null,
+    timedOut: details.timedOut === true,
+    exitSignal: normalizeExitSignal(details.exitSignal),
+    failureKind: stringField(details.failureKind),
+  });
+}
+
 function hashExecToolOutcome(details: Record<string, unknown>, text: string): string | undefined {
   const status = stringField(details.status);
   if (!status) {
@@ -173,13 +199,26 @@ function hashExecToolOutcome(details: Record<string, unknown>, text: string): st
     });
   }
 
-  if (status === "completed" || status === "failed") {
+  if (status === "completed") {
+    const exitCode = typeof details.exitCode === "number" ? details.exitCode : null;
+    // #93917: Foreground exec reports ordinary nonzero exits (grep exit 1,
+    // SSH/Docker retries) as "completed", but they are real failures whose stderr
+    // often varies per call. Fingerprint those by stable failure facts, not the
+    // volatile output, so repeated identical failures accumulate a no-progress
+    // streak. Exit 0 keeps output because changing successful output is progress.
+    if (exitCode !== null && exitCode !== 0) {
+      return hashStableExecFailure(status, details);
+    }
     return digestStable({
       status,
-      exitCode: typeof details.exitCode === "number" ? details.exitCode : null,
+      exitCode,
       timedOut: details.timedOut === true,
       output: nonEmptyStringField(details.aggregated) ?? text,
     });
+  }
+
+  if (status === "failed") {
+    return hashStableExecFailure(status, details);
   }
 
   if (status === "approval-pending" || status === "approval-unavailable") {

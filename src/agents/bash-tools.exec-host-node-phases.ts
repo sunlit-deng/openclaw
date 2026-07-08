@@ -237,21 +237,50 @@ export function formatNodeRunToolResult(params: {
   const errorText = typeof payloadObj.error === "string" ? payloadObj.error : "";
   const success = typeof payloadObj.success === "boolean" ? payloadObj.success : false;
   const exitCode = typeof payloadObj.exitCode === "number" ? payloadObj.exitCode : null;
+  const exitSignal: NodeJS.Signals | number | null =
+    typeof payloadObj.exitSignal === "string"
+      ? (payloadObj.exitSignal as NodeJS.Signals)
+      : typeof payloadObj.exitSignal === "number"
+        ? payloadObj.exitSignal
+        : null;
+  const timedOut = payloadObj.timedOut === true;
+  const aggregated = [stdout, stderr, errorText].filter(Boolean).join("\n");
+  const durationMs = Date.now() - params.startedAt;
+  if (!success) {
+    return {
+      content: [
+        {
+          type: "text",
+          text: renderExecUpdateText({ tailText: aggregated, warnings: params.warnings ?? [] }),
+        },
+      ],
+      details: {
+        status: "failed",
+        exitCode,
+        exitSignal,
+        durationMs,
+        aggregated,
+        timedOut,
+        failureKind: timedOut ? "overall-timeout" : "node-run-failed",
+        cwd: params.cwd,
+      },
+    };
+  }
   return {
     content: [
       {
         type: "text",
         text: renderExecUpdateText({
-          tailText: stdout || stderr || errorText,
+          tailText: aggregated,
           warnings: params.warnings ?? [],
         }),
       },
     ],
     details: {
-      status: success ? "completed" : "failed",
+      status: "completed",
       exitCode,
-      durationMs: Date.now() - params.startedAt,
-      aggregated: [stdout, stderr, errorText].filter(Boolean).join("\n"),
+      durationMs,
+      aggregated,
       cwd: params.cwd,
     } satisfies ExecToolDetails,
   };

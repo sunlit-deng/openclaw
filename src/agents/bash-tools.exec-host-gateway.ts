@@ -439,9 +439,11 @@ function buildGatewayExecApprovalDeniedToolResult(params: {
     details: {
       status: "failed",
       exitCode: null,
+      exitSignal: null,
       durationMs: 0,
       aggregated: text,
       timedOut: params.deniedReason.includes("timeout"),
+      failureKind: "approval-denied",
       cwd: params.cwd,
     },
   };
