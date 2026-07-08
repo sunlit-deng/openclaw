@@ -66,7 +66,7 @@ vi.mock("@agentclientprotocol/sdk", () => {
       initialize: vi.fn(
         () =>
           new Promise<void>((resolve, reject) => {
-            sdkInitResolve = resolve;
+            void resolve;
             sdkInitReject = reject;
           }),
       ),
