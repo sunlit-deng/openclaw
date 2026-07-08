@@ -251,3 +251,8 @@ export async function runAcpClientInteractive(opts: AcpClientOptions = {}): Prom
     process.exit(code ?? 0);
   });
 }
+
+// Exported for testing only.
+export const testing = {
+  createAcpClient,
+} as const;
