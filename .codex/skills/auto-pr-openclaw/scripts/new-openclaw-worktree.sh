@@ -15,6 +15,22 @@ slugify() {
     sed -E 's/[^a-z0-9]+/-/g; s/^-+//; s/-+$//'
 }
 
+configure_shared_store() {
+  local repo="$1"
+  local store_path="$2"
+
+  local current_store
+  current_store="$(pnpm --dir "$repo" store path 2>/dev/null || true)"
+
+  if [[ "$current_store" != "$store_path" ]]; then
+    pnpm --dir "$repo" config set store-dir "$store_path"
+    if ! grep -qxF '.npmrc' "$repo/.git/info/exclude" 2>/dev/null; then
+      echo '.npmrc' >> "$repo/.git/info/exclude"
+    fi
+    echo "  → pnpm shared store configured: $store_path"
+  fi
+}
+
 issue=""
 topic=""
 root="/Users/yangjiajun/projects/auto-pr/workspace/openclaw"
@@ -98,6 +114,8 @@ if [[ ! -d "$main_repo/.git" ]]; then
 fi
 
 git -C "$main_repo" fetch origin
+
+configure_shared_store "$main_repo" "${store_path:-$root/.pnpm-store/v11}"
 
 if [[ -e "$worktree_path" ]]; then
   echo "Worktree already exists: $worktree_path" >&2
