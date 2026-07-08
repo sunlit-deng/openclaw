@@ -151,6 +151,17 @@ async function createAcpClient(opts: AcpClientOptions = {}): Promise<AcpClientHa
     throw new Error("Failed to create ACP stdio pipes");
   }
 
+  // Guard pipe streams so a mid-session stream error (e.g. EPIPE when the
+  // child exits unexpectedly) does not crash the host process.
+  const onStreamError = (label: string, err: Error) => {
+    if (verbose) {
+      console.error(`[acp-client] stream error on ${label}:`, err.message);
+    }
+  };
+  agent.stdout.on("error", (err) => onStreamError("stdout", err));
+  agent.stdin.on("error", (err) => onStreamError("stdin", err));
+  agent.on("error", (err) => onStreamError("spawn", err));
+
   const input = Writable.toWeb(agent.stdin);
   const output = Readable.toWeb(agent.stdout) as unknown as ReadableStream<Uint8Array>;
   const stream = ndJsonStream(input, output);
