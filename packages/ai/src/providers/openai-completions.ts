@@ -38,6 +38,7 @@ import type {
 import { AssistantMessageEventStream } from "../utils/event-stream.js";
 import { headersToRecord } from "../utils/headers.js";
 import { parseStreamingJson } from "../utils/json-parse.js";
+import { normalizeStructuredPromptSection } from "../utils/prompt-cache-stability.js";
 import { createReasoningTagTextPartitioner } from "../utils/reasoning-tag-text-partitioner.js";
 import { sanitizeSurrogates } from "../utils/sanitize-unicode.js";
 import {
@@ -1021,13 +1022,43 @@ export function convertMessages(
   if (context.systemPrompt) {
     const useDeveloperRole = model.reasoning && compat.supportsDeveloperRole;
     const role = useDeveloperRole ? "developer" : "system";
-    const systemPrompt = options.preserveSystemPromptCacheBoundary
-      ? context.systemPrompt
-      : stripSystemPromptCacheBoundary(context.systemPrompt);
-    params.push({
-      role,
-      content: sanitizeSurrogates(systemPrompt),
-    });
+    let systemPrompt: string;
+    let dynamicSuffix: string | undefined;
+
+    if (compat.disableBoundaryAwareCache) {
+      // Prefix-matching cache providers need a stable system prefix; variable
+      // suffix context moves to the latest user turn instead.
+      const split = splitSystemPromptCacheBoundary(context.systemPrompt);
+      systemPrompt = split?.stablePrefix
+        ? sanitizeSurrogates(split.stablePrefix)
+        : sanitizeSurrogates(stripSystemPromptCacheBoundary(context.systemPrompt));
+      dynamicSuffix = split?.dynamicSuffix || undefined;
+    } else if (options.preserveSystemPromptCacheBoundary) {
+      systemPrompt = sanitizeSurrogates(context.systemPrompt);
+    } else {
+      systemPrompt = sanitizeSurrogates(stripSystemPromptCacheBoundary(context.systemPrompt));
+    }
+
+    params.push({ role, content: systemPrompt });
+
+    // For providers that need stable system-prompt prefixes, prepend the dynamic
+    // suffix as context to the latest user message instead of embedding it in the
+    // system prompt where it breaks prefix-matching cache.
+    if (dynamicSuffix) {
+      const lastUserIndex = transformedMessages.findLastIndex((m) => m.role === "user");
+      if (lastUserIndex >= 0) {
+        const msg = transformedMessages[lastUserIndex];
+        const prefix = normalizeStructuredPromptSection(dynamicSuffix);
+        const userMsg = msg as Extract<(typeof transformedMessages)[number], { role: "user" }>;
+        transformedMessages[lastUserIndex] = {
+          ...userMsg,
+          content:
+            typeof userMsg.content === "string"
+              ? `${prefix}\n\n${userMsg.content}`
+              : [{ type: "text", text: prefix }, ...userMsg.content],
+        };
+      }
+    }
   }
 
   let lastRole: string | null = null;
@@ -1403,6 +1434,7 @@ function detectCompat(model: Model<"openai-completions">): ResolvedOpenAIComplet
     sendSessionAffinityHeaders: false,
     supportsPromptCacheKey: false,
     supportsLongCacheRetention: !(isTogether || isCloudflareWorkersAI || isCloudflareAiGateway),
+    disableBoundaryAwareCache: isDeepSeek || isXiaomi,
   };
 }
 
@@ -1442,5 +1474,7 @@ function getCompat(model: Model<"openai-completions">): ResolvedOpenAICompletion
     supportsPromptCacheKey: model.compat.supportsPromptCacheKey ?? detected.supportsPromptCacheKey,
     supportsLongCacheRetention:
       model.compat.supportsLongCacheRetention ?? detected.supportsLongCacheRetention,
+    disableBoundaryAwareCache:
+      model.compat.disableBoundaryAwareCache ?? detected.disableBoundaryAwareCache,
   };
 }

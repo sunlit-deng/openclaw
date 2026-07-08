@@ -3967,6 +3967,7 @@ function detectCompat(model: OpenAIModeModel) {
     requiresReasoningContentOnAssistantMessages:
       compatDefaults.requiresReasoningContentOnAssistantMessages,
     requiresNonEmptyUserOrAssistantMessage: compatDefaults.requiresNonEmptyUserOrAssistantMessage,
+    disableBoundaryAwareCache: compatDefaults.disableBoundaryAwareCache,
   };
 }
 
@@ -3991,6 +3992,7 @@ function getCompat(model: OpenAIModeModel): {
   visibleReasoningDetailTypes: string[];
   requiresReasoningContentOnAssistantMessages: boolean;
   requiresNonEmptyUserOrAssistantMessage: boolean;
+  disableBoundaryAwareCache: boolean;
 } {
   const detected = detectCompat(model);
   const compat = model.compat ?? {};
@@ -4027,6 +4029,10 @@ function getCompat(model: OpenAIModeModel): {
       compat.requiresReasoningContentOnAssistantMessages ??
       detected.requiresReasoningContentOnAssistantMessages,
     requiresNonEmptyUserOrAssistantMessage: detected.requiresNonEmptyUserOrAssistantMessage,
+    disableBoundaryAwareCache:
+      compat.disableBoundaryAwareCache === false
+        ? false
+        : (compat.disableBoundaryAwareCache ?? detected.disableBoundaryAwareCache),
   };
 }
 
@@ -4640,13 +4646,20 @@ export function buildOpenAICompletionsParams(
 ) {
   const compat = getCompat(model);
   const compatDetection = detectOpenAICompletionsCompat(model);
-  const completionsContext = context.systemPrompt
-    ? {
-        ...context,
-        systemPrompt: stripSystemPromptCacheBoundary(context.systemPrompt),
-      }
-    : context;
-  let messages = convertMessages(model as never, completionsContext, compat as never);
+  // disableBoundaryAwareCache is already resolved by getCompat() (transport layer)
+  // via model.compat.disableBoundaryAwareCache ?? detectCompat()
+  // which respects explicit false and auto-detects true for deepseek/xiaomi.
+  const disableBoundaryAwareCache = compat.disableBoundaryAwareCache;
+  const completionsContext =
+    context.systemPrompt && !disableBoundaryAwareCache
+      ? {
+          ...context,
+          systemPrompt: stripSystemPromptCacheBoundary(context.systemPrompt),
+        }
+      : context;
+  let messages = convertMessages(model as never, completionsContext, compat as never, {
+    preserveSystemPromptCacheBoundary: disableBoundaryAwareCache,
+  });
   injectToolCallThoughtSignatures(messages as unknown[], context, model);
   sanitizeCompletionsReasoningReplayFields(messages, {
     preserveOpenRouterReasoning:

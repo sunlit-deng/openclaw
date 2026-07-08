@@ -389,6 +389,7 @@ function normalizeModelCatalogCompat(value: unknown): ModelCatalogCompatConfig |
     "sendSessionIdHeader",
     "supportsEagerToolInputStreaming",
     "supportsLongCacheRetention",
+    "disableBoundaryAwareCache",
     "nativeWebSearchTool",
     "requiresMistralToolIds",
     "requiresOpenAiAnthropicToolPayload",

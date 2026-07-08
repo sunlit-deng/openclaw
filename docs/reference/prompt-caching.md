@@ -89,6 +89,7 @@ Source: `src/agents/anthropic-payload-policy.ts` (`resolveAnthropicEphemeralCach
 - Cache hits surface via `usage.prompt_tokens_details.cached_tokens` (Chat Completions) or `input_tokens_details.cached_tokens` (Responses API), mapped to `cacheRead`.
 - Responses API payloads can also expose `input_tokens_details.cache_write_tokens`, mapped to `cacheWrite` and priced at the model's cache-write rate; Responses payloads that omit the field keep `cacheWrite` at `0`. OpenAI's Chat Completions API does not document or emit a `cache_write_tokens` counter, but OpenClaw still reads `prompt_tokens_details.cache_write_tokens` there for OpenRouter-compatible and DeepSeek-style proxies that report a separate write count.
 - In practice, OpenAI behaves more like an initial-prefix cache than Anthropic's moving full-history reuse - see [OpenAI live expectations](#openai-live-expectations) below.
+- DeepSeek and Xiaomi OpenAI-compatible Completions models default to `compat.disableBoundaryAwareCache: true`. OpenClaw keeps the stable system-prompt prefix in the system message and prepends the dynamic cache-boundary suffix to the latest user message so prefix-matching provider caches can reuse prior turns.
 
 ### Amazon Bedrock
 
