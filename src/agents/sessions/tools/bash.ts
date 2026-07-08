@@ -69,6 +69,14 @@ export function createLocalBashOperations(options?: { shellPath?: string }): Bas
           windowsHide: true,
         });
         let timedOut = false;
+        let settled = false;
+        const settle = (fn: () => void) => {
+          if (settled) {
+            return;
+          }
+          settled = true;
+          fn();
+        };
         let timeoutHandle: NodeJS.Timeout | undefined;
         const timeoutMs = resolveBashTimeoutMs(timeout);
         if (timeoutMs !== undefined) {
@@ -82,6 +90,24 @@ export function createLocalBashOperations(options?: { shellPath?: string }): Bas
         // Stream stdout and stderr.
         child.stdout?.on("data", onData);
         child.stderr?.on("data", onData);
+        const onStreamError = (stream: "stdout" | "stderr", error: Error) => {
+          if (signal) {
+            signal.removeEventListener("abort", onAbort);
+          }
+
+          if (settled) {
+            return;
+          }
+          if (child.pid) {
+            killProcessTree(child.pid);
+          }
+          if (timeoutHandle) {
+            clearTimeout(timeoutHandle);
+          }
+          settle(() => reject(new Error(`bash ${stream} error: ${error.message}`)));
+        };
+        child.stdout?.on("error", (error) => onStreamError("stdout", error));
+        child.stderr?.on("error", (error) => onStreamError("stderr", error));
         // Handle abort signal by killing the entire process tree.
         const onAbort = () => {
           if (child.pid) {
@@ -99,6 +125,9 @@ export function createLocalBashOperations(options?: { shellPath?: string }): Bas
         // on inherited stdio handles held by detached descendants.
         waitForChildProcess(child)
           .then((code) => {
+            if (settled) {
+              return;
+            }
             if (timeoutHandle) {
               clearTimeout(timeoutHandle);
             }
@@ -106,23 +135,26 @@ export function createLocalBashOperations(options?: { shellPath?: string }): Bas
               signal.removeEventListener("abort", onAbort);
             }
             if (signal?.aborted) {
-              reject(new Error("aborted"));
+              settle(() => reject(new Error("aborted")));
               return;
             }
             if (timedOut) {
-              reject(new Error(`timeout:${timeout}`));
+              settle(() => reject(new Error(`timeout:${timeout}`)));
               return;
             }
-            resolve({ exitCode: code });
+            settle(() => resolve({ exitCode: code }));
           })
           .catch((err: unknown) => {
+            if (settled) {
+              return;
+            }
             if (timeoutHandle) {
               clearTimeout(timeoutHandle);
             }
             if (signal) {
               signal.removeEventListener("abort", onAbort);
             }
-            reject(toErrorObject(err, "Non-Error rejection"));
+            settle(() => reject(toErrorObject(err, "Non-Error rejection")));
           });
       });
     },
