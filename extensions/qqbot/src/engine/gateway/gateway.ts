@@ -83,7 +83,7 @@ export async function startGateway(ctx: CoreGatewayContext): Promise<void> {
     setRefIndex(refIdx, {
       content: meta.text ?? "",
       senderId: account.accountId,
-      senderName: account.accountId,
+      senderName: account.name ?? account.accountId,
       timestamp: Date.now(),
       isBot: true,
       ...(attachments.length > 0 ? { attachments } : {}),
