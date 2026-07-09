@@ -1167,6 +1167,71 @@ describe("backfillMattermostThreadHistoryForMonitor", () => {
     );
   });
 
+  it("adopts pending markers without blocking later session rotations", async () => {
+    const harness = createBackfillHarness();
+    const pendingSessionKey = "pending:mattermost:default:channel:chan-1:thread:root-1";
+    const createdSessionKey = "session:session-created-after-first-turn";
+    const resetSessionKey = "session:session-after-reset";
+    harness.fetchThreadPosts
+      .mockRejectedValueOnce(new Error("thread fetch timeout"))
+      .mockResolvedValueOnce([
+        createPost({ id: "new-1", create_at: 2, message: "after reset", user_id: "user-2" }),
+      ]);
+
+    await backfillMattermostThreadHistoryForMonitor({
+      client: harness.client,
+      post: createPost({ id: "current-1" }),
+      threadRootId: "root-1",
+      historyKey,
+      baseSessionKey: pendingSessionKey,
+      historyLimit: 5,
+      channelHistories: harness.channelHistories,
+      threadsBackfilledThisSession: harness.threadsBackfilledThisSession,
+      fetchThreadPosts: harness.fetchThreadPosts,
+    });
+    expect(harness.fetchThreadPosts).toHaveBeenCalledTimes(1);
+    expect(harness.threadsBackfilledThisSession.has(`${historyKey}:${pendingSessionKey}`)).toBe(
+      true,
+    );
+
+    await backfillMattermostThreadHistoryForMonitor({
+      client: harness.client,
+      post: createPost({ id: "current-2" }),
+      threadRootId: "root-1",
+      historyKey,
+      baseSessionKey: createdSessionKey,
+      adoptBackfillSessionKey: pendingSessionKey,
+      historyLimit: 5,
+      channelHistories: harness.channelHistories,
+      threadsBackfilledThisSession: harness.threadsBackfilledThisSession,
+      fetchThreadPosts: harness.fetchThreadPosts,
+    });
+    expect(harness.fetchThreadPosts).toHaveBeenCalledTimes(1);
+    expect(harness.threadsBackfilledThisSession.has(`${historyKey}:${createdSessionKey}`)).toBe(
+      true,
+    );
+    expect(harness.threadsBackfilledThisSession.has(`${historyKey}:${pendingSessionKey}`)).toBe(
+      false,
+    );
+
+    await backfillMattermostThreadHistoryForMonitor({
+      client: harness.client,
+      post: createPost({ id: "current-3" }),
+      threadRootId: "root-1",
+      historyKey,
+      baseSessionKey: resetSessionKey,
+      adoptBackfillSessionKey: pendingSessionKey,
+      historyLimit: 5,
+      channelHistories: harness.channelHistories,
+      threadsBackfilledThisSession: harness.threadsBackfilledThisSession,
+      fetchThreadPosts: harness.fetchThreadPosts,
+    });
+    expect(harness.fetchThreadPosts).toHaveBeenCalledTimes(2);
+    expect(harness.channelHistories.get(historyKey)?.map((entry) => entry.body)).toStrictEqual([
+      "after reset",
+    ]);
+  });
+
   it("allows the same thread to backfill again after the stored session id rotates", async () => {
     const harness = createBackfillHarness();
     harness.fetchThreadPosts

@@ -717,6 +717,89 @@ describe("mattermost inbound user posts", () => {
     await monitor;
   });
 
+  it("adopts a missing session marker so same-session failed backfills do not retry", async () => {
+    const socket = new FakeWebSocket();
+    const abortController = new AbortController();
+    const routeSessionKey = "mattermost:default:channel:chan-1";
+    const threadSessionKey = `${routeSessionKey}:thread:root-1`;
+    let storedSessionId: string | undefined;
+    mockState.abortController = undefined;
+    mockState.runtimeCore = createRuntimeCore(testConfig, {
+      mainSessionKey: routeSessionKey,
+      sessionKey: routeSessionKey,
+    });
+    mockState.getSessionEntry.mockImplementation((params: { sessionKey?: string }) => {
+      if (params.sessionKey !== threadSessionKey || !storedSessionId) {
+        return undefined;
+      }
+      return { sessionId: storedSessionId };
+    });
+    mockState.fetchMattermostThreadPosts.mockRejectedValueOnce(new Error("thread fetch timeout"));
+    mockState.dispatchReplyFromConfig.mockImplementation(async () => {
+      if (mockState.dispatchReplyFromConfig.mock.calls.length === 1) {
+        storedSessionId = "session-created-after-first-turn";
+      }
+      if (mockState.dispatchReplyFromConfig.mock.calls.length >= 2) {
+        abortController.abort();
+      }
+    });
+
+    const monitor = monitorMattermostProvider({
+      config: testConfig,
+      runtime: testRuntime(),
+      abortSignal: abortController.signal,
+      webSocketFactory: () => socket,
+    });
+
+    await vi.waitFor(() => {
+      expect(socket.openListenerCount).toBeGreaterThan(0);
+    });
+    socket.emitOpen();
+
+    const emitThreadPost = async (id: string, message: string) => {
+      await socket.emitMessage({
+        event: "posted",
+        data: {
+          channel_id: "chan-1",
+          channel_name: "town-square",
+          channel_display_name: "Town Square",
+          sender_name: "alice",
+          post: JSON.stringify({
+            id,
+            root_id: "root-1",
+            channel_id: "chan-1",
+            user_id: "user-1",
+            message,
+            create_at: 1_714_000_001_000,
+          }),
+        },
+        broadcast: {
+          channel_id: "chan-1",
+          user_id: "user-1",
+        },
+      });
+    };
+
+    await emitThreadPost("child-missing-1", "first cold turn");
+    await vi.waitFor(() => {
+      expect(mockState.dispatchReplyFromConfig).toHaveBeenCalledTimes(1);
+    });
+    expect(mockState.fetchMattermostThreadPosts).toHaveBeenCalledTimes(1);
+    expect(mockState.getSessionEntry).toHaveBeenCalledWith({
+      storePath: "/tmp/openclaw-test-sessions.json",
+      sessionKey: threadSessionKey,
+    });
+
+    await emitThreadPost("child-missing-2", "same session follow-up");
+    await vi.waitFor(() => {
+      expect(mockState.dispatchReplyFromConfig).toHaveBeenCalledTimes(2);
+    });
+    expect(mockState.fetchMattermostThreadPosts).toHaveBeenCalledTimes(1);
+
+    socket.emitClose(1000);
+    await monitor;
+  });
+
   it("does not read session storage for group thread posts dropped before admission", async () => {
     const socket = new FakeWebSocket();
     const abortController = new AbortController();
