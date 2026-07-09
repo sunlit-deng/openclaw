@@ -1,5 +1,6 @@
 import { createServer, type Server } from "node:http";
 import { describe, expect, it, vi } from "vitest";
+import { WebSocketServer } from "ws";
 import { createClickClackClient } from "./http-client.js";
 
 const LOOPBACK_RESPONSE_BYTES = 18 * 1024 * 1024;
@@ -317,5 +318,44 @@ describe("ClickClack HTTP client", () => {
     );
     const init = fetchMock.mock.calls[0]?.[1];
     expect(requestBodyJson(init)).toEqual({ body: "longer" });
+  });
+});
+
+describe("createClickClackClient websocket", () => {
+  async function runFrameCase(frame: string): Promise<{ delivered: boolean; error?: string }> {
+    const wss = new WebSocketServer({ port: 0, host: "127.0.0.1" });
+    await new Promise<void>((resolve) => {
+      wss.once("listening", () => resolve());
+    });
+    const address = wss.address();
+    if (!address || typeof address === "string") {
+      throw new Error("expected loopback ws address");
+    }
+    wss.on("connection", (server) => server.send(frame));
+    const client = createClickClackClient({
+      baseUrl: `http://127.0.0.1:${address.port}`,
+      token: "test-token",
+    });
+    try {
+      const socket = client.websocket("ws-1");
+      return await new Promise<{ delivered: boolean; error?: string }>((resolve) => {
+        socket.on("message", () => resolve({ delivered: true }));
+        socket.on("error", (error) => resolve({ delivered: false, error: error.message }));
+      }).finally(() => socket.close());
+    } finally {
+      wss.close();
+    }
+  }
+
+  it("delivers a legitimate inbound frame below the payload cap", async () => {
+    const result = await runFrameCase(JSON.stringify({ cursor: "c1", type: "message" }));
+    expect(result.delivered).toBe(true);
+  });
+
+  it("rejects an oversized inbound frame before it reaches the event parser", async () => {
+    // 1 MiB + 1 byte: ws must error before the frame reaches the message handler.
+    const result = await runFrameCase("x".repeat(1024 * 1024 + 1));
+    expect(result.delivered).toBe(false);
+    expect(result.error).toMatch(/max payload/i);
   });
 });
