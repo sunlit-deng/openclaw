@@ -717,6 +717,66 @@ describe("mattermost inbound user posts", () => {
     await monitor;
   });
 
+  it("does not read session storage for group thread posts dropped before admission", async () => {
+    const socket = new FakeWebSocket();
+    const abortController = new AbortController();
+    mockState.abortController = abortController;
+    const mentionConfig: OpenClawConfig = {
+      channels: {
+        mattermost: {
+          enabled: true,
+          baseUrl: "https://mattermost.example.com",
+          botToken: "bot-token",
+          chatmode: "oncall",
+          dmPolicy: "open",
+          groupPolicy: "open",
+        },
+      },
+    };
+    mockState.runtimeCore = createRuntimeCore(mentionConfig);
+
+    const monitor = monitorMattermostProvider({
+      config: mentionConfig,
+      runtime: testRuntime(),
+      abortSignal: abortController.signal,
+      webSocketFactory: () => socket,
+    });
+
+    await vi.waitFor(() => {
+      expect(socket.openListenerCount).toBeGreaterThan(0);
+    });
+    socket.emitOpen();
+
+    await socket.emitMessage({
+      event: "posted",
+      data: {
+        channel_id: "chan-1",
+        channel_name: "town-square",
+        channel_display_name: "Town Square",
+        sender_name: "alice",
+        post: JSON.stringify({
+          id: "child-dropped-before-admission",
+          root_id: "root-1",
+          channel_id: "chan-1",
+          user_id: "user-1",
+          message: "plain thread chatter",
+          create_at: 1_714_000_001_000,
+        }),
+      },
+      broadcast: {
+        channel_id: "chan-1",
+        user_id: "user-1",
+      },
+    });
+    abortController.abort();
+    socket.emitClose(1000);
+    await monitor;
+
+    expect(mockState.dispatchReplyFromConfig).not.toHaveBeenCalled();
+    expect(mockState.getSessionEntry).not.toHaveBeenCalled();
+    expect(mockState.fetchMattermostThreadPosts).not.toHaveBeenCalled();
+  });
+
   it("dispatches a bare bot mention whose body is empty after normalization as a wake event", async () => {
     const socket = new FakeWebSocket();
     const abortController = new AbortController();
