@@ -1042,21 +1042,16 @@ describe("backfillMattermostThreadHistoryForMonitor", () => {
     const channelHistories = new Map<string, HistoryEntry[]>();
     const threadsBackfilledThisSession = new Set<string>();
     const fetchThreadPosts = vi.fn(async () => [] as MattermostPost[]);
-    const resolveUserInfo = vi.fn(async (userId: string) => ({
-      id: userId,
-      username: userId.replace("user-", "member-"),
-    }));
 
     return {
       channelHistories,
       client,
       fetchThreadPosts,
-      resolveUserInfo,
       threadsBackfilledThisSession,
     };
   }
 
-  it("seeds a cold thread window from server history and filters the triggering post before trim", async () => {
+  it("seeds a cold thread window from server history without sender enrichment", async () => {
     const harness = createBackfillHarness();
     const currentPost = createPost({
       id: "current",
@@ -1081,13 +1076,12 @@ describe("backfillMattermostThreadHistoryForMonitor", () => {
       channelHistories: harness.channelHistories,
       threadsBackfilledThisSession: harness.threadsBackfilledThisSession,
       fetchThreadPosts: harness.fetchThreadPosts,
-      resolveUserInfo: harness.resolveUserInfo,
     });
 
     expect(harness.fetchThreadPosts).toHaveBeenCalledTimes(1);
     expect(harness.channelHistories.get(historyKey)).toStrictEqual([
       {
-        sender: "@member-2",
+        sender: "user-2",
         body: "old two",
         timestamp: 2,
         messageId: "old-2",
@@ -1107,7 +1101,7 @@ describe("backfillMattermostThreadHistoryForMonitor", () => {
   it("marks populated windows so same-session follow-ups do not refetch after history clears", async () => {
     const harness = createBackfillHarness();
     harness.channelHistories.set(historyKey, [
-      { sender: "@member-1", body: "already here", timestamp: 1, messageId: "old-1" },
+      { sender: "user-1", body: "already here", timestamp: 1, messageId: "old-1" },
     ]);
 
     await backfillMattermostThreadHistoryForMonitor({
@@ -1120,7 +1114,6 @@ describe("backfillMattermostThreadHistoryForMonitor", () => {
       channelHistories: harness.channelHistories,
       threadsBackfilledThisSession: harness.threadsBackfilledThisSession,
       fetchThreadPosts: harness.fetchThreadPosts,
-      resolveUserInfo: harness.resolveUserInfo,
     });
     harness.channelHistories.set(historyKey, []);
     await backfillMattermostThreadHistoryForMonitor({
@@ -1133,7 +1126,6 @@ describe("backfillMattermostThreadHistoryForMonitor", () => {
       channelHistories: harness.channelHistories,
       threadsBackfilledThisSession: harness.threadsBackfilledThisSession,
       fetchThreadPosts: harness.fetchThreadPosts,
-      resolveUserInfo: harness.resolveUserInfo,
     });
 
     expect(harness.fetchThreadPosts).not.toHaveBeenCalled();
@@ -1156,7 +1148,6 @@ describe("backfillMattermostThreadHistoryForMonitor", () => {
       channelHistories: harness.channelHistories,
       threadsBackfilledThisSession: harness.threadsBackfilledThisSession,
       fetchThreadPosts: harness.fetchThreadPosts,
-      resolveUserInfo: harness.resolveUserInfo,
     });
     await backfillMattermostThreadHistoryForMonitor({
       client: harness.client,
@@ -1168,7 +1159,6 @@ describe("backfillMattermostThreadHistoryForMonitor", () => {
       channelHistories: harness.channelHistories,
       threadsBackfilledThisSession: harness.threadsBackfilledThisSession,
       fetchThreadPosts: harness.fetchThreadPosts,
-      resolveUserInfo: harness.resolveUserInfo,
     });
 
     expect(harness.fetchThreadPosts).toHaveBeenCalledTimes(1);
@@ -1197,10 +1187,9 @@ describe("backfillMattermostThreadHistoryForMonitor", () => {
       channelHistories: harness.channelHistories,
       threadsBackfilledThisSession: harness.threadsBackfilledThisSession,
       fetchThreadPosts: harness.fetchThreadPosts,
-      resolveUserInfo: harness.resolveUserInfo,
     });
     harness.channelHistories.set(historyKey, [
-      { sender: "@member-1", body: "stale before reset", timestamp: 1, messageId: "old-1" },
+      { sender: "user-1", body: "stale before reset", timestamp: 1, messageId: "old-1" },
     ]);
     await backfillMattermostThreadHistoryForMonitor({
       client: harness.client,
@@ -1212,7 +1201,6 @@ describe("backfillMattermostThreadHistoryForMonitor", () => {
       channelHistories: harness.channelHistories,
       threadsBackfilledThisSession: harness.threadsBackfilledThisSession,
       fetchThreadPosts: harness.fetchThreadPosts,
-      resolveUserInfo: harness.resolveUserInfo,
     });
 
     expect(harness.fetchThreadPosts).toHaveBeenCalledTimes(2);
