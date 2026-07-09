@@ -256,8 +256,10 @@ describe("deliverSessionMaintenanceWarning", () => {
     });
 
     // Fill the cache so every slot holds a unique session.
+    // Seed with the same context pattern buildWarningContext produces so the
+    // later params1 lookup can only succeed via eviction, not a context miss.
     for (let i = 1; i < maxEntries; i++) {
-      setWarnedContextForKeyTestOnly(`session:${i}`, `ctx-${i}`);
+      setWarnedContextForKeyTestOnly(`session:${i}`, `session:${i}|1000|100|prune`);
     }
     // session:0 is not yet cached, so this delivers.
     await deliverSessionMaintenanceWarning(params0);
