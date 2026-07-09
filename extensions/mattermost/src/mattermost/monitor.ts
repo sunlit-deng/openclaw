@@ -158,10 +158,6 @@ type MattermostThreadBackfillFetcher = (
   signal?: AbortSignal,
 ) => Promise<MattermostPost[]>;
 
-type MattermostThreadBackfillUserResolver = (
-  userId: string,
-) => Promise<MattermostUser | null | undefined>;
-
 export async function backfillMattermostThreadHistoryForMonitor(params: {
   client: MattermostClient;
   post: MattermostPost;
@@ -172,7 +168,6 @@ export async function backfillMattermostThreadHistoryForMonitor(params: {
   channelHistories: Map<string, HistoryEntry[]>;
   threadsBackfilledThisSession: Set<string>;
   fetchThreadPosts?: MattermostThreadBackfillFetcher;
-  resolveUserInfo: MattermostThreadBackfillUserResolver;
   timeoutMs?: number;
 }): Promise<void> {
   const {
@@ -185,7 +180,6 @@ export async function backfillMattermostThreadHistoryForMonitor(params: {
     channelHistories,
     threadsBackfilledThisSession,
     fetchThreadPosts = fetchMattermostThreadPosts,
-    resolveUserInfo,
     timeoutMs = 10_000,
   } = params;
   if (!threadRootId || !historyKey || historyLimit <= 0) {
@@ -222,10 +216,8 @@ export async function backfillMattermostThreadHistoryForMonitor(params: {
       const windowed = others.slice(-historyLimit);
       const entries: HistoryEntry[] = [];
       for (const p of windowed) {
-        const user = await resolveUserInfo(p.user_id ?? "").catch(() => null);
-        const sender = user?.username ? `@${user.username}` : (p.user_id ?? "unknown");
         entries.push({
-          sender,
+          sender: p.user_id ?? "unknown",
           body: p.message || "[attachment]",
           timestamp: typeof p.create_at === "number" ? p.create_at : undefined,
           messageId: p.id ?? undefined,
@@ -1733,7 +1725,6 @@ export async function monitorMattermostProvider(opts: MonitorMattermostOpts = {}
           historyLimit,
           channelHistories,
           threadsBackfilledThisSession,
-          resolveUserInfo,
         });
 
         core.channel.activity.record({
