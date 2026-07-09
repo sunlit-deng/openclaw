@@ -461,7 +461,7 @@ export const feishuOutbound: ChannelOutboundAdapter = {
             to: ctx.to,
             card,
             replyToMessageId,
-            replyInThread: ctx.threadId != null && !ctx.replyToId,
+            replyInThread: ctx.threadId != null && !replyToMessageId,
             accountId: ctx.accountId ?? undefined,
           }),
       }),
