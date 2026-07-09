@@ -3,6 +3,7 @@ import {
   recordChannelBotPairLoopAndCheckSuppression,
   type ChannelBotLoopProtectionFacts,
 } from "openclaw/plugin-sdk/channel-inbound";
+import { collectErrorGraphCandidates, formatErrorMessage } from "openclaw/plugin-sdk/error-runtime";
 import { mergePairLoopGuardConfig } from "openclaw/plugin-sdk/pair-loop-guard-runtime";
 import { normalizeOptionalLowercaseString } from "openclaw/plugin-sdk/string-coerce-runtime";
 import type { OpenClawConfig } from "../runtime-api.js";
@@ -38,6 +39,27 @@ function logVerbose(core: GoogleChatCoreRuntime, runtime: GoogleChatRuntimeEnv, 
   if (core.logging.shouldLogVerbose()) {
     runtime.log?.(`[googlechat] ${message}`);
   }
+}
+
+// Core throws "reply session initialization conflicted" when two inbound paths
+// race the same reply session key (webhook redelivery, overlapping dispatch, or
+// a restart mid-processing). The conflict is raised during session init, before
+// any reply is delivered, so a bounded retry recovers without double-sending.
+// Telegram/Slack/WhatsApp already retry this; Google Chat dropped the message.
+const REPLY_SESSION_INIT_CONFLICT_MESSAGE_RE = /reply session initialization conflicted for \S+/u;
+const REPLY_SESSION_INIT_CONFLICT_MAX_ATTEMPTS = 3;
+const REPLY_SESSION_INIT_CONFLICT_RETRY_DELAY_MS = 250;
+
+function isReplySessionInitConflictError(error: unknown): boolean {
+  return collectErrorGraphCandidates(error, (current) => [current.cause, current.error]).some(
+    (candidate) => REPLY_SESSION_INIT_CONFLICT_MESSAGE_RE.test(formatErrorMessage(candidate)),
+  );
+}
+
+function sleep(ms: number): Promise<void> {
+  return new Promise((resolve) => {
+    setTimeout(resolve, ms);
+  });
 }
 
 function normalizeAudienceType(value?: string | null): GoogleChatAudienceType | undefined {
@@ -376,70 +398,93 @@ async function processMessageWithPipeline(params: {
     }
   }
 
-  await core.channel.inbound.run({
-    channel: "googlechat",
-    accountId: route.accountId,
-    raw: message,
-    adapter: {
-      ingest: () => ({
-        id: message.name ?? spaceId,
-        timestamp: timestampMs,
-        rawText: rawBody,
-        textForAgent: rawBody,
-        textForCommands: rawBody,
-        raw: message,
-      }),
-      resolveTurn: () => ({
-        cfg: config,
-        channel: "googlechat",
-        accountId: route.accountId,
-        agentId: route.agentId,
-        routeSessionKey: route.sessionKey,
-        storePath,
-        ctxPayload,
-        recordInboundSession: core.channel.session.recordInboundSession,
-        dispatchReplyWithBufferedBlockDispatcher:
-          core.channel.reply.dispatchReplyWithBufferedBlockDispatcher,
-        delivery: {
-          durable: (payload, info) =>
-            resolveGoogleChatDurableReplyOptions({
-              payload,
-              infoKind: info.kind,
-              spaceId,
-              typingMessageName,
-            }),
-          deliver: async (payload) => {
-            await deliverGoogleChatReply({
-              payload,
-              account,
-              spaceId,
-              runtime,
-              core,
-              config,
-              statusSink,
-              typingMessageName,
-            });
-            // Only use typing message for first delivery
-            typingMessageName = undefined;
+  const runInbound = () =>
+    core.channel.inbound.run({
+      channel: "googlechat",
+      accountId: route.accountId,
+      raw: message,
+      adapter: {
+        ingest: () => ({
+          id: message.name ?? spaceId,
+          timestamp: timestampMs,
+          rawText: rawBody,
+          textForAgent: rawBody,
+          textForCommands: rawBody,
+          raw: message,
+        }),
+        resolveTurn: () => ({
+          cfg: config,
+          channel: "googlechat",
+          accountId: route.accountId,
+          agentId: route.agentId,
+          routeSessionKey: route.sessionKey,
+          storePath,
+          ctxPayload,
+          recordInboundSession: core.channel.session.recordInboundSession,
+          dispatchReplyWithBufferedBlockDispatcher:
+            core.channel.reply.dispatchReplyWithBufferedBlockDispatcher,
+          delivery: {
+            durable: (payload, info) =>
+              resolveGoogleChatDurableReplyOptions({
+                payload,
+                infoKind: info.kind,
+                spaceId,
+                typingMessageName,
+              }),
+            deliver: async (payload) => {
+              await deliverGoogleChatReply({
+                payload,
+                account,
+                spaceId,
+                runtime,
+                core,
+                config,
+                statusSink,
+                typingMessageName,
+              });
+              // Only use typing message for first delivery
+              typingMessageName = undefined;
+            },
+            onDelivered: () => {
+              statusSink?.({ lastOutboundAt: Date.now() });
+            },
+            onError: (err, info) => {
+              runtime.error?.(
+                `[${account.accountId}] Google Chat ${info.kind} reply failed: ${String(err)}`,
+              );
+            },
           },
-          onDelivered: () => {
-            statusSink?.({ lastOutboundAt: Date.now() });
+          replyPipeline: {},
+          record: {
+            onRecordError: (err) => {
+              runtime.error?.(`googlechat: failed updating session meta: ${String(err)}`);
+            },
           },
-          onError: (err, info) => {
-            runtime.error?.(
-              `[${account.accountId}] Google Chat ${info.kind} reply failed: ${String(err)}`,
-            );
-          },
-        },
-        replyPipeline: {},
-        record: {
-          onRecordError: (err) => {
-            runtime.error?.(`googlechat: failed updating session meta: ${String(err)}`);
-          },
-        },
-      }),
-    },
-  });
+        }),
+      },
+    });
+
+  // Retry a racing reply-session-init conflict; see the constant comment above.
+  for (let attempt = 1; ; attempt++) {
+    try {
+      await runInbound();
+      return;
+    } catch (err) {
+      if (
+        attempt < REPLY_SESSION_INIT_CONFLICT_MAX_ATTEMPTS &&
+        isReplySessionInitConflictError(err)
+      ) {
+        logVerbose(
+          core,
+          runtime,
+          `reply session init conflict for ${route.sessionKey}; retry ${attempt}/${REPLY_SESSION_INIT_CONFLICT_MAX_ATTEMPTS - 1}`,
+        );
+        await sleep(REPLY_SESSION_INIT_CONFLICT_RETRY_DELAY_MS * attempt);
+        continue;
+      }
+      throw err;
+    }
+  }
 }
 
 export const testing = {
@@ -447,6 +492,8 @@ export const testing = {
   resolveGoogleChatBotLoopProtection,
   resolveGoogleChatBotLoopProtectionConfig,
   shouldSuppressGoogleChatBotLoop,
+  isReplySessionInitConflictError,
+  REPLY_SESSION_INIT_CONFLICT_MAX_ATTEMPTS,
 };
 
 async function downloadAttachment(
