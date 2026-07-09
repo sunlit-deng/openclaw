@@ -164,6 +164,7 @@ export async function backfillMattermostThreadHistoryForMonitor(params: {
   threadRootId: string | undefined;
   historyKey: string | null;
   baseSessionKey: string;
+  adoptBackfillSessionKey?: string;
   historyLimit: number;
   channelHistories: Map<string, HistoryEntry[]>;
   threadsBackfilledThisSession: Set<string>;
@@ -176,6 +177,7 @@ export async function backfillMattermostThreadHistoryForMonitor(params: {
     threadRootId,
     historyKey,
     baseSessionKey,
+    adoptBackfillSessionKey,
     historyLimit,
     channelHistories,
     threadsBackfilledThisSession,
@@ -188,6 +190,14 @@ export async function backfillMattermostThreadHistoryForMonitor(params: {
 
   const backfillKey = `${historyKey}:${baseSessionKey}`;
   if (threadsBackfilledThisSession.has(backfillKey)) {
+    return;
+  }
+  const adoptBackfillKey = adoptBackfillSessionKey
+    ? `${historyKey}:${adoptBackfillSessionKey}`
+    : undefined;
+  if (adoptBackfillKey && threadsBackfilledThisSession.has(adoptBackfillKey)) {
+    threadsBackfilledThisSession.add(backfillKey);
+    threadsBackfilledThisSession.delete(adoptBackfillKey);
     return;
   }
   const hasPriorBackfillForThread = [...threadsBackfilledThisSession].some((key) =>
@@ -1699,11 +1709,13 @@ export async function monitorMattermostProvider(opts: MonitorMattermostOpts = {}
         // backfill thread history from the Mattermost server when the local
         // in-memory window is genuinely cold for the current agent session.
         //
-        // Compound key (historyKey + currentAgentSessionId): historyKey alone is
-        // stable across /new for the same thread channel, while route.sessionKey
-        // is also stable. The stored session id rotates on /new, so binding to
-        // it gives reset its own first-sighting backfill instead of being
-        // blocked by a stale monitor-lifetime marker.
+        // Compound key (historyKey + backfill session marker): historyKey alone
+        // is stable across /new for the same thread channel, while route.sessionKey
+        // is also stable. The stored session id rotates on /new, so binding to it
+        // gives reset its own first-sighting backfill. If the first cold turn has
+        // not been recorded yet, use a pending marker and adopt it once the stored
+        // session id appears; this prevents a same-session follow-up fetch without
+        // blocking a later real session-id rotation.
         //
         // Active-thread guard: if a thread is first seen with a populated
         // window, mark that session so the kernel clearing pending history
@@ -1713,15 +1725,20 @@ export async function monitorMattermostProvider(opts: MonitorMattermostOpts = {}
         const storePath = core.channel.session.resolveStorePath(cfg.session?.store, {
           agentId: route.agentId,
         });
-        const currentAgentSessionId =
-          normalizeOptionalString(getSessionEntry({ storePath, sessionKey })?.sessionId) ??
-          sessionKey;
+        const currentAgentSessionId = normalizeOptionalString(
+          getSessionEntry({ storePath, sessionKey })?.sessionId,
+        );
+        const backfillSessionMarker = currentAgentSessionId
+          ? `session:${currentAgentSessionId}`
+          : `pending:${sessionKey}`;
+        const adoptBackfillSessionKey = currentAgentSessionId ? `pending:${sessionKey}` : undefined;
         await backfillMattermostThreadHistoryForMonitor({
           client,
           post,
           threadRootId,
           historyKey,
-          baseSessionKey: currentAgentSessionId,
+          baseSessionKey: backfillSessionMarker,
+          adoptBackfillSessionKey,
           historyLimit,
           channelHistories,
           threadsBackfilledThisSession,
