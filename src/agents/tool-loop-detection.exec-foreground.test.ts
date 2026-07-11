@@ -20,8 +20,10 @@ import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import "./test-helpers/fast-coding-tools.js";
 import "./test-helpers/fast-openclaw-tools.js";
 import { createTempDirTracker } from "../../test/helpers/temp-dir.js";
+import { resetDiagnosticSessionStateForTest } from "../logging/diagnostic-session-state.js";
 import { setActivePluginRegistry } from "../plugins/runtime.js";
 import { createSessionConversationTestRegistry } from "../test-utils/session-conversation-registry.js";
+import { wrapToolWithBeforeToolCallHook } from "./agent-tools.before-tool-call.js";
 import { createOpenClawCodingTools } from "./agent-tools.js";
 import {
   detectToolCallLoop,
@@ -207,5 +209,79 @@ describe("exec foreground failed-result loop detection (#93917)", () => {
     expect(lastStatus).toBe("completed");
     // exit 0 with changing output stays progress-sensitive: no false breaker.
     expect(breaker).toBeUndefined();
+  });
+
+  it("vetoes repeated nonzero completed exec through the real before_tool_call hook", async () => {
+    resetDiagnosticSessionStateForTest();
+    const execTool = createRealExecTool("exec-fg-hook-nonzero");
+    // Drive the production orchestration path a live agent turn runs: the wrapped
+    // execute() calls detectToolCallLoop -> real exec child process -> the changed
+    // outcome hash, and returns a blocked "tool-loop" veto instead of executing
+    // once the no-progress streak reaches critical. Proves the fix reaches the
+    // real circuit breaker, not just the detector functions in isolation.
+    const ctx = {
+      agentId: "main",
+      sessionKey: "agent:main:main",
+      sessionId: "hook-nonzero",
+      runId: "run-hook-nonzero",
+      loopDetection: LOOP_CONFIG,
+    };
+    const wrapped = wrapToolWithBeforeToolCallHook(execTool as never, ctx as never, {
+      emitDiagnostics: false,
+    });
+    const params = { command: "printf 'attempt %s\\n' \"$(date +%s%N)\"; exit 1" };
+    let firstStatus: unknown;
+    let firstExitCode: unknown;
+    let vetoedAtCall: number | undefined;
+
+    for (let i = 1; i <= LOOP_CONFIG.globalCircuitBreakerThreshold + 2; i += 1) {
+      const result = (await wrapped.execute(`h${i}`, params, undefined, undefined)) as {
+        details?: { status?: unknown; deniedReason?: unknown; exitCode?: unknown };
+      };
+      if (i === 1) {
+        firstStatus = result.details?.status;
+        firstExitCode = result.details?.exitCode;
+      }
+      if (result.details?.deniedReason === "tool-loop") {
+        vetoedAtCall = i;
+        break;
+      }
+    }
+
+    // A real nonzero exit is a completed outcome the hook still vetoes on repeat.
+    expect(firstStatus).toBe("completed");
+    expect(firstExitCode).toBe(1);
+    expect(vetoedAtCall).toBeDefined();
+  });
+
+  it("keeps exit-0 volatile output unblocked through the real before_tool_call hook", async () => {
+    resetDiagnosticSessionStateForTest();
+    const execTool = createRealExecTool("exec-fg-hook-progress");
+    // Negative control on the same production path: a successful command with
+    // fresh output each call is real progress, so the hook must never veto it.
+    const ctx = {
+      agentId: "main",
+      sessionKey: "agent:main:main",
+      sessionId: "hook-progress",
+      runId: "run-hook-progress",
+      loopDetection: LOOP_CONFIG,
+    };
+    const wrapped = wrapToolWithBeforeToolCallHook(execTool as never, ctx as never, {
+      emitDiagnostics: false,
+    });
+    const params = { command: "printf 'progress %s\\n' \"$(date +%s%N)\"" };
+    let vetoed = false;
+
+    for (let i = 1; i <= LOOP_CONFIG.globalCircuitBreakerThreshold + 2; i += 1) {
+      const result = (await wrapped.execute(`p${i}`, params, undefined, undefined)) as {
+        details?: { deniedReason?: unknown };
+      };
+      if (result.details?.deniedReason === "tool-loop") {
+        vetoed = true;
+        break;
+      }
+    }
+
+    expect(vetoed).toBe(false);
   });
 });
