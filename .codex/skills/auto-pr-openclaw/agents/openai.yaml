@@ -1,4 +1,4 @@
 interface:
   display_name: "OpenClaw PR Workflow"
-  short_description: "Find local or remote OpenClaw PR candidates and prepare them with review gates."
-  default_prompt: "Use $auto-pr-openclaw to screen local or remote OpenClaw candidate issues, or handle an OpenClaw PR from triage through pre-push review."
+  short_description: "Prepare OpenClaw PRs with deterministic checks"
+  default_prompt: "Use $auto-pr-openclaw to prepare or maintain an OpenClaw PR with canonical worktrees, executable checks, durable proof, and a human-gated REST publication flow."

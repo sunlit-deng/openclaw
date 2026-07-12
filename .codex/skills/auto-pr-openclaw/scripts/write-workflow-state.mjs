@@ -1,0 +1,74 @@
+#!/usr/bin/env node
+
+import fs from "node:fs";
+import path from "node:path";
+
+const values = new Map();
+for (let index = 2; index < process.argv.length; index += 2) {
+  const key = process.argv[index];
+  const value = process.argv[index + 1];
+  if (!key?.startsWith("--") || value === undefined) {
+    throw new Error(`Invalid argument near ${key ?? "<end>"}`);
+  }
+  values.set(key.slice(2), value);
+}
+
+const required = [
+  "mode",
+  "issue",
+  "root",
+  "repo-path",
+  "output-path",
+  "branch",
+  "base-ref",
+  "base-sha",
+  "head-sha",
+  "pnpm-store-path",
+  "pr-body-path",
+  "preflight-path",
+  "dependency-status",
+];
+
+for (const key of required) {
+  if (!values.get(key)) {
+    throw new Error(`Missing required argument --${key}`);
+  }
+}
+
+const outputPath = path.resolve(values.get("output-path"));
+const statePath = path.join(outputPath, "workflow.json");
+const state = {
+  schemaVersion: 1,
+  mode: values.get("mode"),
+  issue: Number(values.get("issue")),
+  pr: values.has("pr") ? Number(values.get("pr")) : null,
+  root: path.resolve(values.get("root")),
+  repoPath: path.resolve(values.get("repo-path")),
+  outputPath,
+  branch: values.get("branch"),
+  headOwner: values.get("head-owner") || null,
+  headRef: values.get("head-ref") || values.get("branch"),
+  baseRef: values.get("base-ref"),
+  baseSha: values.get("base-sha"),
+  initialHeadSha: values.get("head-sha"),
+  headSha: values.get("head-sha"),
+  pnpmStorePath: path.resolve(values.get("pnpm-store-path")),
+  prBodyPath: path.resolve(values.get("pr-body-path")),
+  preflightPath: path.resolve(values.get("preflight-path")),
+  dependencies: {
+    status: values.get("dependency-status"),
+    skipReason: values.get("skip-reason") || null,
+  },
+  maintainerCanModify: values.has("maintainer-can-modify")
+    ? values.get("maintainer-can-modify") === "true"
+    : null,
+  createdAt: new Date().toISOString(),
+};
+
+if (!Number.isSafeInteger(state.issue) || state.issue <= 0) {
+  throw new Error("--issue must be a positive integer");
+}
+
+fs.mkdirSync(outputPath, { recursive: true });
+fs.writeFileSync(statePath, `${JSON.stringify(state, null, 2)}\n`, "utf8");
+process.stdout.write(`${JSON.stringify(state)}\n`);

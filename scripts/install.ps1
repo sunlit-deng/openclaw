@@ -15,4 +15,28 @@ if (Test-Path -LiteralPath $validator) {
   "Skill validator not found at $validator; skipped validation."
 }
 
+$parseErrors = @()
+Get-ChildItem -LiteralPath (Join-Path $target "scripts") -Filter "*.ps1" | ForEach-Object {
+  $tokens = $null
+  $errors = $null
+  [void][System.Management.Automation.Language.Parser]::ParseFile($_.FullName, [ref]$tokens, [ref]$errors)
+  $parseErrors += $errors
+}
+if ($parseErrors.Count -gt 0) {
+  $parseErrors | ForEach-Object { Write-Error $_.Message }
+  throw "PowerShell syntax validation failed"
+}
+
+if (Get-Command node -ErrorAction SilentlyContinue) {
+  Get-ChildItem -LiteralPath (Join-Path $target "scripts") -Recurse -Filter "*.mjs" | ForEach-Object {
+    & node --check $_.FullName
+    if ($LASTEXITCODE -ne 0) { throw "Node syntax validation failed: $($_.FullName)" }
+  }
+  $bodyTests = Join-Path $repoRoot "tests\pr-body-validator.test.mjs"
+  & node --test $bodyTests
+  if ($LASTEXITCODE -ne 0) { throw "Node tests failed" }
+} else {
+  "node not found; skipped Node syntax checks and tests."
+}
+
 "Project-local auto-pr-openclaw is ready at $target"

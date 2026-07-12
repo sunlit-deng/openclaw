@@ -1,6 +1,6 @@
 ---
 name: auto-pr-openclaw
-description: Prepare and maintain contributor pull requests for openclaw/openclaw issues with repo-policy intake, per-issue worktrees, focused implementation validation, durable PR-body evidence, official ClawSweeper local-review, GitHub operations routed through gh when available, and a mandatory human approval gate before any push, PR update, or GitHub comment. Use when Codex is asked to handle an OpenClaw issue, screen local or remote candidate issues, find easy-to-merge PR opportunities, prepare or update an OpenClaw PR, respond to ClawSweeper/Codex review, debug PR CI, or request ClawSweeper re-review for openclaw/openclaw.
+description: Prepare and maintain contributor pull requests for openclaw/openclaw issues with repo-policy intake, canonical per-issue worktrees, executable validation checks, durable PR-body evidence, and a mandatory human approval gate before any push, PR update, or GitHub comment. Use when Codex is asked to handle an OpenClaw issue, screen local or remote candidate issues, find easy-to-merge PR opportunities, prepare or update an OpenClaw PR, respond to ClawSweeper/Codex review, debug PR CI, or request ClawSweeper re-review for openclaw/openclaw.
 ---
 
 # OpenClaw PR Workflow
@@ -10,7 +10,7 @@ description: Prepare and maintain contributor pull requests for openclaw/opencla
 Use this skill for `openclaw/openclaw` contributor work. Keep the process conservative and evidence-first.
 
 - Treat GitHub writes as gated: do not push, create/update a PR, edit the PR body, post comments, or request bot review until the pre-push human gate has been shown and the user confirms.
-- Use `gh` for GitHub operations by default, including reading issues/PRs/comments, inspecting CI/checks/logs, pushing branches, creating/updating PRs, posting comments, and requesting reviews. Use another GitHub tool only when `gh` is unavailable, unauthenticated, lacks the needed capability, or the user explicitly asks for a different path; mention the fallback reason.
+- Use `gh` for GitHub authentication and reads. PR creation and PR body updates must use the GitHub REST pulls API through `scripts/publish-openclaw-pr.mjs`; do not use `gh pr create` or `gh pr edit` for body writes. Use another GitHub tool only when `gh` is unavailable, unauthenticated, lacks the needed capability, or the user explicitly asks for a different path; mention the fallback reason.
 - Authorship email is a hard requirement: all commits authored or committed by `sunlit-deng` must use `sunlit-deng <yang.jiajun1@xydigit.com>`. Do not create, amend, cherry-pick, rebase, or push a `sunlit-deng` commit with any other author or committer email unless the user explicitly overrides this requirement for that specific operation.
 - Fork PR maintainer edit access is a release gate. Do not pass `--no-maintainer-edit`. This machine's `gh` may not support `--maintainer-edit` because maintainer edits are enabled by default, so omit both flags unless intentionally disabling edits. For existing PRs, verify `maintainerCanModify: true` with `gh pr view <number> --repo openclaw/openclaw --json maintainerCanModify,headRepositoryOwner,headRefName,url`. For new PRs, verify the same immediately after creation, or manually confirm the GitHub web checkbox `Allow edits and access to secrets by maintainers` remains checked when the API cannot prove it.
 - Use one worktree per issue by default: `worktrees/issue-<number>` and `outputs/issue-<number>`. Add a topic suffix only when one issue needs multiple candidate PRs.
@@ -57,8 +57,9 @@ When the user says remote candidate issues, remote candidates, or asks to screen
 ## Workflow
 
 1. **Issue intake**
-   - Create or reuse a per-issue worktree with `scripts/new-openclaw-worktree.sh` on macOS/Linux or `scripts/new-openclaw-worktree.ps1` on Windows.
-   - For dependency setup, share only the pnpm store across worktrees; keep each worktree's `node_modules` private. Use `scripts/ensure-openclaw-deps.sh` or create the worktree with `--install-dependencies` on macOS/Linux; use the `.ps1` equivalents on Windows.
+   - Create a per-issue worktree with `scripts/new-openclaw-worktree.sh` on macOS/Linux or `scripts/new-openclaw-worktree.ps1` on Windows. The helpers derive the canonical workspace root, fetch `origin/main`, refuse implicit reuse of stale local branches, and record paths and SHAs in `workflow.json`.
+   - For an existing PR, use `scripts/prepare-openclaw-pr-worktree.mjs --pr <number>`. It reads the live PR through REST, fetches the exact fork head into `worktrees/pr-<number>`, and records the remote owner/ref separately. Rebase onto current `origin/main` before preflight when the reported head is stale.
+   - Share only `workspace/openclaw/.pnpm-store` across worktrees; keep each worktree's `node_modules` private. Dependency installation is the default. Skipping it requires an explicit reason and is recorded as an incomplete validation state.
    - Read the issue or PR, latest comments, current PR diff, CI state, root `AGENTS.md`, relevant scoped `AGENTS.md`, `CONTRIBUTING.md`, and `.github/pull_request_template.md`.
    - Prefer `gh issue view`, `gh pr view`, `gh pr diff`, `gh pr checks`, `gh run view`, and `gh api` for GitHub reads.
    - Search for duplicate or canonical issues/PRs before implementing or defending a branch.
@@ -72,19 +73,19 @@ When the user says remote candidate issues, remote candidates, or asks to screen
    - When picking a cap, reuse an existing repo convention or provider/runtime limit when one fits. If the cap is lower than a nearby default or plausible valid traffic size, include evidence for the legitimate large case or raise the cap.
    - Draft or update the PR body using `references/pr-body.md`.
 
-3. **Local review gates**
-   - Run `codex review --base origin/main` when available and address accepted actionable findings.
-   - Run official ClawSweeper local-review before push. Use `references/review-gates.md` for setup and interpretation.
-   - Use `scripts/openclaw-prepush-check.ps1` to summarize branch state, authorship, diff, PR body draft, local-review report, and remaining gate failures.
+3. **Executable local checks**
+   - Run `scripts/openclaw-preflight.sh --workflow <outputs>/workflow.json` on macOS/Linux or the `.ps1` wrapper on Windows.
+   - Preflight must execute the repository `check` lane (typecheck, lint, formatting, and policy guards), focused changed tests, Git and identity checks, and PR body/proof validation. A prose claim that checks ran is not a substitute for a passing `preflight.json` tied to the current HEAD.
+   - Local AI review commands are optional diagnostics only. `codex review` and ClawSweeper local-review are not release gates because their availability is environment-dependent.
 
 4. **Pre-push human gate**
    - Stop before any GitHub write.
-   - Show the user: diff summary, commit author/committer, tests/checks run, PR body draft path or summary, live proof summary, ClawSweeper local-review result, and any unresolved risks.
+   - Show the user: diff summary, commit author/committer, tests/checks from `preflight.json`, PR body draft path or summary, live proof summary, and any unresolved risks.
    - Verify every `sunlit-deng` commit that will be pushed uses author and committer email `yang.jiajun1@xydigit.com`. If any `sunlit-deng` commit uses another email, fix the local commit metadata before asking for push approval. Do not rewrite other contributors' authored commits merely to change their author email.
    - For existing fork PRs, show the current maintainer edit status from `maintainerCanModify`. If it is `false`, stop and ask the user to re-enable `Allow edits and access to secrets by maintainers` in the GitHub web UI before push, PR update, or re-review. For new PRs, show that the PR will be created without `--no-maintainer-edit` and must be checked immediately after creation.
    - When the PR already has a ClawSweeper review, show ClawSweeper's current verdict and any unresolved blocking findings before asking for push or re-review confirmation.
    - Continue with push/PR/comment only after explicit user confirmation.
-   - After confirmation, prefer `git push` for the branch push and `gh pr create/edit/comment/review` or `gh api` for PR and comment writes.
+   - After confirmation, pass the approved HEAD and PR body SHA-256 to `scripts/publish-openclaw-pr.mjs`. It pushes through the named SSH remote, writes the PR through the REST pulls API, then re-reads and verifies the exact body and maintainer edit access.
    - After creating or updating a fork PR, re-read `maintainerCanModify`. If it is `false`, stop before requesting review and tell the user the web checkbox must be restored.
 
 5. **PR maintenance**
@@ -99,30 +100,28 @@ When the user says remote candidate issues, remote candidates, or asks to screen
 
 - Read `references/worktree-layout.md` before creating or reusing worktrees.
 - Read `references/pr-body.md` before drafting or editing an OpenClaw PR body.
-- Read `references/review-gates.md` before running pre-push review, ClawSweeper local-review, or interpreting bot/CI gates.
+- Read `references/review-gates.md` before running preflight or interpreting bot/CI gates.
 
 ## Scripts
 
 Create a worktree on macOS/Linux:
 
 ```bash
-/Users/yangjiajun/projects/auto-pr/.codex/skills/auto-pr-openclaw/scripts/new-openclaw-worktree.sh --issue 94432 --install-dependencies
+./.codex/skills/auto-pr-openclaw/scripts/new-openclaw-worktree.sh --issue 94432
 ```
 
 Create a worktree on Windows:
 
 ```powershell
-powershell -ExecutionPolicy Bypass -File E:\Projects\auto-pr\.codex\skills\auto-pr-openclaw\scripts\new-openclaw-worktree.ps1 -Issue 94432
+powershell -ExecutionPolicy Bypass -File .\.codex\skills\auto-pr-openclaw\scripts\new-openclaw-worktree.ps1 -Issue 94432
 ```
 
-Run the pre-push summary from an OpenClaw checkout:
+Run executable preflight checks:
 
-```powershell
-powershell -ExecutionPolicy Bypass -File E:\Projects\auto-pr\.codex\skills\auto-pr-openclaw\scripts\openclaw-prepush-check.ps1 `
-  -RepoPath C:\path\to\openclaw `
-  -Base origin/main `
-  -PrBodyDraft C:\path\to\pr-body.md `
-  -ClawSweeperReport C:\path\to\local-review.md
+```bash
+./.codex/skills/auto-pr-openclaw/scripts/openclaw-preflight.sh \
+  --workflow workspace/openclaw/outputs/issue-94432/workflow.json
 ```
 
-The pre-push script is read-only for the target repository. It reports gate status; it does not run tests, build ClawSweeper, push, comment, or edit tracked files.
+Preflight writes `preflight.json` outside the target repository. It never pushes,
+comments, or edits a PR.

@@ -73,4 +73,12 @@ fi
 mkdir -p "$store_path"
 pnpm --dir "$repo_path" install --frozen-lockfile --prefer-offline --store-dir "$store_path"
 
-printf '{"repo":"%s","status":"installed","store":"%s"}\n' "$repo_path" "$store_path"
+actual_store="$(pnpm --dir "$repo_path" store path --store-dir "$store_path")"
+actual_store="$(cd "$actual_store" && pwd -P)"
+expected_store="$(cd "$store_path" && pwd -P)"
+if [[ "$actual_store" != "$expected_store" && "$actual_store" != "$expected_store/"* ]]; then
+  echo "pnpm store mismatch: expected $expected_store, got $actual_store" >&2
+  exit 1
+fi
+
+printf '{"repo":"%s","status":"installed","storeRoot":"%s","store":"%s"}\n' "$repo_path" "$expected_store" "$actual_store"

@@ -18,8 +18,8 @@ Use these gates before pushing or updating an OpenClaw PR.
 ## Validation Gate
 
 - Run focused tests first for changed modules.
-- Run broader checks only when blast radius justifies it.
-- Run `codex review --base origin/main` when available; address accepted actionable findings before asking for review.
+- Run `scripts/openclaw-preflight.sh --workflow <path>` (or the PowerShell wrapper) so the repository `pnpm check` lane and focused changed tests are executed and recorded against the current HEAD.
+- A passing `preflight.json` is required. Missing, skipped, stale, or failed checks do not pass based on an agent's prose summary.
 - For live external behavior, execute the real path when feasible and summarize only redacted proof.
 - If ClawSweeper asks for real behavior proof, update the PR body with copied terminal output from a live or loopback run before requesting re-review. Tests alone usually do not satisfy runtime/resource-safety proof.
 
@@ -27,7 +27,7 @@ Use these gates before pushing or updating an OpenClaw PR.
 
 - For existing fork PRs, run `gh pr view <number> --repo openclaw/openclaw --json maintainerCanModify,headRepositoryOwner,headRefName,url` before any push, PR-body update, comment, or re-review request.
 - Treat `maintainerCanModify: false` as a stop unless the user explicitly wants maintainers unable to edit the branch. Ask the user to re-enable the GitHub web checkbox `Allow edits and access to secrets by maintainers`, then re-check before continuing.
-- For new fork PRs, do not pass `--no-maintainer-edit`. On this machine, `gh pr create --maintainer-edit` may fail because maintainer edit is already the default and the installed `gh` only exposes `--no-maintainer-edit`.
+- For new fork PRs, create through `publish-openclaw-pr.mjs`; its REST payload sets `maintainer_can_modify: true`.
 - Immediately after creating a new PR, re-read `maintainerCanModify`. If it is not `true`, stop before requesting ClawSweeper review or CI attention and ask the user to restore the web checkbox.
 - If GitHub does not expose the state through the API, get an explicit web UI confirmation or screenshot from the PR edit page before treating the gate as passed.
 
@@ -45,27 +45,13 @@ Use this gate before requesting ClawSweeper re-review to prevent blind re-review
 When the pre-re-review gate passes, proceed to the Human Gate below before any GitHub write.
 
 
-## Official ClawSweeper Local-Review Gate
+## Optional Local AI Review
 
-Use the public `openclaw/clawsweeper` repository. The official local pre-PR path is `pnpm local-review`.
-
-Expected setup:
-
-```powershell
-git clone https://github.com/openclaw/clawsweeper.git <sibling-or-cache>\clawsweeper
-cd <sibling-or-cache>\clawsweeper
-pnpm install
-pnpm build
-pnpm local-review -- --target-dir <openclaw-checkout> --base origin/main --target-repo openclaw/openclaw
-```
-
-Rules:
-
-- The OpenClaw checkout must be clean because local-review reviews the committed range `merge-base(base, HEAD)..HEAD`.
-- The official local-review is offline and scrubs GitHub credentials for the review worker.
-- Treat `result: nothing_found` as the normal pass condition.
-- Treat `result: findings` as a stop: fix the findings or ask the user for an explicit decision.
-- Treat `result: inconclusive` or `result: failed` as not passed. Explain the failure and do not pretend it is a clean result.
+`codex review` and ClawSweeper local-review may be run as optional diagnostics
+when the installed CLI and model support them. They never replace deterministic
+preflight checks and their absence or infrastructure failure is not a release
+gate. Actionable findings that are accepted still need normal implementation and
+validation.
 
 ## Human Gate
 
@@ -77,7 +63,7 @@ Before any GitHub write, show the user:
 - tests/checks run
 - PR body draft summary or path
 - live proof summary
-- ClawSweeper local-review report path and result
+- preflight receipt path, HEAD SHA, and result
 - maintainer edit status for existing PRs, or the post-create maintainer edit check plan for new PRs
 - unresolved risks or blocked checks
 

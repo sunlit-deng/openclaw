@@ -1,7 +1,7 @@
 param(
   [Parameter(Mandatory = $true)]
   [string]$RepoPath,
-  [string]$Root = "E:\Projects\auto-pr\workspace\openclaw",
+  [string]$Root = "",
   [string]$PnpmStorePath = "",
   [switch]$Force
 )
@@ -25,15 +25,32 @@ if (-not $PnpmStorePath.Trim()) {
   if ((Split-Path -Path $repoParent -Leaf) -eq "worktrees") {
     $Root = Split-Path -Path $repoParent -Parent
   }
+  if (-not $Root.Trim()) {
+    throw "Unable to infer the OpenClaw workspace root; pass -Root or -PnpmStorePath"
+  }
   $PnpmStorePath = Join-Path $Root ".pnpm-store"
 }
 
 New-Item -ItemType Directory -Force $PnpmStorePath | Out-Null
 
 pnpm --dir $repoPath install --frozen-lockfile --prefer-offline --store-dir $PnpmStorePath
+if ($LASTEXITCODE -ne 0) {
+  throw "pnpm install failed with exit code $LASTEXITCODE"
+}
+
+$expectedStore = [System.IO.Path]::GetFullPath($PnpmStorePath).TrimEnd('\', '/')
+$actualStore = (& pnpm --dir $repoPath store path --store-dir $PnpmStorePath | Select-Object -Last 1).Trim()
+if ($LASTEXITCODE -ne 0) {
+  throw "pnpm store path failed with exit code $LASTEXITCODE"
+}
+$actualStore = [System.IO.Path]::GetFullPath($actualStore).TrimEnd('\', '/')
+if ($actualStore -ne $expectedStore -and -not $actualStore.StartsWith("$expectedStore$([System.IO.Path]::DirectorySeparatorChar)")) {
+  throw "pnpm store mismatch: expected $expectedStore, got $actualStore"
+}
 
 [pscustomobject]@{
   repo = $repoPath
   status = "installed"
-  store = $PnpmStorePath
+  storeRoot = $expectedStore
+  store = $actualStore
 } | ConvertTo-Json
