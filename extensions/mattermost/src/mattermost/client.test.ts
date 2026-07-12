@@ -642,11 +642,11 @@ describe("fetchMattermostThreadPosts", () => {
     });
     const posts = await fetchMattermostThreadPosts(client, "post1");
     expect(posts).toHaveLength(3);
-    expect(posts[0].id).toBe("post1");
-    expect(posts[1].id).toBe("post2");
-    expect(posts[2].id).toBe("post3");
-    expect(posts[0].message).toBe("hello thread root");
-    expect(calls[0].url).toBe("http://localhost:8065/api/v4/posts/post1/thread");
+    expect(posts[0]?.id).toBe("post1");
+    expect(posts[1]?.id).toBe("post2");
+    expect(posts[2]?.id).toBe("post3");
+    expect(posts[0]?.message).toBe("hello thread root");
+    expect(calls[0]?.url).toBe("http://localhost:8065/api/v4/posts/post1/thread");
   });
 
   it("returns empty array when order is empty", async () => {
@@ -673,7 +673,7 @@ describe("fetchMattermostThreadPosts", () => {
       body: { order: ["post3", "post2", "post1"], posts: mockThreadPosts },
     });
     const posts = await fetchMattermostThreadPosts(client, "post1", { limit: 2 });
-    expect(calls[0].url).toBe(
+    expect(calls[0]?.url).toBe(
       "http://localhost:8065/api/v4/posts/post1/thread?perPage=2&direction=up",
     );
     expect(posts.map((p) => p.id)).toEqual(["post1", "post2", "post3"]);
