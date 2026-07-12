@@ -4,7 +4,7 @@ set -euo pipefail
 usage() {
   cat <<'EOF'
 Usage: new-openclaw-worktree.sh --issue N [--topic TEXT] [--root PATH]
-                               [--branch-prefix PREFIX] [--remote URL]
+                               [--branch-prefix PREFIX]
                                [--store-path PATH]
                                [--skip-install --skip-install-reason TEXT]
 
@@ -26,7 +26,6 @@ issue=""
 topic=""
 root="$auto_pr_root/workspace/openclaw"
 branch_prefix="sunlit/fix"
-remote="https://github.com/openclaw/openclaw.git"
 store_path=""
 skip_install=0
 skip_install_reason=""
@@ -37,7 +36,6 @@ while [[ $# -gt 0 ]]; do
     --topic) topic="${2:-}"; shift 2 ;;
     --root) root="${2:-}"; shift 2 ;;
     --branch-prefix) branch_prefix="${2:-}"; shift 2 ;;
-    --remote) remote="${2:-}"; shift 2 ;;
     --store-path) store_path="${2:-}"; shift 2 ;;
     --install-dependencies) shift ;;
     --skip-install) skip_install=1; shift ;;
@@ -67,6 +65,12 @@ if [[ "$skip_install" -eq 0 ]] && ! command -v pnpm >/dev/null 2>&1; then
   echo "pnpm is required unless --skip-install is used with a reason" >&2
   exit 1
 fi
+if ! command -v gh >/dev/null 2>&1; then
+  echo "gh is required for authenticated OpenClaw repository setup" >&2
+  exit 1
+fi
+gh auth status >/dev/null
+gh auth setup-git
 
 root="$(mkdir -p "$root" && cd "$root" && pwd -P)"
 name="issue-$issue"
@@ -90,10 +94,14 @@ mkdir -p "$repo_root" "$worktree_root" "$outputs_root" "$output_path" "$store_pa
 store_path="$(cd "$store_path" && pwd -P)"
 
 if [[ ! -d "$main_repo/.git" ]]; then
-  git clone "$remote" "$main_repo"
+  gh repo clone openclaw/openclaw "$main_repo"
 fi
 
-git -C "$main_repo" fetch origin main
+if ! git -C "$main_repo" fetch origin main; then
+  echo "Unable to fetch current origin/main through the gh-authenticated repository." >&2
+  echo "Stop here; do not continue with cached local refs." >&2
+  exit 1
+fi
 base_ref="refs/remotes/origin/main"
 base_sha="$(git -C "$main_repo" rev-parse "$base_ref^{commit}")"
 

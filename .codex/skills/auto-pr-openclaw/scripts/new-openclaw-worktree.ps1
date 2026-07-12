@@ -5,7 +5,6 @@ param(
   [string]$Topic = "",
   [string]$Root = "",
   [string]$BranchPrefix = "sunlit/fix",
-  [string]$OpenClawRemote = "https://github.com/openclaw/openclaw.git",
   [string]$PnpmStorePath = "",
   [switch]$InstallDependencies,
   [switch]$SkipInstall,
@@ -36,6 +35,13 @@ if (-not (Get-Command node -ErrorAction SilentlyContinue)) {
 if (-not $SkipInstall -and -not (Get-Command pnpm -ErrorAction SilentlyContinue)) {
   throw "pnpm is required unless -SkipInstall is used with a reason"
 }
+if (-not (Get-Command gh -ErrorAction SilentlyContinue)) {
+  throw "gh is required for authenticated OpenClaw repository setup"
+}
+& gh auth status | Out-Null
+if ($LASTEXITCODE -ne 0) { throw "gh auth status failed" }
+& gh auth setup-git
+if ($LASTEXITCODE -ne 0) { throw "gh auth setup-git failed" }
 
 $Root = [System.IO.Path]::GetFullPath($Root)
 $name = "issue-$Issue"
@@ -61,12 +67,14 @@ $PnpmStorePath = [System.IO.Path]::GetFullPath($PnpmStorePath)
 New-Item -ItemType Directory -Force $repoRoot, $worktreeRoot, $outputsRoot, $outputPath, $PnpmStorePath | Out-Null
 
 if (-not (Test-Path -LiteralPath (Join-Path $mainRepo ".git"))) {
-  & git clone $OpenClawRemote $mainRepo
-  if ($LASTEXITCODE -ne 0) { throw "git clone failed with exit code $LASTEXITCODE" }
+  & gh repo clone openclaw/openclaw $mainRepo
+  if ($LASTEXITCODE -ne 0) { throw "gh repo clone failed with exit code $LASTEXITCODE" }
 }
 
 & git -C $mainRepo fetch origin main
-if ($LASTEXITCODE -ne 0) { throw "git fetch origin main failed with exit code $LASTEXITCODE" }
+if ($LASTEXITCODE -ne 0) {
+  throw "Unable to fetch current origin/main through the gh-authenticated repository. Stop; do not use cached local refs."
+}
 $baseRef = "refs/remotes/origin/main"
 $baseSha = (& git -C $mainRepo rev-parse "$baseRef`^{commit}" | Select-Object -First 1).Trim()
 if ($LASTEXITCODE -ne 0 -or -not $baseSha) { throw "Unable to resolve latest origin/main" }

@@ -6,12 +6,11 @@ import { spawnSync } from "node:child_process";
 import { validatePrBody } from "./lib/pr-body-validator.mjs";
 
 function parseArgs(argv) {
-  const result = { workflow: "", testScript: "test:changed", skipFetch: false };
+  const result = { workflow: "", testScript: "test:changed" };
   for (let index = 0; index < argv.length; index += 1) {
     const arg = argv[index];
     if (arg === "--workflow") result.workflow = argv[++index] ?? "";
     else if (arg === "--test-script") result.testScript = argv[++index] ?? "";
-    else if (arg === "--skip-fetch") result.skipFetch = true;
     else if (arg === "-h" || arg === "--help") result.help = true;
     else throw new Error(`Unknown argument: ${arg}`);
   }
@@ -20,7 +19,7 @@ function parseArgs(argv) {
 
 function usage() {
   return [
-    "Usage: openclaw-preflight.mjs --workflow PATH [--test-script NAME] [--skip-fetch]",
+    "Usage: openclaw-preflight.mjs --workflow PATH [--test-script NAME]",
     "",
     "Runs deterministic OpenClaw checks and writes preflight.json next to workflow.json.",
     "The default focused test lane is pnpm test:changed.",
@@ -151,9 +150,7 @@ checks.push(staticCheck(
   resolvedModulesStore || "node_modules/.modules.yaml has no storeDir",
 ));
 
-if (!args.skipFetch) {
-  checks.push(commandCheck("fetch latest origin/main", run("git", ["fetch", "origin", "main"], repo)));
-}
+checks.push(commandCheck("fetch latest origin/main", run("git", ["fetch", "origin", "main"], repo)));
 
 let headSha = "";
 let baseSha = "";

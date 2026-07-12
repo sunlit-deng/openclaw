@@ -40,11 +40,16 @@ const worktreePath = path.join(root, "worktrees", name);
 const outputPath = path.join(root, "outputs", name);
 const storePath = path.join(root, ".pnpm-store");
 const localBranch = `sunlit/pr-${args.pr}`;
-const remoteName = `pr-${args.pr}-head`;
 
-const pr = JSON.parse(execute("gh", ["api", `repos/openclaw/openclaw/pulls/${args.pr}`]));
-if (pr.state !== "open") throw new Error(`PR #${args.pr} is not open`);
-if (!pr.head?.repo?.clone_url || !pr.head?.ref || !pr.head?.repo?.owner?.login) {
+execute("gh", ["auth", "status"]);
+execute("gh", ["auth", "setup-git"]);
+
+const pr = JSON.parse(execute("gh", [
+  "pr", "view", String(args.pr), "--repo", "openclaw/openclaw",
+  "--json", "body,state,headRefName,headRepository,headRepositoryOwner,maintainerCanModify,url",
+]));
+if (pr.state !== "OPEN") throw new Error(`PR #${args.pr} is not open`);
+if (!pr.headRepository?.nameWithOwner || !pr.headRefName || !pr.headRepositoryOwner?.login) {
   throw new Error(`PR #${args.pr} does not expose a usable head repository`);
 }
 const linkedIssue = Number((pr.body ?? "").match(/^(?:Fixes|Closes):?\s+#(\d+)\s*$/mi)?.[1] ?? args.pr);
@@ -54,22 +59,19 @@ fs.mkdirSync(path.join(root, "worktrees"), { recursive: true });
 fs.mkdirSync(outputPath, { recursive: true });
 fs.mkdirSync(storePath, { recursive: true });
 if (!fs.existsSync(path.join(mainRepo, ".git"))) {
-  execute("git", ["clone", "https://github.com/openclaw/openclaw.git", mainRepo]);
+  execute("gh", ["repo", "clone", "openclaw/openclaw", mainRepo]);
 }
 
 execute("git", ["fetch", "origin", "main"], { cwd: mainRepo });
-const existingRemotes = execute("git", ["remote"], { cwd: mainRepo }).split("\n");
-if (existingRemotes.includes(remoteName)) {
-  execute("git", ["remote", "set-url", remoteName, pr.head.repo.clone_url], { cwd: mainRepo });
-} else {
-  execute("git", ["remote", "add", remoteName, pr.head.repo.clone_url], { cwd: mainRepo });
-}
-execute("git", ["fetch", "--force", remoteName, pr.head.ref], { cwd: mainRepo });
-
 if (fs.existsSync(worktreePath)) throw new Error(`Worktree already exists: ${worktreePath}`);
 const branchExists = spawnSync("git", ["show-ref", "--verify", "--quiet", `refs/heads/${localBranch}`], { cwd: mainRepo }).status === 0;
 if (branchExists) throw new Error(`Local branch already exists and will not be reused implicitly: ${localBranch}`);
-execute("git", ["worktree", "add", "-b", localBranch, worktreePath, "FETCH_HEAD"], { cwd: mainRepo });
+if (execute("git", ["status", "--porcelain"], { cwd: mainRepo })) {
+  throw new Error(`Main clone is not clean: ${mainRepo}`);
+}
+execute("gh", ["pr", "checkout", String(args.pr), "--repo", "openclaw/openclaw", "--branch", localBranch], { cwd: mainRepo });
+execute("git", ["switch", "main"], { cwd: mainRepo });
+execute("git", ["worktree", "add", worktreePath, localBranch], { cwd: mainRepo });
 
 for (const file of ["pr-body.md", "live-proof.md", "ci-notes.md"]) {
   fs.writeFileSync(path.join(outputPath, file), file === "pr-body.md" ? `${pr.body ?? ""}` : "", "utf8");
@@ -99,8 +101,8 @@ execute(process.execPath, [
   "--repo-path", worktreePath,
   "--output-path", outputPath,
   "--branch", localBranch,
-  "--head-owner", pr.head.repo.owner.login,
-  "--head-ref", pr.head.ref,
+  "--head-owner", pr.headRepositoryOwner.login,
+  "--head-ref", pr.headRefName,
   "--base-ref", "origin/main",
   "--base-sha", baseSha,
   "--head-sha", headSha,
@@ -109,7 +111,7 @@ execute(process.execPath, [
   "--preflight-path", path.join(outputPath, "preflight.json"),
   "--dependency-status", dependencyStatus,
   "--skip-reason", args.skipInstallReason,
-  "--maintainer-can-modify", String(pr.maintainer_can_modify === true),
+  "--maintainer-can-modify", String(pr.maintainerCanModify === true),
 ]);
 
 const mergeBase = execute("git", ["merge-base", headSha, baseSha], { cwd: worktreePath });
@@ -118,9 +120,9 @@ console.log(JSON.stringify({
   worktree: worktreePath,
   outputs: outputPath,
   branch: localBranch,
-  head: `${pr.head.repo.owner.login}:${pr.head.ref}`,
+  head: `${pr.headRepositoryOwner.login}:${pr.headRefName}`,
   headSha,
   latestBaseSha: baseSha,
   containsLatestBase: mergeBase === baseSha,
-  maintainerCanModify: pr.maintainer_can_modify === true,
+  maintainerCanModify: pr.maintainerCanModify === true,
 }, null, 2));

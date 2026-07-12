@@ -139,6 +139,8 @@ Do not create a separate heading just for this marker unless the user explicitly
 
 - Keep the body in the canonical `outputs/<issue>/pr-body.md` file with LF line endings.
 - Run `validate-pr-body.mjs` or the full preflight before the human gate.
-- Publish bodies only through `publish-openclaw-pr.mjs`, which uses the GitHub REST pulls API. Do not use `gh pr create` or `gh pr edit` for body writes.
+- Create new PRs through `gh api --method POST repos/openclaw/openclaw/pulls` so the complete body/proof is submitted through REST.
+- Update an existing PR body through `gh api --method PATCH repos/openclaw/openclaw/pulls/<number>`.
+- Do not use `gh pr create` or `gh pr edit` for body-bearing writes; both create and update must preserve the canonical body file through REST.
 - The human approval applies to one HEAD SHA and one body SHA-256. Any code or body edit requires validation and approval again.
 - Re-read the PR after writing and require the normalized remote body to match the local file exactly.

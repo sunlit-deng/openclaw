@@ -56,6 +56,17 @@ function normalizeNewlines(value) {
   return value.replace(/\r\n?/g, "\n");
 }
 
+function viewPr(selector, repo) {
+  return JSON.parse(execute("gh", [
+    "pr", "view", String(selector), "--repo", repo,
+    "--json", "number,url,body,maintainerCanModify,headRefName,headRepositoryOwner",
+  ]));
+}
+
+function ownerLogin(value) {
+  return typeof value === "string" ? value : value?.login;
+}
+
 let args;
 try {
   args = parseArgs(process.argv.slice(2));
@@ -95,10 +106,14 @@ if (failures.length > 0) {
 }
 
 execute("gh", ["auth", "status"]);
+execute("gh", ["auth", "setup-git"]);
 const ghLogin = JSON.parse(execute("gh", ["api", "user"])).login;
-const remoteUrl = execute("git", ["remote", "get-url", args.pushRemote], { cwd: repoPath });
-if (/^https?:\/\//i.test(remoteUrl)) {
-  throw new Error(`Push remote must use SSH to avoid credentials that differ from gh auth: ${args.pushRemote}`);
+let remoteUrl;
+try {
+  remoteUrl = execute("git", ["remote", "get-url", args.pushRemote], { cwd: repoPath });
+} catch {
+  execute("gh", ["repo", "fork", args.repo, "--remote", "--remote-name", args.pushRemote], { cwd: repoPath });
+  remoteUrl = execute("git", ["remote", "get-url", args.pushRemote], { cwd: repoPath });
 }
 const remoteOwner = remoteUrl.match(/github\.com(?::|\/)([^/]+)\//i)?.[1];
 if (!remoteOwner || remoteOwner.toLowerCase() !== ghLogin.toLowerCase()) {
@@ -107,11 +122,11 @@ if (!remoteOwner || remoteOwner.toLowerCase() !== ghLogin.toLowerCase()) {
 
 let prNumber = workflow.pr;
 if (prNumber) {
-  const existing = JSON.parse(execute("gh", ["api", `repos/${args.repo}/pulls/${prNumber}`]));
-  if (existing.maintainer_can_modify !== true) {
+  const existing = viewPr(prNumber, args.repo);
+  if (existing.maintainerCanModify !== true) {
     throw new Error("maintainer_can_modify is not true; restore maintainer edit access before push");
   }
-  if (existing.head?.repo?.owner?.login?.toLowerCase() !== ghLogin.toLowerCase() || existing.head?.ref !== remoteHeadRef) {
+  if (ownerLogin(existing.headRepositoryOwner)?.toLowerCase() !== ghLogin.toLowerCase() || existing.headRefName !== remoteHeadRef) {
     throw new Error("existing PR head owner or branch does not match the authenticated push target");
   }
 } else {
@@ -151,17 +166,17 @@ if (prNumber) {
   prNumber = response.number;
 }
 
-const remote = JSON.parse(execute("gh", ["api", `repos/${args.repo}/pulls/${prNumber}`]));
+const remote = viewPr(prNumber, args.repo);
 const remoteBody = normalizeNewlines(remote.body ?? "");
 if (remoteBody !== body) {
   throw new Error(`GitHub PR body differs after REST write (local=${bodySha}, remote=${sha256(remoteBody)})`);
 }
-if (remote.maintainer_can_modify !== true) {
+if (remote.maintainerCanModify !== true) {
   throw new Error("maintainer_can_modify is not true; restore maintainer edit access before review requests");
 }
 
 workflow.pr = prNumber;
-workflow.prUrl = remote.html_url ?? response.html_url ?? null;
+workflow.prUrl = remote.url ?? response.url ?? null;
 workflow.publishedHeadSha = currentHead;
 workflow.remoteBodySha256 = sha256(remoteBody);
 workflow.updatedAt = new Date().toISOString();

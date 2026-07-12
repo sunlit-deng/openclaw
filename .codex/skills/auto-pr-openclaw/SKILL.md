@@ -10,7 +10,7 @@ description: Prepare and maintain contributor pull requests for openclaw/opencla
 Use this skill for `openclaw/openclaw` contributor work. Keep the process conservative and evidence-first.
 
 - Treat GitHub writes as gated: do not push, create/update a PR, edit the PR body, post comments, or request bot review until the pre-push human gate has been shown and the user confirms.
-- Use `gh` for GitHub authentication and reads. PR creation and PR body updates must use the GitHub REST pulls API through `scripts/publish-openclaw-pr.mjs`; do not use `gh pr create` or `gh pr edit` for body writes. Use another GitHub tool only when `gh` is unavailable, unauthenticated, lacks the needed capability, or the user explicitly asks for a different path; mention the fallback reason.
+- Use high-level `gh` commands for GitHub reads, repository download/fork setup, CI, comments, and review operations, including `gh repo clone`, `gh repo fork`, `gh issue`, `gh pr`, `gh run`, and `gh search`. PR creation and PR body updates are the exception: use `gh api` with the GitHub REST pulls API because both operations carry the complete body/proof and must avoid the GraphQL editing path. Do not replace failed `gh` download/fork operations with anonymous HTTPS, stale local refs, or a different GitHub tool unless the user explicitly authorizes it.
 - Authorship email is a hard requirement: all commits authored or committed by `sunlit-deng` must use `sunlit-deng <yang.jiajun1@xydigit.com>`. Do not create, amend, cherry-pick, rebase, or push a `sunlit-deng` commit with any other author or committer email unless the user explicitly overrides this requirement for that specific operation.
 - Fork PR maintainer edit access is a release gate. Do not pass `--no-maintainer-edit`. This machine's `gh` may not support `--maintainer-edit` because maintainer edits are enabled by default, so omit both flags unless intentionally disabling edits. For existing PRs, verify `maintainerCanModify: true` with `gh pr view <number> --repo openclaw/openclaw --json maintainerCanModify,headRepositoryOwner,headRefName,url`. For new PRs, verify the same immediately after creation, or manually confirm the GitHub web checkbox `Allow edits and access to secrets by maintainers` remains checked when the API cannot prove it.
 - Use one worktree per issue by default: `worktrees/issue-<number>` and `outputs/issue-<number>`. Add a topic suffix only when one issue needs multiple candidate PRs.
@@ -58,11 +58,12 @@ When the user says remote candidate issues, remote candidates, or asks to screen
 
 1. **Issue intake**
    - Create a per-issue worktree with `scripts/new-openclaw-worktree.sh` on macOS/Linux or `scripts/new-openclaw-worktree.ps1` on Windows. The helpers derive the canonical workspace root, fetch `origin/main`, refuse implicit reuse of stale local branches, and record paths and SHAs in `workflow.json`.
-   - For an existing PR, use `scripts/prepare-openclaw-pr-worktree.mjs --pr <number>`. It reads the live PR through REST, fetches the exact fork head into `worktrees/pr-<number>`, and records the remote owner/ref separately. Rebase onto current `origin/main` before preflight when the reported head is stale.
+   - For an existing PR, use `scripts/prepare-openclaw-pr-worktree.mjs --pr <number>`. It reads the live PR with `gh pr view`, fetches the exact fork head into `worktrees/pr-<number>`, and records the remote owner/ref separately. Rebase onto current `origin/main` before preflight when the reported head is stale.
    - Share only `workspace/openclaw/.pnpm-store` across worktrees; keep each worktree's `node_modules` private. Dependency installation is the default. Skipping it requires an explicit reason and is recorded as an incomplete validation state.
    - Read the issue or PR, latest comments, current PR diff, CI state, root `AGENTS.md`, relevant scoped `AGENTS.md`, `CONTRIBUTING.md`, and `.github/pull_request_template.md`.
    - Prefer `gh issue view`, `gh pr view`, `gh pr diff`, `gh pr checks`, `gh run view`, and `gh api` for GitHub reads.
    - Search for duplicate or canonical issues/PRs before implementing or defending a branch.
+   - Treat inability to fetch current `origin/main` as a hard stop. An HTTP 429 or other fetch failure may be retried through the `gh`-authenticated SSH setup, but never continue implementation, rebase, or preflight using an existing local ref while describing it as current.
    - For Codex-related work, inspect the sibling `../codex` checkout or clone `https://github.com/openai/codex.git` before making any dependency-behavior verdict.
 
 2. **Implementation and evidence**
@@ -85,7 +86,7 @@ When the user says remote candidate issues, remote candidates, or asks to screen
    - For existing fork PRs, show the current maintainer edit status from `maintainerCanModify`. If it is `false`, stop and ask the user to re-enable `Allow edits and access to secrets by maintainers` in the GitHub web UI before push, PR update, or re-review. For new PRs, show that the PR will be created without `--no-maintainer-edit` and must be checked immediately after creation.
    - When the PR already has a ClawSweeper review, show ClawSweeper's current verdict and any unresolved blocking findings before asking for push or re-review confirmation.
    - Continue with push/PR/comment only after explicit user confirmation.
-   - After confirmation, pass the approved HEAD and PR body SHA-256 to `scripts/publish-openclaw-pr.mjs`. It pushes through the named SSH remote, writes the PR through the REST pulls API, then re-reads and verifies the exact body and maintainer edit access.
+   - After confirmation, pass the approved HEAD and PR body SHA-256 to `scripts/publish-openclaw-pr.mjs`. It pushes through the named SSH remote created for the `gh` identity. Both new PR creation and existing PR body updates use `gh api` with the REST pulls API. It then re-reads with `gh pr view` and verifies the exact body and maintainer edit access.
    - After creating or updating a fork PR, re-read `maintainerCanModify`. If it is `false`, stop before requesting review and tell the user the web checkbox must be restored.
 
 5. **PR maintenance**

@@ -27,7 +27,7 @@ Use these gates before pushing or updating an OpenClaw PR.
 
 - For existing fork PRs, run `gh pr view <number> --repo openclaw/openclaw --json maintainerCanModify,headRepositoryOwner,headRefName,url` before any push, PR-body update, comment, or re-review request.
 - Treat `maintainerCanModify: false` as a stop unless the user explicitly wants maintainers unable to edit the branch. Ask the user to re-enable the GitHub web checkbox `Allow edits and access to secrets by maintainers`, then re-check before continuing.
-- For new fork PRs, create through `publish-openclaw-pr.mjs`; its REST payload sets `maintainer_can_modify: true`.
+- For new fork PRs, create through `publish-openclaw-pr.mjs`; its REST payload sets `maintainer_can_modify: true` and carries the validated body verbatim.
 - Immediately after creating a new PR, re-read `maintainerCanModify`. If it is not `true`, stop before requesting ClawSweeper review or CI attention and ask the user to restore the web checkbox.
 - If GitHub does not expose the state through the API, get an explicit web UI confirmation or screenshot from the PR edit page before treating the gate as passed.
 

@@ -44,7 +44,9 @@ cross-worktree reuse can make tests resolve the wrong source files.
 
 The worktree helpers derive this root from the `auto-pr` checkout, fetch
 `origin/main`, and create the branch from the fetched commit. Dependencies are
-installed by default.
+installed by default. Initial repository download uses `gh repo clone` after
+`gh auth setup-git`; do not replace a failed authenticated download with an
+anonymous HTTPS clone.
 
 Preferred setup:
 
@@ -64,9 +66,10 @@ issue branch from a fork head:
 node ./.codex/skills/auto-pr-openclaw/scripts/prepare-openclaw-pr-worktree.mjs --pr 93865
 ```
 
-It reads the PR through the REST API, fetches its actual fork head, records the
-remote head separately from the local branch, and reports whether the PR already
-contains the latest `origin/main`. Rebase before preflight when it does not.
+It reads the PR through `gh pr view`, checks out its actual fork head through
+`gh pr checkout`, records the remote head separately from the local branch, and
+reports whether the PR already contains the latest `origin/main`. Rebase before
+preflight when it does not.
 
 For an existing worktree:
 

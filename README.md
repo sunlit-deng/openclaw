@@ -37,6 +37,11 @@ local branch implicitly, uses `workspace/openclaw/.pnpm-store`, and installs
 dependencies by default. It records the exact paths and Git SHAs in
 `outputs/<name>/workflow.json`.
 
+Repository download uses `gh repo clone` with `gh auth setup-git`. Existing PR
+heads use `gh pr checkout`, and the publication step creates or attaches the
+fork remote with `gh repo fork --remote` after the human gate. Fetch failure is
+a hard stop; cached refs are never treated as current main.
+
 Existing PR maintenance uses `prepare-openclaw-pr-worktree.mjs --pr <number>`.
 It fetches the actual fork head into `worktrees/pr-<number>` and reports whether
 the head contains the latest upstream main, preventing a stale fork head from
@@ -54,10 +59,11 @@ state, commit identity, and PR body proof, then writes `preflight.json` tied to
 the checked HEAD. Local AI reviews are optional diagnostics rather than gates.
 
 After the human gate, `publish-openclaw-pr.mjs` requires the approved HEAD and
-body SHA-256, pushes through an explicitly named SSH remote, and creates or
-updates the PR body through GitHub's REST pulls API. It then re-reads the PR and
-verifies the body and maintainer edit access. `gh pr create` and `gh pr edit`
-are not used for PR body writes.
+body SHA-256 and pushes through an explicitly named SSH remote associated with
+the `gh` identity. Both new PR creation and existing PR body updates use `gh
+api` with the REST pulls API so the validated body/proof is preserved verbatim.
+The script re-reads the PR with `gh pr view` and verifies the body and
+maintainer edit access.
 
 `workspace/` is local working state and is ignored by git.
 
