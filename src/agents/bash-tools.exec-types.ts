@@ -156,6 +156,8 @@ export type ExecToolDetails =
       exitCode: number | null;
       exitSignal: NodeJS.Signals | number | null;
       failureKind: ExecToolFailureKind;
+      /** Stable failure reason/error text, hashed for no-progress detection instead of volatile stdout. */
+      failureReason?: string;
       exitReason?: TerminationReason;
       durationMs: number;
       aggregated: string;

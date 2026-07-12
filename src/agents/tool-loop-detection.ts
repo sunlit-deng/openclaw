@@ -205,9 +205,10 @@ function hashStableExecFailure(status: string, details: Record<string, unknown>)
   const exitCode = typeof details.exitCode === "number" ? details.exitCode : null;
   const exitSignal = normalizeExitSignal(details.exitSignal);
   // A failed outcome with no exit code and no signal (the broad catch-all kinds)
-  // has no structured identity to tell distinct failures apart, so fall back to
-  // the normalized reason. Completed nonzero exits keep the pure exit-fact
-  // fingerprint and never reach this branch with a null exit code.
+  // has no structured exit identity, so fall back to the producer's stable
+  // failureReason (the actual error, not the volatile leading stdout), or the
+  // aggregated output when a producer does not set one. Completed nonzero exits
+  // keep the pure exit-fact fingerprint and never reach this branch.
   const hasStructuredExitIdentity = exitCode !== null || exitSignal !== null;
   return digestStable({
     status,
@@ -216,7 +217,7 @@ function hashStableExecFailure(status: string, details: Record<string, unknown>)
     exitSignal,
     failureKind: stringField(details.failureKind),
     ...(status === "failed" && !hasStructuredExitIdentity
-      ? { reason: normalizeFailureReason(details.aggregated) }
+      ? { reason: normalizeFailureReason(details.failureReason ?? details.aggregated) }
       : {}),
   });
 }

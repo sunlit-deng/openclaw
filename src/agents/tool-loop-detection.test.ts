@@ -873,6 +873,48 @@ describe("tool-loop-detection", () => {
       }
     });
 
+    // #93917 follow-up: two node failures with identical leading stdout but
+    // different actual errors must stay distinct — the hash uses the structured
+    // failureReason (the real error), not the first line of stdout.
+    it("keeps node failures with identical stdout but different errors apart", () => {
+      const state = createState();
+      const params = { command: "flaky-command" };
+      const errors = ["ENOENT missing dependency", "ECONNREFUSED upstream refused"];
+      let callIndex = 0;
+
+      for (const error of errors) {
+        for (let i = 0; i < Math.floor(GLOBAL_CIRCUIT_BREAKER_THRESHOLD / errors.length); i += 1) {
+          recordSuccessfulCall(
+            state,
+            "exec",
+            params,
+            {
+              content: [{ type: "text", text: "identical leading stdout" }],
+              details: {
+                status: "failed",
+                exitCode: null,
+                exitSignal: null,
+                failureKind: "node-run-failed",
+                // Identical leading stdout, distinct structured failure reason.
+                aggregated: `identical leading stdout\n${error}`,
+                failureReason: error,
+                durationMs: 100 + i,
+              },
+            },
+            callIndex,
+          );
+          callIndex += 1;
+        }
+      }
+
+      const loopResult = detectToolCallLoop(state, "exec", params, enabledLoopDetectionConfig);
+      // Distinct failureReason → distinct hashes → no single streak trips the breaker.
+      expect(loopResult.stuck).toBe(true);
+      if (loopResult.stuck) {
+        expect(loopResult.level).toBe("warning");
+      }
+    });
+
     it("does not block repeated unknown-tool failures before the unknown-tool threshold", () => {
       const state = createState();
       const toolName = "exec";

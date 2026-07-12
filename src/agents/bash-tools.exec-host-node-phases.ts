@@ -262,6 +262,8 @@ export function formatNodeRunToolResult(params: {
         aggregated,
         timedOut,
         failureKind: timedOut ? "overall-timeout" : "node-run-failed",
+        // Hash the actual node error, not the volatile leading stdout.
+        failureReason: errorText || stderr || undefined,
         cwd: params.cwd,
       },
     };

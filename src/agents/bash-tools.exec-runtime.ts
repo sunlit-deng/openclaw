@@ -142,6 +142,8 @@ export type ExecProcessOutcome =
       noOutputTimedOut?: boolean;
       failureKind: ExecProcessFailureKind;
       reason: string;
+      /** Stable failure reason/error text for no-progress hashing (excludes volatile output). */
+      failureReason?: string;
     };
 
 /** Live handle returned after an exec process has started. */
@@ -513,6 +515,7 @@ function buildExecExitOutcome(params: {
     timedOut: params.exit.timedOut,
     noOutputTimedOut: params.exit.noOutputTimedOut,
     failureKind,
+    failureReason: reason,
     reason: joinExecFailureOutput(params.aggregated, reason),
   };
 }
@@ -531,6 +534,7 @@ export function buildExecRuntimeErrorOutcome(params: {
     aggregated: params.aggregated,
     timedOut: false,
     failureKind: "runtime-error",
+    failureReason: String(params.error),
     reason: joinExecFailureOutput(params.aggregated, String(params.error)),
   };
 }
