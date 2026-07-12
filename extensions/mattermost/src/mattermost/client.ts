@@ -711,7 +711,9 @@ export async function fetchMattermostThreadPosts(
     order: string[];
     posts: Record<string, MattermostPost>;
   }>(`/posts/${postId}/thread${query}`, signal ? { signal } : undefined);
-  const posts = (data.order ?? []).map((pid) => data.posts?.[pid]).filter(Boolean);
+  const posts: MattermostPost[] = (data.order ?? [])
+    .map((pid) => data.posts?.[pid])
+    .filter((p): p is MattermostPost => p != null);
   return posts.toSorted((a, b) => (a.create_at ?? 0) - (b.create_at ?? 0));
 }
 
