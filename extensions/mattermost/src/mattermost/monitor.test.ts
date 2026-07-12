@@ -1061,6 +1061,7 @@ describe("backfillMattermostThreadHistoryForMonitor", () => {
     const client = createMattermostClientMock();
     const channelHistories = new Map<string, HistoryEntry[]>();
     const threadBackfillMarkers = new Map<string, string>();
+    const threadBackfillInFlight = new Map<string, Promise<void>>();
     const fetchThreadPosts = vi.fn(async () => [] as MattermostPost[]);
 
     return {
@@ -1068,6 +1069,7 @@ describe("backfillMattermostThreadHistoryForMonitor", () => {
       client,
       fetchThreadPosts,
       threadBackfillMarkers,
+      threadBackfillInFlight,
     };
   }
 
@@ -1095,6 +1097,7 @@ describe("backfillMattermostThreadHistoryForMonitor", () => {
       historyLimit: 2,
       channelHistories: harness.channelHistories,
       threadBackfillMarkers: harness.threadBackfillMarkers,
+      threadBackfillInFlight: harness.threadBackfillInFlight,
       fetchThreadPosts: harness.fetchThreadPosts,
     });
 
@@ -1137,6 +1140,7 @@ describe("backfillMattermostThreadHistoryForMonitor", () => {
       historyLimit: 5,
       channelHistories: harness.channelHistories,
       threadBackfillMarkers: harness.threadBackfillMarkers,
+      threadBackfillInFlight: harness.threadBackfillInFlight,
       fetchThreadPosts: harness.fetchThreadPosts,
     });
     harness.channelHistories.set(historyKey, []);
@@ -1149,6 +1153,7 @@ describe("backfillMattermostThreadHistoryForMonitor", () => {
       historyLimit: 5,
       channelHistories: harness.channelHistories,
       threadBackfillMarkers: harness.threadBackfillMarkers,
+      threadBackfillInFlight: harness.threadBackfillInFlight,
       fetchThreadPosts: harness.fetchThreadPosts,
     });
 
@@ -1169,6 +1174,7 @@ describe("backfillMattermostThreadHistoryForMonitor", () => {
       historyLimit: 5,
       channelHistories: harness.channelHistories,
       threadBackfillMarkers: harness.threadBackfillMarkers,
+      threadBackfillInFlight: harness.threadBackfillInFlight,
       fetchThreadPosts: harness.fetchThreadPosts,
     });
     await backfillMattermostThreadHistoryForMonitor({
@@ -1180,6 +1186,7 @@ describe("backfillMattermostThreadHistoryForMonitor", () => {
       historyLimit: 5,
       channelHistories: harness.channelHistories,
       threadBackfillMarkers: harness.threadBackfillMarkers,
+      threadBackfillInFlight: harness.threadBackfillInFlight,
       fetchThreadPosts: harness.fetchThreadPosts,
     });
 
@@ -1207,6 +1214,7 @@ describe("backfillMattermostThreadHistoryForMonitor", () => {
       historyLimit: 5,
       channelHistories: harness.channelHistories,
       threadBackfillMarkers: harness.threadBackfillMarkers,
+      threadBackfillInFlight: harness.threadBackfillInFlight,
       fetchThreadPosts: harness.fetchThreadPosts,
     });
     expect(harness.fetchThreadPosts).toHaveBeenCalledTimes(1);
@@ -1222,6 +1230,7 @@ describe("backfillMattermostThreadHistoryForMonitor", () => {
       historyLimit: 5,
       channelHistories: harness.channelHistories,
       threadBackfillMarkers: harness.threadBackfillMarkers,
+      threadBackfillInFlight: harness.threadBackfillInFlight,
       fetchThreadPosts: harness.fetchThreadPosts,
     });
     expect(harness.fetchThreadPosts).toHaveBeenCalledTimes(1);
@@ -1238,6 +1247,7 @@ describe("backfillMattermostThreadHistoryForMonitor", () => {
       historyLimit: 5,
       channelHistories: harness.channelHistories,
       threadBackfillMarkers: harness.threadBackfillMarkers,
+      threadBackfillInFlight: harness.threadBackfillInFlight,
       fetchThreadPosts: harness.fetchThreadPosts,
     });
     expect(harness.fetchThreadPosts).toHaveBeenCalledTimes(2);
@@ -1265,6 +1275,7 @@ describe("backfillMattermostThreadHistoryForMonitor", () => {
       historyLimit: 5,
       channelHistories: harness.channelHistories,
       threadBackfillMarkers: harness.threadBackfillMarkers,
+      threadBackfillInFlight: harness.threadBackfillInFlight,
       fetchThreadPosts: harness.fetchThreadPosts,
     });
     harness.channelHistories.set(historyKey, [
@@ -1279,6 +1290,7 @@ describe("backfillMattermostThreadHistoryForMonitor", () => {
       historyLimit: 5,
       channelHistories: harness.channelHistories,
       threadBackfillMarkers: harness.threadBackfillMarkers,
+      threadBackfillInFlight: harness.threadBackfillInFlight,
       fetchThreadPosts: harness.fetchThreadPosts,
     });
 
@@ -1286,6 +1298,138 @@ describe("backfillMattermostThreadHistoryForMonitor", () => {
     expect(harness.channelHistories.get(historyKey)?.map((entry) => entry.body)).toStrictEqual([
       "after reset",
     ]);
+  });
+
+  it("bounds the marker map at the local 1000-key cap and re-backfills an evicted thread", async () => {
+    const harness = createBackfillHarness();
+    harness.fetchThreadPosts.mockResolvedValue([
+      createPost({ id: "seed", create_at: 1, message: "seed", user_id: "user-1" }),
+    ]);
+    const firstKey = "mattermost:thread:root-evicted";
+
+    // Backfill the first thread, then 1000 further distinct threads. The first
+    // key is the oldest by insertion order, so the 1001st admitted thread must
+    // evict it under the local 1000-key marker cap.
+    await backfillMattermostThreadHistoryForMonitor({
+      client: harness.client,
+      post: createPost({ id: "current-evicted" }),
+      threadRootId: "root-evicted",
+      historyKey: firstKey,
+      baseSessionKey: "session-evicted",
+      historyLimit: 5,
+      channelHistories: harness.channelHistories,
+      threadBackfillMarkers: harness.threadBackfillMarkers,
+      threadBackfillInFlight: harness.threadBackfillInFlight,
+      fetchThreadPosts: harness.fetchThreadPosts,
+    });
+    expect(harness.threadBackfillMarkers.has(firstKey)).toBe(true);
+
+    for (let i = 0; i < 1000; i++) {
+      await backfillMattermostThreadHistoryForMonitor({
+        client: harness.client,
+        post: createPost({ id: `current-${i}` }),
+        threadRootId: `root-${i}`,
+        historyKey: `mattermost:thread:root-${i}`,
+        baseSessionKey: `session-${i}`,
+        historyLimit: 5,
+        channelHistories: harness.channelHistories,
+        threadBackfillMarkers: harness.threadBackfillMarkers,
+        threadBackfillInFlight: harness.threadBackfillInFlight,
+        fetchThreadPosts: harness.fetchThreadPosts,
+      });
+    }
+
+    // Marker retention stays capped and the oldest key was evicted.
+    expect(harness.threadBackfillMarkers.size).toBe(1000);
+    expect(harness.threadBackfillMarkers.has(firstKey)).toBe(false);
+
+    // A thread whose marker was evicted and whose local window has since gone
+    // cold has no marker to suppress recovery, so its next inbound turn
+    // re-backfills from the server instead of being permanently starved.
+    harness.channelHistories.delete(firstKey);
+    const callsBefore = harness.fetchThreadPosts.mock.calls.length;
+    await backfillMattermostThreadHistoryForMonitor({
+      client: harness.client,
+      post: createPost({ id: "current-evicted-again" }),
+      threadRootId: "root-evicted",
+      historyKey: firstKey,
+      baseSessionKey: "session-evicted",
+      historyLimit: 5,
+      channelHistories: harness.channelHistories,
+      threadBackfillMarkers: harness.threadBackfillMarkers,
+      threadBackfillInFlight: harness.threadBackfillInFlight,
+      fetchThreadPosts: harness.fetchThreadPosts,
+    });
+
+    expect(harness.fetchThreadPosts.mock.calls.length).toBe(callsBefore + 1);
+    expect(harness.threadBackfillMarkers.get(firstKey)).toBe("session-evicted");
+  });
+
+  it("makes a concurrent same-session cold turn await one in-flight backfill", async () => {
+    const harness = createBackfillHarness();
+    // Gate the first fetch so a second overlapping turn observes it in-flight.
+    let releaseFetch: (() => void) | undefined;
+    const fetchStarted = new Promise<void>((resolveStarted) => {
+      harness.fetchThreadPosts.mockImplementationOnce(async () => {
+        resolveStarted();
+        await new Promise<void>((resolveGate) => {
+          releaseFetch = resolveGate;
+        });
+        return [
+          createPost({ id: "old-1", create_at: 1, message: "prior context", user_id: "user-1" }),
+        ];
+      });
+    });
+
+    // Turn A starts the cold backfill and blocks inside the fetch.
+    const turnA = backfillMattermostThreadHistoryForMonitor({
+      client: harness.client,
+      post: createPost({ id: "current-a" }),
+      threadRootId: "root-1",
+      historyKey,
+      baseSessionKey: sessionBackfillKey,
+      historyLimit: 5,
+      channelHistories: harness.channelHistories,
+      threadBackfillMarkers: harness.threadBackfillMarkers,
+      threadBackfillInFlight: harness.threadBackfillInFlight,
+      fetchThreadPosts: harness.fetchThreadPosts,
+    });
+    await fetchStarted;
+
+    // Turn B arrives while A's fetch is still pending; it must await the same
+    // operation rather than skip and reply without prior context.
+    let turnBResolved = false;
+    const turnB = backfillMattermostThreadHistoryForMonitor({
+      client: harness.client,
+      post: createPost({ id: "current-b" }),
+      threadRootId: "root-1",
+      historyKey,
+      baseSessionKey: sessionBackfillKey,
+      historyLimit: 5,
+      channelHistories: harness.channelHistories,
+      threadBackfillMarkers: harness.threadBackfillMarkers,
+      threadBackfillInFlight: harness.threadBackfillInFlight,
+      fetchThreadPosts: harness.fetchThreadPosts,
+    }).then(() => {
+      turnBResolved = true;
+    });
+
+    // B cannot resolve until A's gated fetch releases.
+    await Promise.resolve();
+    expect(turnBResolved).toBe(false);
+
+    releaseFetch?.();
+    await Promise.all([turnA, turnB]);
+
+    // Exactly one server fetch ran, and both turns see the recovered window.
+    expect(harness.fetchThreadPosts).toHaveBeenCalledTimes(1);
+    expect(turnBResolved).toBe(true);
+    expect(harness.channelHistories.get(historyKey)?.map((entry) => entry.body)).toStrictEqual([
+      "prior context",
+    ]);
+    // In-flight handle is cleared once settled; the marker governs no-retry.
+    expect(harness.threadBackfillInFlight.has(historyKey)).toBe(false);
+    expect(harness.threadBackfillMarkers.get(historyKey)).toBe(sessionBackfillKey);
   });
 });
 
