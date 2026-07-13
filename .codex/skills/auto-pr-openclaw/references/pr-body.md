@@ -20,6 +20,10 @@ Fixes an issue where users <do X> would <experience Y> when <condition>.
 
 Fixes #<issue-number>
 
+<!-- Omit the issue link for direct local-candidate PRs that fix a code point
+without an existing GitHub issue. Do not create or attach an unrelated issue
+only to satisfy the template. -->
+
 ## Why This Change Was Made
 
 <1-2 short sentences. State the fix and any important boundary.>
@@ -73,6 +77,7 @@ AI-assisted: built with Codex
 - Use `Fixes #<issue>` or `Closes #<issue>` for a fix that should close the issue.
 - Use `Related: #<issue>` only when the PR is related but should not close the issue.
 - Keep the link visible as the last line of `## What Problem This Solves`.
+- For direct local-candidate PRs discovered from code, omit the issue link when no real issue exists.
 
 ## Evidence
 
@@ -137,7 +142,7 @@ Do not create a separate heading just for this marker unless the user explicitly
 
 ## Publication Integrity
 
-- Keep the body in the canonical `outputs/<issue>/pr-body.md` file with LF line endings.
+- Keep the body in the canonical `outputs/<issue-or-candidate>/pr-body.md` file with LF line endings.
 - Run `validate-pr-body.mjs` or the full preflight before the human gate.
 - Create new PRs through `gh api --method POST repos/openclaw/openclaw/pulls` so the complete body/proof is submitted through REST.
 - Update an existing PR body through `gh api --method PATCH repos/openclaw/openclaw/pulls/<number>`.

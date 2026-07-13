@@ -6,10 +6,11 @@ import { spawnSync } from "node:child_process";
 import { validatePrBody } from "./lib/pr-body-validator.mjs";
 
 function parseArgs(argv) {
-  const result = { workflow: "", testScript: "test:changed" };
+  const result = { workflow: "", checkScript: "", testScript: "test:changed" };
   for (let index = 0; index < argv.length; index += 1) {
     const arg = argv[index];
     if (arg === "--workflow") result.workflow = argv[++index] ?? "";
+    else if (arg === "--check-script") result.checkScript = argv[++index] ?? "";
     else if (arg === "--test-script") result.testScript = argv[++index] ?? "";
     else if (arg === "-h" || arg === "--help") result.help = true;
     else throw new Error(`Unknown argument: ${arg}`);
@@ -19,9 +20,10 @@ function parseArgs(argv) {
 
 function usage() {
   return [
-    "Usage: openclaw-preflight.mjs --workflow PATH [--test-script NAME]",
+    "Usage: openclaw-preflight.mjs --workflow PATH [--check-script NAME] [--test-script NAME]",
     "",
     "Runs deterministic OpenClaw checks and writes preflight.json next to workflow.json.",
+    "The default local-candidate check lane is pnpm check:changed; issue/PR workflows use pnpm check.",
     "The default focused test lane is pnpm test:changed.",
   ].join("\n");
 }
@@ -95,6 +97,7 @@ if (!args.workflow) {
 
 const workflowPath = path.resolve(args.workflow);
 const workflow = JSON.parse(fs.readFileSync(workflowPath, "utf8"));
+const checkScript = args.checkScript || (workflow.mode === "local-candidate" ? "check:changed" : "check");
 const repo = path.resolve(workflow.repoPath);
 const root = path.resolve(workflow.root);
 const outputPath = path.resolve(workflow.outputPath);
@@ -138,8 +141,13 @@ checks.push(staticCheck(
 const modulesPath = path.join(repo, "node_modules", ".modules.yaml");
 let modulesStore = "";
 if (fs.existsSync(modulesPath)) {
-  const modulesYaml = fs.readFileSync(modulesPath, "utf8");
-  modulesStore = modulesYaml.match(/^storeDir:\s*["']?(.+?)["']?\s*$/m)?.[1] ?? "";
+  const modulesMetadata = fs.readFileSync(modulesPath, "utf8");
+  try {
+    const parsed = JSON.parse(modulesMetadata);
+    modulesStore = typeof parsed.storeDir === "string" ? parsed.storeDir : "";
+  } catch {
+    modulesStore = modulesMetadata.match(/^storeDir:\s*["']?(.+?)["']?\s*$/m)?.[1] ?? "";
+  }
 }
 const resolvedModulesStore = modulesStore ? path.resolve(repo, modulesStore) : "";
 checks.push(staticCheck(
@@ -165,10 +173,13 @@ try {
   checks.push(staticCheck("working tree clean", status.length === 0, status || "clean"));
 
   const mergeBase = git(repo, "merge-base", headSha, baseSha);
+  const containsLatestMain = mergeBase === baseSha;
   checks.push(staticCheck(
     "branch contains latest origin/main",
-    mergeBase === baseSha,
-    `merge-base=${mergeBase} origin/main=${baseSha}`,
+    workflow.mode === "local-candidate" || containsLatestMain,
+    containsLatestMain
+      ? `merge-base=${mergeBase} origin/main=${baseSha}`
+      : `local-candidate freshness advisory: merge-base=${mergeBase} origin/main=${baseSha}`,
   ));
   const changedFiles = git(repo, "diff", "--name-only", `${baseSha}...${headSha}`);
   checks.push(staticCheck(
@@ -207,6 +218,7 @@ try {
   const bodyResult = validatePrBody({
     bodyPath: workflow.prBodyPath,
     issue: workflow.issue,
+    requireIssueLink: workflow.mode !== "local-candidate",
     repoPath: repo,
   });
   workflow.prBodySha256 = bodyResult.sha256;
@@ -228,9 +240,9 @@ try {
 
 if (packageJson) {
   checks.push(staticCheck(
-    "repository check script exists",
-    typeof packageJson.scripts?.check === "string",
-    packageJson.scripts?.check ?? "missing package.json scripts.check",
+    "selected check script exists",
+    Boolean(checkScript && typeof packageJson.scripts?.[checkScript] === "string"),
+    checkScript || "no check script selected",
   ));
   checks.push(staticCheck(
     "focused test script exists",
@@ -238,8 +250,19 @@ if (packageJson) {
     args.testScript || "no focused test script selected",
   ));
 
-  if (typeof packageJson.scripts?.check === "string") {
-    checks.push(commandCheck("typecheck lint and policy checks", run("pnpm", ["check"], repo)));
+  if (checkScript && typeof packageJson.scripts?.[checkScript] === "string") {
+    const checkOptions =
+      checkScript === "check:changed"
+        ? {
+            env: {
+              ...process.env,
+              OPENCLAW_CHECK_CHANGED_REMOTE_CHILD: "1",
+              OPENCLAW_CHANGED_LANES_RAW_SYNC: "1",
+              PNPM_CONFIG_VERIFY_DEPS_BEFORE_RUN: "false",
+            },
+          }
+        : {};
+    checks.push(commandCheck("typecheck lint and policy checks", run("pnpm", [checkScript], repo, checkOptions)));
   }
   if (args.testScript && typeof packageJson.scripts?.[args.testScript] === "string") {
     checks.push(commandCheck("focused tests", run("pnpm", [args.testScript], repo)));

@@ -68,6 +68,10 @@ function ownerLogin(value) {
   return typeof value === "string" ? value : value?.login;
 }
 
+function sleep(ms) {
+  Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, ms);
+}
+
 function viewPr(selector, repo) {
   return JSON.parse(execute("gh", [
     "pr", "view", String(selector), "--repo", repo,
@@ -161,8 +165,15 @@ let remoteUrl;
 try {
   remoteUrl = execute("git", ["remote", "get-url", args.pushRemote], { cwd: repoPath });
 } catch {
-  execute("gh", ["repo", "fork", args.repo, "--remote", "--remote-name", args.pushRemote], { cwd: repoPath });
+  const repoName = args.repo.split("/")[1];
+  if (!repoName) throw new Error(`Invalid repository name: ${args.repo}`);
+  remoteUrl = `git@github.com:${ghLogin}/${repoName}.git`;
+  execute("git", ["remote", "add", args.pushRemote, remoteUrl], { cwd: repoPath });
+}
+try {
   remoteUrl = execute("git", ["remote", "get-url", args.pushRemote], { cwd: repoPath });
+} catch (error) {
+  throw new Error(`Push remote ${args.pushRemote} is unavailable: ${error.message}`);
 }
 const remoteOwner = remoteUrl.match(/github\.com(?::|\/)([^/]+)\//i)?.[1];
 if (!remoteOwner || remoteOwner.toLowerCase() !== ghLogin.toLowerCase()) {
@@ -188,7 +199,11 @@ execute("git", [
   `${currentBranch}:refs/heads/${remoteHeadRef}`,
 ], { cwd: repoPath });
 
-const after = viewPr(workflow.pr, args.repo);
+let after = viewPr(workflow.pr, args.repo);
+for (let attempt = 0; after.headRefOid !== currentHead && attempt < 10; attempt += 1) {
+  sleep(1000);
+  after = viewPr(workflow.pr, args.repo);
+}
 if (after.headRefOid !== currentHead) {
   throw new Error(`remote PR head differs after push (local=${currentHead}, remote=${after.headRefOid ?? "unknown"})`);
 }

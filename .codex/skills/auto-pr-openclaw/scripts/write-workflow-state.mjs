@@ -15,7 +15,6 @@ for (let index = 2; index < process.argv.length; index += 2) {
 
 const required = [
   "mode",
-  "issue",
   "root",
   "repo-path",
   "output-path",
@@ -37,10 +36,13 @@ for (const key of required) {
 
 const outputPath = path.resolve(values.get("output-path"));
 const statePath = path.join(outputPath, "workflow.json");
+const mode = values.get("mode");
+const issueRaw = values.get("issue");
+const issue = issueRaw ? Number(issueRaw) : null;
 const state = {
   schemaVersion: 1,
-  mode: values.get("mode"),
-  issue: Number(values.get("issue")),
+  mode,
+  issue,
   pr: values.has("pr") ? Number(values.get("pr")) : null,
   root: path.resolve(values.get("root")),
   repoPath: path.resolve(values.get("repo-path")),
@@ -65,8 +67,11 @@ const state = {
   createdAt: new Date().toISOString(),
 };
 
-if (!Number.isSafeInteger(state.issue) || state.issue <= 0) {
-  throw new Error("--issue must be a positive integer");
+if (mode !== "local-candidate" && (!Number.isSafeInteger(issue) || issue <= 0)) {
+  throw new Error("--issue must be a positive integer except for --mode local-candidate");
+}
+if (mode === "local-candidate" && issue !== null && (!Number.isSafeInteger(issue) || issue <= 0)) {
+  throw new Error("--issue must be omitted or a positive integer for --mode local-candidate");
 }
 
 fs.mkdirSync(outputPath, { recursive: true });

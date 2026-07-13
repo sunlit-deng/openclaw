@@ -18,7 +18,7 @@ Use these gates before pushing or updating an OpenClaw PR.
 ## Validation Gate
 
 - Run focused tests first for changed modules.
-- Run `scripts/openclaw-preflight.sh --workflow <path>` (or the PowerShell wrapper) so the repository `pnpm check` lane and focused changed tests are executed and recorded against the current HEAD.
+- Run `scripts/openclaw-preflight.sh --workflow <path>` (or the PowerShell wrapper) so the selected check lane and focused changed tests are executed and recorded against the current HEAD. Issue/PR workflows use the repository `pnpm check` lane; direct `local-candidate` PRs use `pnpm check:changed` by default.
 - A passing `preflight.json` is required. Missing, skipped, stale, or failed checks do not pass based on an agent's prose summary.
 - For live external behavior, execute the real path when feasible and summarize only redacted proof.
 - If ClawSweeper asks for real behavior proof, update the PR body with copied terminal output from a live or loopback run before requesting re-review. Tests alone usually do not satisfy runtime/resource-safety proof.

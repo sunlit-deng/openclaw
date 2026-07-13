@@ -31,6 +31,7 @@ function sectionBody(body, name) {
 export function validatePrBody({
   bodyPath,
   issue,
+  requireIssueLink = true,
   repoPath,
   baseRef = "refs/remotes/origin/main",
   changedFiles: suppliedChangedFiles,
@@ -54,8 +55,20 @@ export function validatePrBody({
     }
   }
 
-  if (!new RegExp(`^(?:(?:Fixes|Closes):?\\s+#${issue}|Related:\\s+#${issue})[ \\t]*$`, "m").test(body)) {
-    errors.push(`missing visible issue link for #${issue}`);
+  const hasIssue = Number.isSafeInteger(issue) && issue > 0;
+  const issueLinkPattern = /^(?:(?:Fixes|Closes):?\s+#(\d+)|Related:\s+#(\d+))[ \t]*$/m;
+  const linkedIssue = body.match(issueLinkPattern);
+  if (requireIssueLink) {
+    if (!hasIssue) {
+      errors.push("workflow requires a positive issue number");
+    } else if (!new RegExp(`^(?:(?:Fixes|Closes):?\\s+#${issue}|Related:\\s+#${issue})[ \\t]*$`, "m").test(body)) {
+      errors.push(`missing visible issue link for #${issue}`);
+    }
+  } else if (linkedIssue && hasIssue) {
+    const linked = Number(linkedIssue[1] ?? linkedIssue[2]);
+    if (linked !== issue) {
+      errors.push(`visible issue link points to #${linked}, expected #${issue}`);
+    }
   }
   const markerMatches = body.match(/^AI-assisted: built with Codex\s*$/gm) ?? [];
   if (markerMatches.length !== 1) {

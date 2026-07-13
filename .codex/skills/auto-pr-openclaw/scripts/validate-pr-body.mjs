@@ -15,6 +15,7 @@ const workflow = JSON.parse(fs.readFileSync(workflowPath, "utf8"));
 const result = validatePrBody({
   bodyPath: workflow.prBodyPath,
   issue: workflow.issue,
+  requireIssueLink: workflow.mode !== "local-candidate",
   repoPath: workflow.repoPath,
 });
 
