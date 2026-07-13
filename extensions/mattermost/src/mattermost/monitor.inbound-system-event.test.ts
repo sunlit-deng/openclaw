@@ -104,11 +104,14 @@ vi.mock("./client.js", async () => {
     ...actual,
     createMattermostClient: mockState.createMattermostClient,
     fetchMattermostMe: mockState.fetchMattermostMe,
-    fetchMattermostThreadPosts: mockState.fetchMattermostThreadPosts,
     normalizeMattermostBaseUrl: (value: string | undefined) => value?.trim() ?? "",
     updateMattermostPost: mockState.updateMattermostPost,
   };
 });
+
+vi.mock("./thread-posts.js", () => ({
+  fetchMattermostThreadPosts: mockState.fetchMattermostThreadPosts,
+}));
 
 vi.mock("./draft-stream.js", async () => {
   const actual = await vi.importActual<typeof import("./draft-stream.js")>("./draft-stream.js");

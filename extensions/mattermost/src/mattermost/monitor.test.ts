@@ -5,7 +5,7 @@ import type { OpenClawConfig } from "../../runtime-api.js";
 import { resolveMattermostAccount } from "./accounts.js";
 import * as clientModule from "./client.js";
 import type { MattermostClient, MattermostPost } from "./client.js";
-import { backfillMattermostThreadHistoryForMonitor } from "./monitor.js";
+import { backfillMattermostThreadHistoryForMonitor } from "./monitor-thread-backfill.js";
 import {
   buildMattermostModelPickerSelectMessageSid,
   canFinalizeMattermostPreviewInPlace,

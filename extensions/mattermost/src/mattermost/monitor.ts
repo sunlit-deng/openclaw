@@ -6,7 +6,6 @@ import {
 import { isLoopbackHost } from "openclaw/plugin-sdk/gateway-runtime";
 import { resolveInboundLastRouteSessionKey } from "openclaw/plugin-sdk/routing";
 import { resolvePinnedMainDmOwnerFromAllowlist } from "openclaw/plugin-sdk/security-runtime";
-import { getSessionEntry } from "openclaw/plugin-sdk/session-store-runtime";
 import { isPrivateNetworkOptInEnabled } from "openclaw/plugin-sdk/ssrf-runtime";
 import {
   normalizeLowercaseStringOrEmpty,
@@ -20,7 +19,6 @@ import { resolveMattermostAccount, resolveMattermostReplyToMode } from "./accoun
 import {
   createMattermostClient,
   fetchMattermostMe,
-  fetchMattermostThreadPosts,
   normalizeMattermostBaseUrl,
   type MattermostPost,
   type MattermostUser,
@@ -82,6 +80,7 @@ import {
   type MattermostMediaInfo,
 } from "./monitor-resources.js";
 import { registerMattermostMonitorSlashCommands } from "./monitor-slash.js";
+import { backfillMattermostThreadHistoryForMonitorTurn } from "./monitor-thread-backfill.js";
 import {
   createMattermostConnectOnce,
   type MattermostEventPayload,
@@ -133,159 +132,6 @@ type MonitorMattermostOpts = {
   statusSink?: (patch: Partial<ChannelAccountSnapshot>) => void;
   webSocketFactory?: MattermostWebSocketFactory;
 };
-
-type MattermostThreadBackfillFetcher = (
-  client: MattermostClient,
-  rootPostId: string,
-  options: { limit: number; signal?: AbortSignal },
-) => Promise<MattermostPost[]>;
-
-// Cap the per-thread backfill marker map so it cannot outgrow the 1000-key
-// `channelHistories` window it accompanies; an evicted thread simply
-// re-backfills on its next cold inbound turn.
-const MAX_THREAD_BACKFILL_MARKERS = 1000;
-
-// Evict oldest marker keys (Map insertion order = LRU) once the map exceeds the
-// cap. Kept local to the plugin so core history internals stay untouched.
-function evictOldThreadBackfillMarkers(markers: Map<string, string>): void {
-  while (markers.size > MAX_THREAD_BACKFILL_MARKERS) {
-    const oldestKey = markers.keys().next().value;
-    if (oldestKey === undefined) {
-      break;
-    }
-    markers.delete(oldestKey);
-  }
-}
-
-export async function backfillMattermostThreadHistoryForMonitor(params: {
-  client: MattermostClient;
-  post: MattermostPost;
-  threadRootId: string | undefined;
-  historyKey: string | null;
-  baseSessionKey: string;
-  adoptBackfillSessionKey?: string;
-  historyLimit: number;
-  channelHistories: Map<string, HistoryEntry[]>;
-  threadBackfillMarkers: Map<string, string>;
-  threadBackfillInFlight: Map<string, Promise<void>>;
-  fetchThreadPosts?: MattermostThreadBackfillFetcher;
-  timeoutMs?: number;
-}): Promise<void> {
-  const {
-    client,
-    post,
-    threadRootId,
-    historyKey,
-    baseSessionKey,
-    adoptBackfillSessionKey,
-    historyLimit,
-    channelHistories,
-    threadBackfillMarkers,
-    threadBackfillInFlight,
-    fetchThreadPosts = fetchMattermostThreadPosts,
-    timeoutMs = 10_000,
-  } = params;
-  if (!threadRootId || !historyKey || historyLimit <= 0) {
-    return;
-  }
-
-  // One marker per thread history key: the value is the current session marker.
-  // This bounds marker memory and lookup cost to the number of live threads,
-  // instead of accumulating a `${historyKey}:${session}` entry for every session
-  // rotation and scanning the whole process-lifetime set on each candidate.
-  // Writes refresh LRU order and stay under the local 1000-key cap so the marker
-  // map cannot outgrow the `channelHistories` window it accompanies.
-  const setMarker = (session: string): void => {
-    threadBackfillMarkers.delete(historyKey);
-    threadBackfillMarkers.set(historyKey, session);
-    evictOldThreadBackfillMarkers(threadBackfillMarkers);
-  };
-
-  const currentMarker = threadBackfillMarkers.get(historyKey);
-  if (currentMarker === baseSessionKey) {
-    // Same-session marker already set. If a first cold turn is still fetching
-    // (zero-debounce inbound bursts overlap on the awaited network boundary),
-    // await that one bounded request so this turn reads the recovered window
-    // instead of replying without prior context. No in-flight entry means the
-    // fetch already completed, returned empty, timed out, or failed, and the
-    // completed marker intentionally suppresses a retry.
-    const inFlight = threadBackfillInFlight.get(historyKey);
-    if (inFlight) {
-      await inFlight.catch(() => {});
-    }
-    return;
-  }
-  // Adopt the earlier pending marker once the stored session id appears, so a
-  // same-session follow-up does not refetch while a later real session rotation
-  // still can.
-  if (adoptBackfillSessionKey && currentMarker === adoptBackfillSessionKey) {
-    setMarker(baseSessionKey);
-    return;
-  }
-  const hasPriorBackfillForThread = currentMarker !== undefined;
-
-  const existing = channelHistories.get(historyKey);
-  if (existing && existing.length > 0 && !hasPriorBackfillForThread) {
-    setMarker(baseSessionKey);
-    return;
-  }
-
-  // Set the completed-attempt marker before awaiting so overlapping same-session
-  // turns take the branch above and await this one operation. Publish the
-  // in-flight promise so those turns can wait for the recovered window; clear it
-  // in `finally` so the marker alone governs no-retry afterwards.
-  setMarker(baseSessionKey);
-  // Capture the marker this recovery owns so a stale older-session response
-  // that resolves last does not overwrite a newer session's recovered window.
-  // If the marker rotated while the fetch was in flight, skip the write.
-  const ownedMarker = baseSessionKey;
-  const recovery = (async () => {
-    const abort = new AbortController();
-    const timeoutId = setTimeout(() => abort.abort(), timeoutMs);
-    try {
-      // Request one extra post so the window still fills after we drop the
-      // triggering post below when it is among the newest entries.
-      const threadPosts = await fetchThreadPosts(client, threadRootId, {
-        limit: historyLimit + 1,
-        signal: abort.signal,
-      });
-      if (threadPosts.length === 0) {
-        return;
-      }
-
-      // Filter current post before trimming so the history window is fully
-      // utilized even when the triggering post is among the newest entries.
-      const others = threadPosts.filter((p) => p.id !== post.id);
-      const windowed = others.slice(-historyLimit);
-      const entries: HistoryEntry[] = [];
-      for (const p of windowed) {
-        entries.push({
-          sender: p.user_id ?? "unknown",
-          body: p.message || "[attachment]",
-          timestamp: typeof p.create_at === "number" ? p.create_at : undefined,
-          messageId: p.id ?? undefined,
-        });
-      }
-      if (entries.length > 0 && threadBackfillMarkers.get(historyKey) === ownedMarker) {
-        channelHistories.set(historyKey, entries);
-      }
-    } finally {
-      clearTimeout(timeoutId);
-    }
-  })();
-  threadBackfillInFlight.set(historyKey, recovery);
-  try {
-    await recovery;
-  } catch {
-    // Best-effort: server fetch failure or timeout should not block inbound dispatch.
-  } finally {
-    // Drop the in-flight handle once settled; the completed marker then governs
-    // no-retry, and only this owner clears its own operation.
-    if (threadBackfillInFlight.get(historyKey) === recovery) {
-      threadBackfillInFlight.delete(historyKey);
-    }
-  }
-}
 
 type MediaKind = "image" | "audio" | "video" | "document" | "unknown";
 
@@ -403,11 +249,6 @@ export async function monitorMattermostProvider(opts: MonitorMattermostOpts = {}
     allowPrivateNetwork: isPrivateNetworkOptInEnabled(account.config),
   });
 
-  // Wait for the Mattermost API to accept our bot token before proceeding.
-  // When a bot account is disabled and re-enabled, the session is invalidated
-  // and API calls return 401 until the account is fully active again.  Retrying
-  // here (with exponential backoff) keeps the monitor alive and prevents the
-  // framework's auto-restart budget from being exhausted.
   let botUser!: MattermostUser;
   await runWithReconnect(
     async () => {
@@ -442,15 +283,8 @@ export async function monitorMattermostProvider(opts: MonitorMattermostOpts = {}
   });
   const slashEnabled = getSlashCommandState(account.accountId) != null;
 
-  // ─── Interactive buttons registration ──────────────────────────────────────
-  // Derive a stable HMAC secret from the bot token so CLI and gateway share it.
   setInteractionSecret(account.accountId, botToken);
-
-  // Register HTTP callback endpoint for interactive button clicks.
-  // Mattermost POSTs to this URL when a user clicks a button action.
   const interactionPath = resolveInteractionCallbackPath(account.accountId);
-  // Recompute from config on each monitor start so reconnects or config reloads can refresh the
-  // cached callback URL for downstream callers such as `message action=send`.
   const callbackUrl = computeInteractionCallbackUrl(account.accountId, {
     gateway: cfg.gateway,
     interactions: account.config.interactions,
@@ -730,17 +564,7 @@ export async function monitorMattermostProvider(opts: MonitorMattermostOpts = {}
     cfg.messages?.groupChat?.historyLimit ?? DEFAULT_GROUP_HISTORY_LIMIT,
   );
   const channelHistories = new Map<string, HistoryEntry[]>();
-  // Thread backfill tracking: one marker per thread history key, valued by the
-  // current stored agent session id (which rotates on /new or session reset).
-  // Keeping a single current marker per thread bounds memory to live threads and
-  // still lets a session reset earn its own first-sighting backfill; marking
-  // non-empty first sightings prevents normal post-turn empty windows from
-  // re-triggering an unnecessary server fetch (kernel.ts:577 clears pending group
-  // history after a successful dispatch).
   const threadBackfillMarkers = new Map<string, string>();
-  // In-flight cold-recovery fetches keyed by thread history key, so overlapping
-  // same-session turns await one bounded request instead of replying without the
-  // recovered window. Cleared when the owning fetch settles.
   const threadBackfillInFlight = new Map<string, Promise<void>>();
   const defaultGroupPolicy = resolveDefaultGroupPolicy(cfg);
   const dmPolicy = account.config.dmPolicy ?? "pairing";
@@ -1429,50 +1253,21 @@ export async function monitorMattermostProvider(opts: MonitorMattermostOpts = {}
           );
           return;
         }
-        // Mention-only turns need non-empty agent text; the shared reply runner rejects empty
-        // bodies before model invocation. The guard above ensures this fallback is a bot mention.
         const bodyForAgent = bodyText || rawText.trim();
 
-        // ── Thread history backfill: seed in-memory history from server ──
-        // After all admission gates pass (onchar / mention / empty-body drop),
-        // backfill thread history from the Mattermost server when the local
-        // in-memory window is genuinely cold for the current agent session.
-        //
-        // Read the stored agent session id here (not before the gates) so posts
-        // dropped before admission never touch the session store. The backfill
-        // marker binds historyKey to this session id: historyKey alone is stable
-        // across /new for the same thread, but the stored session id rotates on
-        // /new, so binding to it gives reset its own first-sighting backfill. If
-        // the first cold turn has not recorded a session id yet, use a pending
-        // marker and adopt it once the stored id appears; this prevents a
-        // same-session follow-up fetch without blocking a later session rotation.
-        //
-        // Active-thread guard: if a thread is first seen with a populated
-        // window, mark that session so the kernel clearing pending history
-        // after a successful turn does not make same-session follow-ups fetch.
-        //
-        // Best-effort — never blocks inbound dispatch.
-        const storePath = core.channel.session.resolveStorePath(cfg.session?.store, {
-          agentId: route.agentId,
-        });
-        const currentAgentSessionId = normalizeOptionalString(
-          getSessionEntry({ storePath, sessionKey })?.sessionId,
-        );
-        const backfillSessionMarker = currentAgentSessionId
-          ? `session:${currentAgentSessionId}`
-          : `pending:${sessionKey}`;
-        const adoptBackfillSessionKey = currentAgentSessionId ? `pending:${sessionKey}` : undefined;
-        await backfillMattermostThreadHistoryForMonitor({
+        await backfillMattermostThreadHistoryForMonitorTurn({
           client,
           post,
           threadRootId,
           historyKey,
-          baseSessionKey: backfillSessionMarker,
-          adoptBackfillSessionKey,
           historyLimit,
           channelHistories,
           threadBackfillMarkers,
           threadBackfillInFlight,
+          storePath: core.channel.session.resolveStorePath(cfg.session?.store, {
+            agentId: route.agentId,
+          }),
+          sessionKey,
         });
 
         core.channel.activity.record({

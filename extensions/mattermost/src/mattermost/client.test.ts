@@ -16,11 +16,11 @@ import {
   createMattermostClient,
   createMattermostDirectChannelWithRetry,
   createMattermostPost,
-  fetchMattermostThreadPosts,
   normalizeMattermostBaseUrl,
   readMattermostError,
   updateMattermostPost,
 } from "./client.js";
+import { fetchMattermostThreadPosts } from "./thread-posts.js";
 
 // ── Helper: mock fetch that captures requests ────────────────────────
 
