@@ -25,6 +25,7 @@ import {
 } from "openclaw/plugin-sdk/realtime-voice";
 import { truncateUtf16Safe } from "openclaw/plugin-sdk/text-utility-runtime";
 import { type RawData, WebSocket, WebSocketServer } from "ws";
+import { decodeVoiceCallMediaBase64 } from "./media-base64.js";
 
 /**
  * Configuration for the media stream handler.
@@ -52,13 +53,10 @@ export interface MediaStreamConfig {
   onTranscript?: (callId: string, transcript: string) => void;
   /** Callback for partial transcripts (streaming UI) */
   onPartialTranscript?: (callId: string, partial: string) => void;
-  /** Callback when stream connects */
   onConnect?: (callId: string, streamSid: string) => void;
-  /** Callback when realtime transcription is ready for the stream */
   onTranscriptionReady?: (callId: string, streamSid: string) => void;
   /** Callback when speech starts (barge-in) */
   onSpeechStart?: (callId: string) => void;
-  /** Callback when stream disconnects */
   onDisconnect?: (callId: string, streamSid: string) => void;
   /** Callback for common Talk events emitted by the telephony STT/TTS adapter. */
   onTalkEvent?: (callId: string, streamSid: string, event: TalkEvent) => void;
@@ -251,8 +249,10 @@ export class MediaStreamHandler {
 
           case "media":
             if (session && message.media?.payload) {
-              // Forward audio to STT
-              const audioBuffer = Buffer.from(message.media.payload, "base64");
+              const audioBuffer = decodeVoiceCallMediaBase64(
+                message.media.payload,
+                "Twilio media stream",
+              );
               const turnId = this.ensureActiveTurn(session);
               this.emitTalkEvent(session, {
                 type: "input.audio.delta",

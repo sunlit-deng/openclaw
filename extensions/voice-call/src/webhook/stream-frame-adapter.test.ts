@@ -58,6 +58,19 @@ describe("TwilioStreamFrameAdapter", () => {
     ).toEqual({ kind: "media", payloadBase64: "AAA=" });
   });
 
+  it("canonicalizes accepted media payloads before realtime decoding", () => {
+    const adapter = new TwilioStreamFrameAdapter();
+
+    expect(
+      adapter.parseInbound(
+        JSON.stringify({
+          event: "media",
+          media: { payload: " AA A \n" },
+        }),
+      ),
+    ).toEqual({ kind: "media", payloadBase64: "AAA=" });
+  });
+
   it("serializes outbound frames with the streamSid captured at start", () => {
     const adapter = new TwilioStreamFrameAdapter();
     adapter.parseInbound(
