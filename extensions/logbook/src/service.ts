@@ -2,6 +2,7 @@
 import { createHash } from "node:crypto";
 import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import path from "node:path";
+import { canonicalizeBase64 } from "openclaw/plugin-sdk/media-runtime";
 import type {
   OpenClawConfig,
   OpenClawPluginApi,
@@ -41,7 +42,6 @@ const JPEG_QUALITY = 0.6;
 // Only Codex currently implements the structured image-extraction contract.
 // Borrowed defaults must not select a provider that will fail every batch.
 const STRUCTURED_MEDIA_PROVIDER = "codex";
-
 type SnapshotPayload = {
   format?: string;
   base64?: string;
@@ -255,9 +255,9 @@ export class LogbookService {
       if (raw?.error) {
         throw new Error(raw.error);
       }
-      const base64 = raw?.base64;
+      const base64 = raw?.base64 && canonicalizeBase64(raw.base64);
       if (!base64) {
-        throw new Error(`${node.command} returned no image payload`);
+        throw new Error(`${node.command} returned ${raw?.base64 ? "invalid" : "no"} image payload`);
       }
       const buffer = Buffer.from(base64, "base64");
       const capturedAtMs = Date.now();

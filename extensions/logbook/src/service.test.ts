@@ -99,6 +99,24 @@ describe("LogbookService capture node selection", () => {
     expect(invoked.map((call) => call.nodeId)).toEqual(["a-broken", "b-working"]);
     expect(service.status().lastCaptureError).toBeUndefined();
   });
+
+  it("rejects malformed snapshot base64 before storing a frame", async () => {
+    const { service, tick, dataDir } = makeService({
+      nodes: [{ nodeId: "capture-node", commands: ["logbook.snapshot"] }],
+      invoke: async () => ({ payload: { format: "jpeg", base64: "not-base64!" } }),
+    });
+    cleanups.push(() => {
+      service.stop();
+      rmSync(dataDir, { recursive: true, force: true });
+    });
+
+    await tick();
+
+    expect(service.status()).toMatchObject({
+      pendingFrames: 0,
+      lastCaptureError: "logbook.snapshot returned invalid image payload",
+    });
+  });
 });
 
 describe("LogbookService vision model selection", () => {
