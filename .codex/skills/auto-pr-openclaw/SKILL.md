@@ -10,6 +10,7 @@ description: Prepare and maintain contributor pull requests for openclaw/opencla
 Use this skill for `openclaw/openclaw` contributor work. Keep the process conservative and evidence-first.
 
 - Treat GitHub writes as gated: do not push, create/update a PR, edit the PR body, post comments, or request bot review until the pre-push human gate has been shown and the user confirms.
+- For existing PR maintenance that only resolves merge conflicts or rebases onto the latest upstream without changing the PR body, use the rebase-only fast path after human confirmation. This path may force-push the existing fork head through `scripts/publish-openclaw-rebase-only.mjs`; it must not update the PR body, post comments, or request bot review.
 - Use high-level `gh` commands for GitHub reads, repository download/fork setup, CI, comments, and review operations, including `gh repo clone`, `gh repo fork`, `gh issue`, `gh pr`, `gh run`, and `gh search`. PR creation and PR body updates are the exception: use `gh api` with the GitHub REST pulls API because both operations carry the complete body/proof and must avoid the GraphQL editing path. Do not replace failed `gh` download/fork operations with anonymous HTTPS, stale local refs, or a different GitHub tool unless the user explicitly authorizes it.
 - Authorship email is a hard requirement: all commits authored or committed by `sunlit-deng` must use `sunlit-deng <yang.jiajun1@xydigit.com>`. Do not create, amend, cherry-pick, rebase, or push a `sunlit-deng` commit with any other author or committer email unless the user explicitly overrides this requirement for that specific operation.
 - Fork PR maintainer edit access is a release gate. Do not pass `--no-maintainer-edit`. This machine's `gh` may not support `--maintainer-edit` because maintainer edits are enabled by default, so omit both flags unless intentionally disabling edits. For existing PRs, verify `maintainerCanModify: true` with `gh pr view <number> --repo openclaw/openclaw --json maintainerCanModify,headRepositoryOwner,headRefName,url`. For new PRs, verify the same immediately after creation, or manually confirm the GitHub web checkbox `Allow edits and access to secrets by maintainers` remains checked when the API cannot prove it.
@@ -79,6 +80,8 @@ When the user says remote candidate issues, remote candidates, or asks to screen
    - Preflight must execute the repository `check` lane (typecheck, lint, formatting, and policy guards), focused changed tests, Git and identity checks, and PR body/proof validation. A prose claim that checks ran is not a substitute for a passing `preflight.json` tied to the current HEAD.
    - Local AI review commands are optional diagnostics only. `codex review` and ClawSweeper local-review are not release gates because their availability is environment-dependent.
 
+   **Rebase-only fast path:** If an existing PR only needs a conflict-resolution or upstream rebase refresh and the PR body will not be changed, the full preflight can be deferred. Before the human gate, verify the lightweight release checks instead: clean worktree, branch contains the latest fetched `origin/main`, committed diff exists, `git diff --check` passes, `sunlit-deng` commit identity is correct, and `maintainerCanModify` is true. After confirmation, publish with `scripts/publish-openclaw-rebase-only.mjs --workflow <outputs>/workflow.json --approved-head <sha> --push-remote <remote>`. Do not use this fast path for code edits that respond to review findings, proof/body changes, new PR creation, or any case that needs ClawSweeper re-review.
+
 4. **Pre-push human gate**
    - Stop before any GitHub write.
    - Show the user: diff summary, commit author/committer, tests/checks from `preflight.json`, PR body draft path or summary, live proof summary, and any unresolved risks.
@@ -87,6 +90,7 @@ When the user says remote candidate issues, remote candidates, or asks to screen
    - When the PR already has a ClawSweeper review, show ClawSweeper's current verdict and any unresolved blocking findings before asking for push or re-review confirmation.
    - Continue with push/PR/comment only after explicit user confirmation.
    - After confirmation, pass the approved HEAD and PR body SHA-256 to `scripts/publish-openclaw-pr.mjs`. It pushes through the named SSH remote created for the `gh` identity. Both new PR creation and existing PR body updates use `gh api` with the REST pulls API. It then re-reads with `gh pr view` and verifies the exact body and maintainer edit access.
+   - For approved rebase-only maintenance on an existing PR, pass the approved HEAD to `scripts/publish-openclaw-rebase-only.mjs` instead. It uses `--force-with-lease`, re-checks the PR head owner/ref and maintainer edit access, pushes only the branch, and verifies the remote PR head SHA. It intentionally does not read or write the PR body.
    - After creating or updating a fork PR, re-read `maintainerCanModify`. If it is `false`, stop before requesting review and tell the user the web checkbox must be restored.
 
 5. **PR maintenance**
@@ -126,3 +130,15 @@ Run executable preflight checks:
 
 Preflight writes `preflight.json` outside the target repository. It never pushes,
 comments, or edits a PR.
+
+Publish an existing PR after rebase-only maintenance:
+
+```bash
+./.codex/skills/auto-pr-openclaw/scripts/publish-openclaw-rebase-only.sh \
+  --workflow workspace/openclaw/outputs/pr-93865/workflow.json \
+  --approved-head <sha> \
+  --push-remote sunlit
+```
+
+The rebase-only publisher force-pushes the recorded existing PR head with
+`--force-with-lease` and never updates the PR body, comments, or review state.

@@ -23,6 +23,27 @@ Use these gates before pushing or updating an OpenClaw PR.
 - For live external behavior, execute the real path when feasible and summarize only redacted proof.
 - If ClawSweeper asks for real behavior proof, update the PR body with copied terminal output from a live or loopback run before requesting re-review. Tests alone usually do not satisfy runtime/resource-safety proof.
 
+### Rebase-Only Fast Path
+
+Use this only for existing PR maintenance where the branch was rebased or merge
+conflicts were resolved and no PR body, proof, comment, or review request will
+be changed.
+
+Required lightweight checks before the human gate:
+
+- worktree is clean
+- branch contains the latest fetched `origin/main`
+- branch still has a committed diff beyond `origin/main`
+- `git diff --check refs/remotes/origin/main...HEAD` passes
+- every `sunlit-deng` author/committer email in the PR commits is `yang.jiajun1@xydigit.com`
+- existing PR head owner/ref matches the authenticated GitHub push identity
+- `maintainerCanModify` is `true`
+
+After human approval, publish with `scripts/publish-openclaw-rebase-only.mjs`.
+The approval is tied to the current HEAD SHA. This fast path must use
+`--force-with-lease`, must verify the remote PR head SHA after pushing, and must
+not update the PR body or post comments.
+
 ## Maintainer Edit and Secrets Gate
 
 - For existing fork PRs, run `gh pr view <number> --repo openclaw/openclaw --json maintainerCanModify,headRepositoryOwner,headRefName,url` before any push, PR-body update, comment, or re-review request.
@@ -64,6 +85,7 @@ Before any GitHub write, show the user:
 - PR body draft summary or path
 - live proof summary
 - preflight receipt path, HEAD SHA, and result
+- for rebase-only fast path, lightweight check results instead of a preflight receipt
 - maintainer edit status for existing PRs, or the post-create maintainer edit check plan for new PRs
 - unresolved risks or blocked checks
 
