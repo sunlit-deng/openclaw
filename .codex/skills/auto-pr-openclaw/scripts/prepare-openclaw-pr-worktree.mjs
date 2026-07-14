@@ -81,12 +81,11 @@ let dependencyStatus = "installed";
 if (args.skipInstall) {
   dependencyStatus = "skipped";
 } else {
-  execute("pnpm", ["--dir", worktreePath, "install", "--frozen-lockfile", "--prefer-offline", "--store-dir", storePath]);
-  const actualStore = path.resolve(execute("pnpm", ["--dir", worktreePath, "store", "path", "--store-dir", storePath]));
-  const expectedStore = path.resolve(storePath);
-  if (actualStore !== expectedStore && !actualStore.startsWith(`${expectedStore}${path.sep}`)) {
-    throw new Error(`pnpm store mismatch: expected ${expectedStore}, got ${actualStore}`);
-  }
+  execute(path.join(scriptDir, "ensure-openclaw-deps.sh"), [
+    "--repo-path", worktreePath,
+    "--root", root,
+    "--store-path", storePath,
+  ]);
 }
 
 const baseSha = execute("git", ["rev-parse", "refs/remotes/origin/main^{commit}"], { cwd: worktreePath });

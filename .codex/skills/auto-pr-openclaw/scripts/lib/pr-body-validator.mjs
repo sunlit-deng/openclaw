@@ -97,7 +97,7 @@ export function validatePrBody({
     const committedProof = changedFiles.some((file) =>
       /(^|\/)(?:proof|repro)(?:[-_.][^/]*)?\.(?:[cm]?[jt]s|py|sh|ps1)$/i.test(file)
     );
-    const embeddedProof = /<details>[\s\S]*?<summary>[^<]*(?:proof|repro)[^<]*<\/summary>[\s\S]*?```(?:typescript|javascript|ts|js|python|bash|sh|powershell)\s*\n[\s\S]+?```[\s\S]*?<\/details>/i.test(evidence);
+    const embeddedProof = /<details>[\s\S]*?<summary>[^<]*(?:proof|repro)[^<]*<\/summary>[\s\S]*?```(?:typescript|javascript|ts|js|python|bash|sh)\s*\n[\s\S]+?```[\s\S]*?<\/details>/i.test(evidence);
     if (!committedProof && !embeddedProof) {
       errors.push("non-docs changes require a committed proof/repro script or full script source in an Evidence <details> block");
     }

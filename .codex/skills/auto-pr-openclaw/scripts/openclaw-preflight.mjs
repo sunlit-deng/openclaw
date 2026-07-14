@@ -1,30 +1,55 @@
 #!/usr/bin/env node
 
+import crypto from "node:crypto";
 import fs from "node:fs";
 import path from "node:path";
 import { spawnSync } from "node:child_process";
 import { validatePrBody } from "./lib/pr-body-validator.mjs";
 
 function parseArgs(argv) {
-  const result = { workflow: "", checkScript: "", testScript: "test:changed" };
+  const result = {
+    workflow: "",
+    profile: "changed",
+    checkScript: "",
+    testScript: "test:changed",
+    typeScript: "",
+  };
   for (let index = 0; index < argv.length; index += 1) {
     const arg = argv[index];
     if (arg === "--workflow") result.workflow = argv[++index] ?? "";
+    else if (arg === "--profile") result.profile = argv[++index] ?? "";
     else if (arg === "--check-script") result.checkScript = argv[++index] ?? "";
     else if (arg === "--test-script") result.testScript = argv[++index] ?? "";
+    else if (arg === "--type-script") result.typeScript = argv[++index] ?? "";
     else if (arg === "-h" || arg === "--help") result.help = true;
     else throw new Error(`Unknown argument: ${arg}`);
+  }
+  if (!["changed", "full"].includes(result.profile)) {
+    throw new Error("--profile must be changed or full");
+  }
+  if (result.profile === "full") {
+    if (result.checkScript && result.checkScript !== "check") {
+      throw new Error("--profile full cannot be combined with a non-check --check-script");
+    }
+    result.checkScript = "check";
+  } else {
+    result.checkScript ||= "check:changed";
+    if (result.checkScript === "check") {
+      throw new Error("pnpm check is a full-repository lane; use --profile full explicitly");
+    }
   }
   return result;
 }
 
 function usage() {
   return [
-    "Usage: openclaw-preflight.mjs --workflow PATH [--check-script NAME] [--test-script NAME]",
+    "Usage: openclaw-preflight.mjs --workflow PATH [--profile changed|full] [--check-script NAME] [--test-script NAME] [--type-script NAME]",
     "",
     "Runs deterministic OpenClaw checks and writes preflight.json next to workflow.json.",
-    "The default local-candidate check lane is pnpm check:changed; issue/PR workflows use pnpm check.",
+    "The default check lane is pnpm check:changed for all workflows; preflight does not run pnpm check by default.",
+    "Use --profile full to explicitly opt into the full-repository pnpm check lane.",
     "The default focused test lane is pnpm test:changed.",
+    "Use --type-script check:test-types only when broader test type coverage is intentionally needed.",
   ].join("\n");
 }
 
@@ -70,6 +95,59 @@ function staticCheck(name, passed, details) {
   };
 }
 
+function advisoryCheck(name, details) {
+  return {
+    name,
+    status: "advisory",
+    command: null,
+    exitCode: 0,
+    details,
+  };
+}
+
+function skippedCheck(name, details) {
+  return {
+    name,
+    status: "skipped",
+    command: null,
+    exitCode: null,
+    details,
+  };
+}
+
+function lines(value) {
+  return value.split("\n").map((line) => line.trim()).filter(Boolean);
+}
+
+function sha256(value) {
+  return crypto.createHash("sha256").update(value).digest("hex");
+}
+
+function fileSha256(file) {
+  return fs.existsSync(file) ? sha256(fs.readFileSync(file)) : null;
+}
+
+function dependencyFingerprint(repo) {
+  const hash = crypto.createHash("sha256");
+  for (const name of ["package.json", "pnpm-lock.yaml"]) {
+    const file = path.join(repo, name);
+    hash.update(name);
+    hash.update("\0");
+    if (fs.existsSync(file)) hash.update(fs.readFileSync(file));
+    hash.update("\0");
+  }
+  return hash.digest("hex");
+}
+
+function readJsonIfPresent(file) {
+  if (!fs.existsSync(file)) return null;
+  try {
+    return JSON.parse(fs.readFileSync(file, "utf8"));
+  } catch {
+    return null;
+  }
+}
+
 function commandCheck(name, result) {
   return {
     name,
@@ -97,12 +175,17 @@ if (!args.workflow) {
 
 const workflowPath = path.resolve(args.workflow);
 const workflow = JSON.parse(fs.readFileSync(workflowPath, "utf8"));
-const checkScript = args.checkScript || (workflow.mode === "local-candidate" ? "check:changed" : "check");
+const checkScript = args.checkScript;
 const repo = path.resolve(workflow.repoPath);
 const root = path.resolve(workflow.root);
 const outputPath = path.resolve(workflow.outputPath);
 const preflightPath = path.resolve(workflow.preflightPath);
+const previousReceipt = readJsonIfPresent(preflightPath);
 const checks = [];
+let heavyChecks = [];
+let heavyFingerprint = "";
+let cacheHit = false;
+let freshness = null;
 
 const expectedWorktreeRoot = `${path.join(root, "worktrees")}${path.sep}`;
 const expectedOutputRoot = `${path.join(root, "outputs")}${path.sep}`;
@@ -157,38 +240,53 @@ checks.push(staticCheck(
   ),
   resolvedModulesStore || "node_modules/.modules.yaml has no storeDir",
 ));
+const dependencyMarker = path.join(repo, "node_modules", ".auto-pr-deps-fingerprint");
+if (fs.existsSync(dependencyMarker)) {
+  const installedFingerprint = fs.readFileSync(dependencyMarker, "utf8").trim();
+  const expectedFingerprint = dependencyFingerprint(repo);
+  checks.push(staticCheck(
+    "dependency fingerprint",
+    installedFingerprint === expectedFingerprint,
+    installedFingerprint === expectedFingerprint
+      ? expectedFingerprint
+      : `stale node_modules fingerprint: installed=${installedFingerprint} expected=${expectedFingerprint}`,
+  ));
+} else {
+  checks.push(advisoryCheck(
+    "dependency fingerprint",
+    "legacy node_modules has no dependency fingerprint; run ensure-openclaw-deps.sh once to enable lockfile-aware reuse",
+  ));
+}
 
-checks.push(commandCheck("fetch latest origin/main", run("git", ["fetch", "origin", "main"], repo)));
+const fetchResult = run("git", ["fetch", "origin", "main"], repo);
+checks.push(commandCheck("fetch latest origin/main snapshot", fetchResult));
 
 let headSha = "";
-let baseSha = "";
+let validationBaseSha = workflow.validationBaseSha || workflow.baseSha || "";
+let latestMainSha = "";
 let branch = "";
 let status = "";
+let changedFiles = [];
 try {
   headSha = git(repo, "rev-parse", "HEAD");
-  baseSha = git(repo, "rev-parse", "refs/remotes/origin/main^{commit}");
+  if (!validationBaseSha) throw new Error("workflow has no pinned validation base SHA");
+  validationBaseSha = git(repo, "rev-parse", `${validationBaseSha}^{commit}`);
+  if (fetchResult.exitCode !== 0) throw new Error("latest origin/main snapshot is unavailable");
+  latestMainSha = git(repo, "rev-parse", "refs/remotes/origin/main^{commit}");
   branch = git(repo, "branch", "--show-current");
   status = git(repo, "status", "--porcelain");
   checks.push(staticCheck("workflow branch matches", branch === workflow.branch, `${branch} vs ${workflow.branch}`));
   checks.push(staticCheck("working tree clean", status.length === 0, status || "clean"));
 
-  const mergeBase = git(repo, "merge-base", headSha, baseSha);
-  const containsLatestMain = mergeBase === baseSha;
-  checks.push(staticCheck(
-    "branch contains latest origin/main",
-    workflow.mode === "local-candidate" || containsLatestMain,
-    containsLatestMain
-      ? `merge-base=${mergeBase} origin/main=${baseSha}`
-      : `local-candidate freshness advisory: merge-base=${mergeBase} origin/main=${baseSha}`,
-  ));
-  const changedFiles = git(repo, "diff", "--name-only", `${baseSha}...${headSha}`);
+  const validationMergeBase = git(repo, "merge-base", headSha, validationBaseSha);
+  changedFiles = lines(git(repo, "diff", "--name-only", `${validationBaseSha}...${headSha}`));
   checks.push(staticCheck(
     "committed diff exists",
     changedFiles.length > 0,
-    changedFiles || "no committed changes beyond origin/main",
+    changedFiles.join("\n") || "no committed changes beyond the pinned validation base",
   ));
 
-  const commits = git(repo, "log", "--format=%H%x09%an%x09%ae%x09%cn%x09%ce", `${mergeBase}..HEAD`);
+  const commits = git(repo, "log", "--format=%H%x09%an%x09%ae%x09%cn%x09%ce", `${validationMergeBase}..HEAD`);
   const identityProblems = commits
     .split("\n")
     .filter(Boolean)
@@ -208,11 +306,74 @@ try {
     identityProblems.length === 0,
     identityProblems.join("; ") || "ok",
   ));
+
+  const latestMergeBase = git(repo, "merge-base", headSha, latestMainSha);
+  const containsLatestMain = latestMergeBase === latestMainSha;
+  const baseAncestorResult = run("git", ["merge-base", "--is-ancestor", validationBaseSha, latestMainSha], repo);
+  const upstreamDiffBase = baseAncestorResult.exitCode === 0
+    ? validationBaseSha
+    : git(repo, "merge-base", validationBaseSha, latestMainSha);
+  const upstreamChangedFiles = validationBaseSha === latestMainSha
+    ? []
+    : lines(git(repo, "diff", "--name-only", `${upstreamDiffBase}..${latestMainSha}`));
+  const changedFileSet = new Set(changedFiles);
+  const overlappingFiles = upstreamChangedFiles.filter((file) => changedFileSet.has(file));
+  const behindBy = validationBaseSha === latestMainSha
+    ? 0
+    : Number(git(repo, "rev-list", "--count", `${upstreamDiffBase}..${latestMainSha}`));
+
+  const mergeTree = run("git", ["merge-tree", "--write-tree", headSha, latestMainSha], repo);
+  const mergeConflict = mergeTree.exitCode === 1;
+  checks.push(staticCheck(
+    "merge compatibility with observed origin/main",
+    mergeTree.exitCode === 0,
+    mergeConflict
+      ? `conflict against observed origin/main ${latestMainSha}: ${mergeTree.output || "merge-tree reported a conflict"}`
+      : mergeTree.exitCode === 0
+        ? `clean against observed origin/main ${latestMainSha}`
+        : `unable to evaluate merge compatibility: ${mergeTree.output || mergeTree.error}`,
+  ));
+
+  if (validationBaseSha === latestMainSha) {
+    checks.push(staticCheck("upstream drift since validation base", true, "origin/main has not advanced"));
+  } else {
+    checks.push(advisoryCheck(
+      "upstream drift since validation base",
+      [
+        `validationBase=${validationBaseSha}`,
+        `latestObservedMain=${latestMainSha}`,
+        `behindBy=${behindBy}`,
+        `overlap=${overlappingFiles.length ? overlappingFiles.join(",") : "none"}`,
+        "main advancement alone does not invalidate validation or require a rebase",
+      ].join(" "),
+    ));
+  }
+  if (!containsLatestMain) {
+    checks.push(advisoryCheck(
+      "branch freshness",
+      `branch does not contain observed origin/main ${latestMainSha}; rebase only for conflicts, risky overlap, or an explicit up-to-date requirement`,
+    ));
+  } else {
+    checks.push(staticCheck("branch freshness", true, `branch contains observed origin/main ${latestMainSha}`));
+  }
+  freshness = {
+    validationBaseSha,
+    latestObservedMainSha: latestMainSha,
+    observedAt: new Date().toISOString(),
+    behindBy,
+    containsLatestMain,
+    validationBaseIsAncestorOfLatest: baseAncestorResult.exitCode === 0,
+    upstreamChangedFileCount: upstreamChangedFiles.length,
+    overlappingFiles,
+    mergeConflict,
+  };
 } catch (error) {
   checks.push(staticCheck("git repository state", false, error.message));
 }
 
-checks.push(commandCheck("git diff check", run("git", ["diff", "--check", "refs/remotes/origin/main...HEAD"], repo)));
+if (validationBaseSha) {
+  checks.push(commandCheck("git diff check", run("git", ["diff", "--check", `${validationBaseSha}...HEAD`], repo)));
+}
 
 try {
   const bodyResult = validatePrBody({
@@ -220,6 +381,8 @@ try {
     issue: workflow.issue,
     requireIssueLink: workflow.mode !== "local-candidate",
     repoPath: repo,
+    baseRef: validationBaseSha || workflow.baseRef,
+    changedFiles,
   });
   workflow.prBodySha256 = bodyResult.sha256;
   checks.push(staticCheck(
@@ -249,39 +412,128 @@ if (packageJson) {
     Boolean(args.testScript && typeof packageJson.scripts?.[args.testScript] === "string"),
     args.testScript || "no focused test script selected",
   ));
+  checks.push(staticCheck(
+    "optional test type script",
+    !args.typeScript || typeof packageJson.scripts?.[args.typeScript] === "string",
+    args.typeScript || "not selected",
+  ));
 
-  if (checkScript && typeof packageJson.scripts?.[checkScript] === "string") {
-    const checkOptions =
-      checkScript === "check:changed"
-        ? {
-            env: {
-              ...process.env,
-              OPENCLAW_CHECK_CHANGED_REMOTE_CHILD: "1",
-              OPENCLAW_CHANGED_LANES_RAW_SYNC: "1",
-              PNPM_CONFIG_VERIFY_DEPS_BEFORE_RUN: "false",
-            },
-          }
-        : {};
-    checks.push(commandCheck("typecheck lint and policy checks", run("pnpm", [checkScript], repo, checkOptions)));
-  }
-  if (args.testScript && typeof packageJson.scripts?.[args.testScript] === "string") {
-    checks.push(commandCheck("focused tests", run("pnpm", [args.testScript], repo)));
+  const prerequisitesPassed = !checks.some((check) => check.status === "failed");
+  if (prerequisitesPassed) {
+    const pnpmVersion = run("pnpm", ["--version"], repo);
+    if (pnpmVersion.exitCode !== 0) {
+      checks.push(commandCheck("pnpm version", pnpmVersion));
+    } else {
+      const relevantEnvironment = Object.fromEntries(
+        Object.entries(process.env)
+          .filter(([key]) => key.startsWith("OPENCLAW_") || ["CI", "GITHUB_ACTIONS"].includes(key))
+          .toSorted(([left], [right]) => left.localeCompare(right)),
+      );
+      heavyFingerprint = sha256(JSON.stringify({
+        schemaVersion: 1,
+        headSha,
+        validationBaseSha,
+        profile: args.profile,
+        checkScript,
+        testScript: args.testScript,
+        typeScript: args.typeScript,
+        packageJsonSha256: fileSha256(path.join(repo, "package.json")),
+        lockfileSha256: fileSha256(path.join(repo, "pnpm-lock.yaml")),
+        node: process.version,
+        platform: process.platform,
+        arch: process.arch,
+        pnpm: pnpmVersion.stdout.trim(),
+        preflightScriptSha256: fileSha256(path.resolve(process.argv[1])),
+        environment: relevantEnvironment,
+      }));
+
+      cacheHit = previousReceipt?.heavyFingerprint === heavyFingerprint &&
+        Array.isArray(previousReceipt.heavyChecks) &&
+        previousReceipt.heavyChecks.length > 0 &&
+        previousReceipt.heavyChecks.every((check) => check.status === "passed");
+
+      if (cacheHit) {
+        heavyChecks = previousReceipt.heavyChecks.map((check) => ({
+          ...check,
+          durationMs: 0,
+          cachedDurationMs: check.cachedDurationMs ?? check.durationMs ?? null,
+          cached: true,
+          reusedAt: new Date().toISOString(),
+        }));
+        checks.push(staticCheck(
+          "heavy check cache",
+          true,
+          `reused successful checks for fingerprint ${heavyFingerprint}`,
+        ));
+      } else {
+        const checkOptions = checkScript === "check:changed"
+          ? {
+              env: {
+                ...process.env,
+                OPENCLAW_CHECK_CHANGED_REMOTE_CHILD: "1",
+                OPENCLAW_CHANGED_LANES_RAW_SYNC: "1",
+                PNPM_CONFIG_VERIFY_DEPS_BEFORE_RUN: "false",
+              },
+            }
+          : {};
+        const checkArgs = checkScript === "check:changed"
+          ? [checkScript, "--base", validationBaseSha, "--timed"]
+          : [checkScript];
+        const changedCheck = commandCheck(
+          args.profile === "full" ? "full-repository lint type and policy checks" : "changed-surface lint type and policy checks",
+          run("pnpm", checkArgs, repo, checkOptions),
+        );
+        heavyChecks.push(changedCheck);
+        if (changedCheck.status === "passed" && args.testScript && typeof packageJson.scripts?.[args.testScript] === "string") {
+          const testResult = args.testScript === "test:changed"
+            ? run(process.execPath, ["scripts/test-projects.mjs", "--changed", validationBaseSha], repo)
+            : run("pnpm", [args.testScript], repo);
+          heavyChecks.push(commandCheck("focused tests", testResult));
+        } else if (args.testScript) {
+          heavyChecks.push(skippedCheck("focused tests", "skipped because the selected check lane failed"));
+        }
+        const earlierHeavyFailure = heavyChecks.some((check) => check.status === "failed");
+        if (!earlierHeavyFailure && args.typeScript && typeof packageJson.scripts?.[args.typeScript] === "string") {
+          heavyChecks.push(commandCheck("test type checks", run("pnpm", [args.typeScript], repo)));
+        } else if (earlierHeavyFailure && args.typeScript) {
+          heavyChecks.push(skippedCheck("test type checks", "skipped because an earlier heavy lane failed"));
+        }
+        checks.push(staticCheck("heavy check cache", true, `cache miss for fingerprint ${heavyFingerprint}`));
+      }
+      checks.push(...heavyChecks);
+    }
+  } else {
+    checks.push(skippedCheck(
+      "heavy checks",
+      "skipped because a dependency, repository, freshness, manifest, or PR-body prerequisite failed",
+    ));
   }
 }
 
-const failed = checks.filter((check) => check.status !== "passed");
-workflow.baseSha = baseSha || workflow.baseSha;
+const failed = checks.filter((check) => check.status === "failed");
+workflow.schemaVersion = Math.max(Number(workflow.schemaVersion) || 1, 2);
+workflow.validationBaseSha = validationBaseSha || workflow.validationBaseSha || workflow.baseSha;
+workflow.validationBaseRef ||= workflow.baseRef || "origin/main";
+workflow.baseSha ||= workflow.validationBaseSha;
+workflow.latestObservedMainSha = latestMainSha || workflow.latestObservedMainSha || null;
+workflow.latestObservedAt = freshness?.observedAt || workflow.latestObservedAt || null;
 workflow.headSha = headSha || workflow.headSha;
 workflow.updatedAt = new Date().toISOString();
 fs.writeFileSync(workflowPath, `${JSON.stringify(workflow, null, 2)}\n`, "utf8");
 const receipt = {
-  schemaVersion: 1,
+  schemaVersion: 2,
   status: failed.length === 0 ? "passed" : "failed",
   workflowPath,
   repoPath: repo,
-  baseSha,
+  validationBaseSha,
+  latestObservedMainSha: latestMainSha,
   headSha,
   branch,
+  profile: args.profile,
+  freshness,
+  heavyFingerprint,
+  heavyCacheHit: cacheHit,
+  heavyChecks,
   generatedAt: new Date().toISOString(),
   checks,
 };
@@ -290,7 +542,14 @@ fs.mkdirSync(path.dirname(preflightPath), { recursive: true });
 fs.writeFileSync(preflightPath, `${JSON.stringify(receipt, null, 2)}\n`, "utf8");
 
 for (const check of checks) {
-  console.log(`${check.status === "passed" ? "PASS" : "FAIL"}  ${check.name}`);
+  const label = check.status === "passed"
+    ? "PASS"
+    : check.status === "advisory"
+      ? "WARN"
+      : check.status === "skipped"
+        ? "SKIP"
+        : "FAIL";
+  console.log(`${label}  ${check.name}`);
 }
 console.log(`\n${receipt.status.toUpperCase()}: ${preflightPath}`);
 process.exit(receipt.status === "passed" ? 0 : 1);

@@ -15,7 +15,10 @@ Use this skill for `openclaw/openclaw` contributor work. Keep the process conser
 - Authorship email is a hard requirement: all commits authored or committed by `sunlit-deng` must use `sunlit-deng <yang.jiajun1@xydigit.com>`. Do not create, amend, cherry-pick, rebase, or push a `sunlit-deng` commit with any other author or committer email unless the user explicitly overrides this requirement for that specific operation.
 - Fork PR maintainer edit access is a release gate. Do not pass `--no-maintainer-edit`. This machine's `gh` may not support `--maintainer-edit` because maintainer edits are enabled by default, so omit both flags unless intentionally disabling edits. For existing PRs, verify `maintainerCanModify: true` with `gh pr view <number> --repo openclaw/openclaw --json maintainerCanModify,headRepositoryOwner,headRefName,url`. For new PRs, verify the same immediately after creation, or manually confirm the GitHub web checkbox `Allow edits and access to secrets by maintainers` remains checked when the API cannot prove it.
 - Use one worktree per issue by default: `worktrees/issue-<number>` and `outputs/issue-<number>`. Add a topic suffix only when one issue needs multiple candidate PRs.
+- Keep the workspace pruned intentionally. The shared pnpm store belongs at `workspace/openclaw/.pnpm-store`, but each worktree still has a private `node_modules` for checkout-specific links. Use `scripts/openclaw-workspace-maintenance.sh` to report size, warm the store, prune old clean `node_modules`, or explicitly remove finished worktrees.
 - Direct local-candidate PRs found from code do not need a GitHub issue or visible issue link. Search for related issues/PRs and link a real one when it exists, but do not create or attach an unrelated issue only to satisfy tooling.
+- For candidate speed and quality, use the local scoring receipts when a workflow exists: `scripts/openclaw-duplicate-check.sh`, `scripts/openclaw-candidate-score.sh`, and `scripts/openclaw-gate-summary.sh`. These are read-only/local-output diagnostics and never replace the human GitHub write gate.
+- Use low-token mode by default. Prefer `scripts/openclaw-context-pack.sh` and local receipts over re-reading large diffs, logs, comment histories, or full JSON outputs. Read `references/token-budget.md` before broad candidate mining, PR maintenance, CI debugging, or any resumed task with an existing workflow.
 - Keep PR explanations durable in the PR body. If a bot or maintainer asks for evidence or context, update the PR body before posting a short pointer comment.
 - Keep PR bodies concise by default: required sections, short human paragraphs, compact evidence bullets, and no report-style filler.
 - After the human gate, publish branches through the `gh`-authenticated GitHub identity: check `gh auth status`, use a fork/SSH remote matching that identity for the unavoidable `git push`, and create/update PRs with `gh`. Do not push to HTTPS remotes whose cached credentials can differ from `gh auth`.
@@ -44,7 +47,10 @@ When the user says local candidate issues, local candidates, or asks to find mod
    - Prefer `gh search prs --repo openclaw/openclaw --state open --match title,body <query>` plus path/helper searches and `gh pr view` on likely matches. A "no duplicate" verdict needs at least title/body, target-file, and helper/API-call searches.
 6. Reject churn: style-only edits, speculative cleanup, tests without a product risk, broad ownership moves, config/default changes without a real bug, or anything that cannot be proven locally.
 7. For each candidate, report: code point, suspected user/operational impact, existing helper/pattern to reuse, related issue/PR status, smallest patch shape, proof command, and merge risk.
-8. When the user picks a candidate, switch to the normal PR workflow below.
+8. When a workflow exists for the candidate, run duplicate and score receipts before investing in broad validation:
+   - `scripts/openclaw-duplicate-check.sh --workflow <outputs>/workflow.json`
+   - `scripts/openclaw-candidate-score.sh --workflow <outputs>/workflow.json`
+9. When the user picks a candidate, switch to the normal PR workflow below.
 
 ### Remote candidates
 
@@ -55,13 +61,14 @@ When the user says remote candidate issues, remote candidates, or asks to screen
 3. Read each promising issue enough to identify actual user impact, maintainer signals, stale context, and proof requirements. Drop vague support requests, design debates, broad refactors, and items needing secrets or paid services.
 4. For top candidates, inspect only the relevant local code path to confirm the issue is real and patchable. Do not implement yet.
 5. Report a ranked shortlist with issue URL, user impact, current status, likely touched files, smallest patch shape, proof plan, duplicate risk, and why it should be easy or hard to merge.
-6. When the user picks a candidate, switch to issue intake and normal PR workflow.
+6. After a workflow is created for a selected remote candidate, run `openclaw-duplicate-check.sh` and `openclaw-candidate-score.sh` before broad validation.
+7. When the user picks a candidate, switch to issue intake and normal PR workflow.
 
 ## Workflow
 
 1. **Issue intake**
-   - Create a per-issue worktree with `scripts/new-openclaw-worktree.sh` on macOS/Linux or `scripts/new-openclaw-worktree.ps1` on Windows. The helpers derive the canonical workspace root, fetch `origin/main`, refuse implicit reuse of stale local branches, and record paths and SHAs in `workflow.json`.
-   - For an existing PR, use `scripts/prepare-openclaw-pr-worktree.mjs --pr <number>`. It reads the live PR with `gh pr view`, fetches the exact fork head into `worktrees/pr-<number>`, and records the remote owner/ref separately. Rebase onto current `origin/main` before preflight when the reported head is stale.
+   - Create a per-issue worktree with `scripts/new-openclaw-worktree.sh` on macOS/Linux. The helper derives the canonical workspace root, fetches `origin/main`, refuses implicit reuse of stale local branches, and pins that fetched commit as `validationBaseSha` in `workflow.json`.
+   - For an existing PR, use `scripts/prepare-openclaw-pr-worktree.mjs --pr <number>`. It reads the live PR with `gh pr view`, fetches the exact fork head into `worktrees/pr-<number>`, records the remote owner/ref separately, and pins the observed main SHA as the validation base. Do not rebase merely because main advanced; rebase for a real merge conflict, risky overlapping upstream changes, or an explicit up-to-date requirement.
    - Share only `workspace/openclaw/.pnpm-store` across worktrees; keep each worktree's `node_modules` private. Dependency installation is the default. Skipping it requires an explicit reason and is recorded as an incomplete validation state.
    - Read the issue or PR, latest comments, current PR diff, CI state, root `AGENTS.md`, relevant scoped `AGENTS.md`, `CONTRIBUTING.md`, and `.github/pull_request_template.md`.
    - Prefer `gh issue view`, `gh pr view`, `gh pr diff`, `gh pr checks`, `gh run view`, and `gh api` for GitHub reads.
@@ -73,20 +80,25 @@ When the user says remote candidate issues, remote candidates, or asks to screen
    - Keep changes focused on one user-visible or operational problem.
    - Run focused tests for the touched surface before broad checks.
    - Collect real behavior proof for external contributor PRs when the change is not docs-only. Prefer pasted terminal output, live logs, HTTP/status output, screenshots, or other actual runtime output over prose summaries. Tests and CI supplement proof; they do not replace live proof.
+   - If true live external proof is infeasible, run `scripts/openclaw-proof-plan.sh --workflow <outputs>/workflow.json` and exercise the highest real local boundary available: CLI/server/provider/subprocess entrypoint first, production module boundary second. Replace unavailable external services only at the network/process boundary with localhost, loopback, or fixtures. Do not prove copied helpers or synthetic `node -e` simulations.
    - For fail-closed resource caps such as body-size limits or WebSocket `maxPayload`, prove both sides of the boundary: a realistic legitimate large payload still succeeds, and an oversized payload is rejected before unbounded buffering. Do not only prove rejection; reviewers will ask whether the chosen cap breaks valid traffic.
    - When picking a cap, reuse an existing repo convention or provider/runtime limit when one fits. If the cap is lower than a nearby default or plausible valid traffic size, include evidence for the legitimate large case or raise the cap.
    - Draft or update the PR body using `references/pr-body.md`.
+   - Run `scripts/openclaw-duplicate-check.sh --workflow <outputs>/workflow.json` when changed files or issue context are known. Use the receipt to drop crowded or duplicate lanes before spending full validation time.
+   - Run `scripts/openclaw-candidate-score.sh --workflow <outputs>/workflow.json` after the PR body and focused proof plan exist. Treat `needs-work` or `poor-fit` as a stop-and-fix signal before publication.
 
 3. **Executable local checks**
-   - Run `scripts/openclaw-preflight.sh --workflow <outputs>/workflow.json` on macOS/Linux or the `.ps1` wrapper on Windows.
-   - Preflight must execute the selected check lane (for issue/PR workflows, repository `check`; for direct `local-candidate` PRs, local `check:changed` by default), focused changed tests, Git and identity checks, and PR body/proof validation. For direct `local-candidate` PRs, record whether the branch contains the freshly fetched `origin/main` as a freshness advisory instead of failing the gate; fast-moving upstream can be left for GitHub mergeability/CI unless there is a known conflict. A prose claim that checks ran is not a substitute for a passing `preflight.json` tied to the current HEAD.
-   - Do not use a naked `pnpm check:changed` as the local-candidate release gate when it delegates to Blacksmith/Testbox. Use preflight, which sets `OPENCLAW_CHECK_CHANGED_REMOTE_CHILD=1 OPENCLAW_CHANGED_LANES_RAW_SYNC=1 PNPM_CONFIG_VERIFY_DEPS_BEFORE_RUN=false` and runs the changed lanes locally. If running the lane manually, use the same child environment without `CI=1`; remote Testbox is optional supplemental evidence only after the user explicitly asks for it.
+   - Run `scripts/openclaw-preflight.sh --workflow <outputs>/workflow.json` on macOS/Linux.
+   - Preflight must execute changed-surface validation and focused changed tests against the pinned `validationBaseSha`, plus Git, identity, PR body/proof, and latest-main merge-risk checks. Main advancement alone is advisory and must not invalidate successful heavy checks. A real merge conflict against the single main snapshot fetched at preflight is blocking; overlapping files are reported for human judgment. Do not keep fetching or rebasing during the same gate. By default preflight runs the pinned-base equivalents of `pnpm check:changed` and `pnpm test:changed`; it does not run full repository `pnpm check` or broad `pnpm check:test-types`. Use `--profile full` only for an intentional full-repository check, and `--type-script check:test-types` only when the touched surface or user request explicitly needs that broader test-type lane. A prose claim that checks ran is not a substitute for a passing `preflight.json` tied to the current HEAD and validation base.
+   - Preflight may reuse successful heavy checks only when its fingerprint matches the current HEAD, pinned validation base, package and lockfile content, selected lanes, toolchain, platform, and relevant execution environment. Latest observed main is deliberately excluded from that fingerprint; merge risk is recomputed separately on every run.
+   - Do not use a naked `pnpm check:changed` as the release gate when it delegates to Blacksmith/Testbox. Use preflight, which sets `OPENCLAW_CHECK_CHANGED_REMOTE_CHILD=1 OPENCLAW_CHANGED_LANES_RAW_SYNC=1 PNPM_CONFIG_VERIFY_DEPS_BEFORE_RUN=false` and runs the changed lanes locally. If running the lane manually, use the same child environment without `CI=1`; remote Testbox is optional supplemental evidence only after the user explicitly asks for it.
    - Local AI review commands are optional diagnostics only. `codex review` and ClawSweeper local-review are not release gates because their availability is environment-dependent.
 
    **Rebase-only fast path:** If an existing PR only needs a conflict-resolution or upstream rebase refresh and the PR body will not be changed, the full preflight can be deferred. Before the human gate, verify the lightweight release checks instead: clean worktree, branch contains the latest fetched `origin/main`, committed diff exists, `git diff --check` passes, `sunlit-deng` commit identity is correct, and `maintainerCanModify` is true. After confirmation, publish with `scripts/publish-openclaw-rebase-only.mjs --workflow <outputs>/workflow.json --approved-head <sha> --push-remote <remote>`. Do not use this fast path for code edits that respond to review findings, proof/body changes, new PR creation, or any case that needs ClawSweeper re-review.
 
 4. **Pre-push human gate**
    - Stop before any GitHub write.
+   - Run `scripts/openclaw-gate-summary.sh --workflow <outputs>/workflow.json` and use the generated `gate-summary.md` as the human approval packet.
    - Show the user: diff summary, commit author/committer, tests/checks from `preflight.json`, PR body draft path or summary, live proof summary, and any unresolved risks.
    - Verify every `sunlit-deng` commit that will be pushed uses author and committer email `yang.jiajun1@xydigit.com`. If any `sunlit-deng` commit uses another email, fix the local commit metadata before asking for push approval. Do not rewrite other contributors' authored commits merely to change their author email.
    - For existing fork PRs, show the current maintainer edit status from `maintainerCanModify`. If it is `false`, stop and ask the user to re-enable `Allow edits and access to secrets by maintainers` in the GitHub web UI before push, PR update, or re-review. For new PRs, show that the PR will be created without `--no-maintainer-edit` and must be checked immediately after creation.
@@ -107,6 +119,7 @@ When the user says remote candidate issues, remote candidates, or asks to screen
 ## References
 
 - Read `references/worktree-layout.md` before creating or reusing worktrees.
+- Read `references/token-budget.md` before broad candidate mining, PR maintenance, CI debugging, or resuming an existing workflow.
 - Read `references/pr-body.md` before drafting or editing an OpenClaw PR body.
 - Read `references/review-gates.md` before running preflight or interpreting bot/CI gates.
 
@@ -118,12 +131,6 @@ Create a worktree on macOS/Linux:
 ./.codex/skills/auto-pr-openclaw/scripts/new-openclaw-worktree.sh --issue 94432
 ```
 
-Create a worktree on Windows:
-
-```powershell
-powershell -ExecutionPolicy Bypass -File .\.codex\skills\auto-pr-openclaw\scripts\new-openclaw-worktree.ps1 -Issue 94432
-```
-
 Run executable preflight checks:
 
 ```bash
@@ -133,6 +140,56 @@ Run executable preflight checks:
 
 Preflight writes `preflight.json` outside the target repository. It never pushes,
 comments, or edits a PR.
+
+Report local workspace size and largest dependency directories:
+
+```bash
+./.codex/skills/auto-pr-openclaw/scripts/openclaw-workspace-maintenance.sh
+```
+
+Warm the shared pnpm store:
+
+```bash
+./.codex/skills/auto-pr-openclaw/scripts/openclaw-workspace-maintenance.sh \
+  --warm-store --yes
+```
+
+Prune dependency directories from clean inactive worktrees:
+
+```bash
+./.codex/skills/auto-pr-openclaw/scripts/openclaw-workspace-maintenance.sh \
+  --prune-node-modules --older-than-days 14 --yes
+```
+
+Run read-only duplicate/canonical searches and candidate scoring:
+
+```bash
+./.codex/skills/auto-pr-openclaw/scripts/openclaw-duplicate-check.sh \
+  --workflow workspace/openclaw/outputs/issue-94432/workflow.json
+./.codex/skills/auto-pr-openclaw/scripts/openclaw-candidate-score.sh \
+  --workflow workspace/openclaw/outputs/issue-94432/workflow.json
+```
+
+Generate the human pre-push approval summary:
+
+```bash
+./.codex/skills/auto-pr-openclaw/scripts/openclaw-gate-summary.sh \
+  --workflow workspace/openclaw/outputs/issue-94432/workflow.json
+```
+
+Generate a real-call-chain proof plan:
+
+```bash
+./.codex/skills/auto-pr-openclaw/scripts/openclaw-proof-plan.sh \
+  --workflow workspace/openclaw/outputs/issue-94432/workflow.json
+```
+
+Generate a compact low-token handoff packet:
+
+```bash
+./.codex/skills/auto-pr-openclaw/scripts/openclaw-context-pack.sh \
+  --workflow workspace/openclaw/outputs/issue-94432/workflow.json
+```
 
 Publish an existing PR after rebase-only maintenance:
 

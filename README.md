@@ -1,28 +1,32 @@
 # auto-pr
 
-Personal Codex workflows for preparing OpenClaw pull requests with repeatable local gates.
+Personal Codex and Claude Code workflows for preparing OpenClaw pull requests with repeatable local gates on macOS and Linux.
 
 ## Layout
 
 ```text
 .codex/
   skills/
-    auto-pr-openclaw/   # project-local Codex skill
+    auto-pr-openclaw/       # canonical project-local skill
+.claude/
+  skills/
+    auto-pr-openclaw        # symlink to the canonical .codex skill
 scripts/
-  install.ps1               # validate the project-local skill
+  validate.sh               # validate scripts, tests, and skill consistency
 ```
 
 Recommended OpenClaw working directory layout:
 
 ```text
-<auto-pr>\workspace\openclaw\
-  repos\
-    openclaw\               # main clone used for fetch/base
-    clawsweeper\            # official openclaw/clawsweeper clone
-  worktrees\
-    issue-94432\            # default one issue -> one PR worktree
-  outputs\
-    issue-94432\
+<auto-pr>/workspace/openclaw/
+  repos/
+    openclaw/               # main clone used for fetch/base
+    clawsweeper/            # official openclaw/clawsweeper clone
+  .pnpm-store/              # shared package store for all OpenClaw worktrees
+  worktrees/
+    issue-94432/            # default one issue -> one PR worktree
+  outputs/
+    issue-94432/
       pr-body.md
       live-proof.md
       workflow.json
@@ -32,20 +36,51 @@ Recommended OpenClaw working directory layout:
 
 Use `issue-<number>` by default. If one issue needs multiple candidate PRs, use `issue-<number>-<topic>`.
 
-The worktree helper always fetches `origin/main`, refuses to reuse an existing
-local branch implicitly, uses `workspace/openclaw/.pnpm-store`, and installs
-dependencies by default. It records the exact paths and Git SHAs in
+The worktree helper fetches `origin/main` once during intake, refuses to reuse
+an existing local branch implicitly, uses `workspace/openclaw/.pnpm-store`, and
+installs dependencies by default. It pins the fetched SHA as
+`validationBaseSha` and records the exact paths and Git SHAs in
 `outputs/<name>/workflow.json`.
+
+The pnpm store is shared to avoid repeated downloads and package unpacking, but
+each worktree keeps its own `node_modules` because pnpm creates
+checkout-specific workspace links there. OpenClaw's private `node_modules` is
+large, so old PR/candidate worktrees are usually the main disk-pressure source.
 
 Repository download uses `gh repo clone` with `gh auth setup-git`. Existing PR
 heads use `gh pr checkout`, and the publication step creates or attaches the
 fork remote with `gh repo fork --remote` after the human gate. Fetch failure is
-a hard stop; cached refs are never treated as current main.
+a hard stop; cached refs are never described as current main.
 
 Existing PR maintenance uses `prepare-openclaw-pr-worktree.mjs --pr <number>`.
-It fetches the actual fork head into `worktrees/pr-<number>` and reports whether
-the head contains the latest upstream main, preventing a stale fork head from
-being mistaken for a fresh new-PR base.
+It fetches the actual fork head into `worktrees/pr-<number>` and records whether
+the head contains the observed upstream main. Main advancement after intake
+does not force a rebase; preflight checks its single latest-main snapshot for a
+real merge conflict and reports behind count and changed-file overlap as
+advisories.
+
+Run read-only candidate quality receipts once the workflow and changed files
+exist:
+
+```bash
+./.codex/skills/auto-pr-openclaw/scripts/openclaw-duplicate-check.sh \
+  --workflow workspace/openclaw/outputs/issue-94432/workflow.json
+./.codex/skills/auto-pr-openclaw/scripts/openclaw-candidate-score.sh \
+  --workflow workspace/openclaw/outputs/issue-94432/workflow.json
+```
+
+These write `duplicate-check.json` and `candidate-score.json` next to the
+workflow. They help drop duplicate, crowded, broad, or proof-weak PR lanes
+before spending full validation time.
+
+For runtime changes where true external live proof is unavailable, generate a
+real-call-chain proof plan and exercise the highest local production boundary
+instead of an isolated helper:
+
+```bash
+./.codex/skills/auto-pr-openclaw/scripts/openclaw-proof-plan.sh \
+  --workflow workspace/openclaw/outputs/issue-94432/workflow.json
+```
 
 Run deterministic checks before the human publication gate:
 
@@ -54,9 +89,56 @@ Run deterministic checks before the human publication gate:
   --workflow workspace/openclaw/outputs/issue-94432/workflow.json
 ```
 
-This executes OpenClaw's `pnpm check` lane and `test:changed`, validates branch
-state, commit identity, and PR body proof, then writes `preflight.json` tied to
-the checked HEAD. Local AI reviews are optional diagnostics rather than gates.
+This executes OpenClaw's changed-surface checks and focused tests against the
+pinned validation base, validates branch state, commit identity, PR body proof,
+and latest-main merge compatibility, then writes `preflight.json` tied to the
+checked HEAD. Successful heavy checks are safely reused when their fingerprint
+is unchanged. Use `--profile full` only for an intentional full-repository
+`pnpm check`. Local AI reviews are optional diagnostics rather than gates.
+
+Generate the human approval packet before any GitHub write:
+
+```bash
+./.codex/skills/auto-pr-openclaw/scripts/openclaw-gate-summary.sh \
+  --workflow workspace/openclaw/outputs/issue-94432/workflow.json
+```
+
+This writes `gate-summary.md` and `gate-summary.json` with the approved HEAD,
+PR body hash, changed files, commit identity, preflight status, duplicate
+receipt, candidate score, maintainer edit status, and blockers.
+
+Generate a compact low-token handoff packet after intake or after validation
+state changes:
+
+```bash
+./.codex/skills/auto-pr-openclaw/scripts/openclaw-context-pack.sh \
+  --workflow workspace/openclaw/outputs/issue-94432/workflow.json
+```
+
+Future resumed work should read `context-pack.md` first, then only the specific
+receipt or source file needed for the next decision. This keeps Codex quota
+focused on judgment instead of repeatedly replaying logs and diffs.
+
+Inspect and maintain local workspace size with:
+
+```bash
+./.codex/skills/auto-pr-openclaw/scripts/openclaw-workspace-maintenance.sh
+```
+
+To warm the shared store before creating new worktrees:
+
+```bash
+./.codex/skills/auto-pr-openclaw/scripts/openclaw-workspace-maintenance.sh \
+  --warm-store --yes
+```
+
+To reclaim dependency space from old clean worktrees while keeping their source
+checkouts:
+
+```bash
+./.codex/skills/auto-pr-openclaw/scripts/openclaw-workspace-maintenance.sh \
+  --prune-node-modules --older-than-days 14 --yes
+```
 
 After the human gate, `publish-openclaw-pr.mjs` requires the approved HEAD and
 body SHA-256 and pushes through an explicitly named SSH remote associated with
@@ -69,15 +151,12 @@ maintainer edit access.
 
 ## Use
 
-```powershell
-powershell -ExecutionPolicy Bypass -File .\scripts\install.ps1
-```
-
-On Linux/macOS, validate the skill and bundled scripts with:
+Validate the skill and bundled scripts on macOS or Linux with:
 
 ```bash
 ./scripts/validate.sh
 ```
 
-Run Codex from the `auto-pr` repository root so the project-local `.codex`
-directory is the workflow home.
+Run Codex or Claude Code from the `auto-pr` repository root. The canonical
+skill lives under `.codex`; `.claude/skills/auto-pr-openclaw` is a repository
+symlink to the same directory, so both tools always read identical content.

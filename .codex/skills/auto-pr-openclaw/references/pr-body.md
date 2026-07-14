@@ -82,6 +82,8 @@ AI-assisted: built with Codex
 ## Evidence
 
 - **Only real runtime proof.** For any change touching runtime, subprocess, stream, network, provider, browser, or external API behavior: the Evidence section must contain live terminal output, logs, recording, or redacted runtime trace that exercises the **real production code path**. Tests alone are supplementary; they do not replace real-path proof.
+- **Use the real call chain when live external proof is blocked.** If credentials, paid services, network policy, or private systems make true live proof infeasible, still exercise the highest real boundary available: CLI command, server/route handler, provider/client entrypoint, sandbox/subprocess path, or public production module boundary. Replace only the unavailable external dependency with localhost/loopback, fixture input, or a local fake at the network/process boundary. Do not fall back to isolated helper calls unless that helper is the public production boundary.
+- **Write a proof plan first for runtime work.** Run `openclaw-proof-plan.sh --workflow <outputs>/workflow.json` once changed files and the PR body exist. Use `proof-plan.md` to pick the real entrypoint and decide whether the fallback is loopback, fixture, CLI, or production-module-boundary proof.
 - **Test output is not real proof.** ClawSweeper ignores test-run output (e.g., `npx vitest ...` results, pass counts, test names, durations) as evidence of runtime behavior. Tests prove that code is testable; they do not prove the code works correctly in the real sandbox/exec-server/subprocess/network path. If you only have test output in Evidence, ClawSweeper will block with "needs real behavior proof" regardless of how many tests pass. At minimum, add redacted terminal output from a real production-path run showing the behavior before and after the change.
 - **No synthetic checks.** ClawSweeper treats `node -e 'simulate ...'` and similar synthetic stream/error simulations as "thin signal" and will block the PR with 🦪 silver shellfish. The proof must come from the actual sandbox/exec-server/subprocess/network path.
 - **No static tool output.** Do not put `oxlint`, `eslint`, `git diff --stat`, or any lint/format output in Evidence. These belong in pre-push validation gates, not the PR body. ClawSweeper ignores them and their presence dilutes the signal of real proof.
@@ -123,10 +125,41 @@ import { optionalTestHook } from "./path/to/same/production-module";
 </details>
 ````
 
+### Real Call-Chain Fallback Pattern
+
+Use this when the true external service cannot be called but the production
+caller can be exercised locally.
+
+````md
+## Evidence
+
+- Real call-chain fallback: `<command>` ran the production <CLI/server/provider/subprocess> path against a localhost/fixture boundary; valid input succeeded and the negative control was rejected before <bad behavior>.
+
+```text
+$ <command>
+entrypoint: <actual CLI/server/provider/subprocess path>
+dependency-boundary: localhost fixture for <external service>
+valid: accepted <status/result>
+negative-control: rejected <status/result>
+```
+
+<details>
+<summary>proof-live.ts</summary>
+
+```ts
+// Start a localhost fixture only at the external boundary.
+// Invoke the production caller/entrypoint that owns the changed behavior.
+// Print valid and negative-control results.
+```
+
+</details>
+````
+
 ### Evidence Rejection Patterns
 
 - Mock-only proof, including Vitest output where the relevant dependencies or production boundary are mocked.
 - Isolated helper proof when the PR changed a production module or caller whose behavior is not exercised.
+- Loopback proof that calls only a copied parser/helper instead of the production caller.
 - Prose claims without pasted terminal output, logs, recording, screenshot, or linked artifact.
 - Mismatched evidence that names files, tests, scripts, or commands absent from the PR head.
 

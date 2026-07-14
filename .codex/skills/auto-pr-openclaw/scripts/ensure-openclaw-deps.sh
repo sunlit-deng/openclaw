@@ -52,10 +52,30 @@ fi
 
 repo_path="$(cd "$repo_path" && pwd -P)"
 modules_file="$repo_path/node_modules/.modules.yaml"
+fingerprint_file="$repo_path/node_modules/.auto-pr-deps-fingerprint"
+dependency_fingerprint="$(node -e '
+  const crypto = require("node:crypto");
+  const fs = require("node:fs");
+  const path = require("node:path");
+  const hash = crypto.createHash("sha256");
+  for (const file of process.argv.slice(1)) {
+    hash.update(path.basename(file));
+    hash.update("\0");
+    if (fs.existsSync(file)) hash.update(fs.readFileSync(file));
+    hash.update("\0");
+  }
+  process.stdout.write(hash.digest("hex"));
+' "$repo_path/package.json" "$repo_path/pnpm-lock.yaml")"
 
 if [[ -f "$modules_file" && "$force" -eq 0 ]]; then
-  printf '{"repo":"%s","status":"skipped","reason":"node_modules already exists; pass --force after lockfile or package changes"}\n' "$repo_path"
-  exit 0
+  installed_fingerprint=""
+  if [[ -f "$fingerprint_file" ]]; then
+    installed_fingerprint="$(tr -d '\r\n' < "$fingerprint_file")"
+  fi
+  if [[ "$installed_fingerprint" == "$dependency_fingerprint" ]]; then
+    printf '{"repo":"%s","status":"skipped","reason":"dependency fingerprint unchanged","fingerprint":"%s"}\n' "$repo_path" "$dependency_fingerprint"
+    exit 0
+  fi
 fi
 
 if [[ -z "$store_path" ]]; then
@@ -72,6 +92,7 @@ fi
 
 mkdir -p "$store_path"
 pnpm --dir "$repo_path" install --frozen-lockfile --prefer-offline --store-dir "$store_path"
+printf '%s\n' "$dependency_fingerprint" > "$fingerprint_file"
 
 actual_store="$(pnpm --dir "$repo_path" store path --store-dir "$store_path")"
 actual_store="$(cd "$actual_store" && pwd -P)"
@@ -81,4 +102,4 @@ if [[ "$actual_store" != "$expected_store" && "$actual_store" != "$expected_stor
   exit 1
 fi
 
-printf '{"repo":"%s","status":"installed","storeRoot":"%s","store":"%s"}\n' "$repo_path" "$expected_store" "$actual_store"
+printf '{"repo":"%s","status":"installed","storeRoot":"%s","store":"%s","fingerprint":"%s"}\n' "$repo_path" "$expected_store" "$actual_store" "$dependency_fingerprint"

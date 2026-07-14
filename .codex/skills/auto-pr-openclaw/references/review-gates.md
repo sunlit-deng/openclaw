@@ -14,14 +14,27 @@ Use these gates before pushing or updating an OpenClaw PR.
 - Use `gh` for GitHub reads by default. Prefer `gh issue view`, `gh pr view`, `gh pr diff`, `gh pr checks`, `gh run view`, and `gh api`; use another GitHub tool only when `gh` is unavailable, unauthenticated, or missing the needed capability.
 - Search linked issues, related PRs, latest comments, and ClawSweeper comments for canonical work.
 - Before claiming a PR is not duplicate, verify current head SHA, actual changed files, and whether sibling PRs solve the same remaining problem.
+- When a workflow exists, run `scripts/openclaw-duplicate-check.sh --workflow <outputs>/workflow.json`. Keep `duplicate-check.json` with the output artifacts. A likely duplicate count above zero is a stop-and-triage signal, not something to wave away in prose.
+
+## Candidate Score Gate
+
+- Run `scripts/openclaw-candidate-score.sh --workflow <outputs>/workflow.json` after the PR body draft and changed files exist. This writes `candidate-score.json`.
+- Treat `strong` and `promising` as publishable only when duplicate and validation gates also pass.
+- Treat `needs-work` as a local fix signal: tighten scope, add matching proof, add focused tests, or resolve duplicate risk before publication.
+- Treat `poor-fit` as a likely drop or redesign signal unless the user explicitly wants to pursue a high-risk PR.
+- The score is advisory; deterministic blockers from preflight, duplicate checks, identity, maintainer edit access, and proof requirements still win.
 
 ## Validation Gate
 
 - Run focused tests first for changed modules.
-- Run `scripts/openclaw-preflight.sh --workflow <path>` (or the PowerShell wrapper) so the selected check lane and focused changed tests are executed and recorded against the current HEAD. Issue/PR workflows use the repository `pnpm check` lane; direct `local-candidate` PRs use local `pnpm check:changed` by default.
-- For direct `local-candidate` checks, avoid the default `pnpm check:changed` remote delegation path. Preflight sets `OPENCLAW_CHECK_CHANGED_REMOTE_CHILD=1 OPENCLAW_CHANGED_LANES_RAW_SYNC=1 PNPM_CONFIG_VERIFY_DEPS_BEFORE_RUN=false` and intentionally omits `CI=1` so changed lanes run locally. When checking manually, use the same environment; Testbox/Blacksmith runs are optional supplemental proof, not the default local gate.
+- Run `scripts/openclaw-preflight.sh --workflow <path>` so changed-surface validation and focused changed tests are executed against the pinned `validationBaseSha` and recorded against the current HEAD. By default preflight runs pinned-base equivalents of `pnpm check:changed` and `pnpm test:changed`; it does not run full repository `pnpm check` or broad `pnpm check:test-types`. Use `--profile full` only when a full-repository check is intentional, and `--type-script check:test-types` only when the touched surface or user request explicitly needs that broader test-type lane.
+- Treat the main SHA fetched by preflight as one observation, not a moving validation base. Main advancement, behind count, and overlapping files are advisories. A merge conflict against that observed SHA is blocking. Do not restart the gate merely because main advances again after the observation.
+- Reuse cached heavy checks only when the receipt fingerprint matches HEAD, `validationBaseSha`, package/lockfile content, lanes, toolchain, platform, and relevant execution environment. Always recompute latest-main merge risk even on a heavy-cache hit.
+- Avoid the default `pnpm check:changed` remote delegation path. Preflight sets `OPENCLAW_CHECK_CHANGED_REMOTE_CHILD=1 OPENCLAW_CHANGED_LANES_RAW_SYNC=1 PNPM_CONFIG_VERIFY_DEPS_BEFORE_RUN=false` and intentionally omits `CI=1` so changed lanes run locally. When checking manually, use the same environment; Testbox/Blacksmith runs are optional supplemental proof, not the default local gate.
 - A passing `preflight.json` is required. Missing, skipped, stale, or failed checks do not pass based on an agent's prose summary.
 - For live external behavior, execute the real path when feasible and summarize only redacted proof.
+- If true live external proof is infeasible, run `scripts/openclaw-proof-plan.sh --workflow <outputs>/workflow.json` and use the highest real local boundary: CLI command, server/route handler, provider/client entrypoint, sandbox/subprocess path, or production module boundary. Substitute unavailable external dependencies only at the network/process boundary with localhost, loopback, or fixtures.
+- Do not treat isolated helper calls, copied parser logic, `node -e` simulations, or test output as real-call-chain fallback proof.
 - If ClawSweeper asks for real behavior proof, update the PR body with copied terminal output from a live or loopback run before requesting re-review. Tests alone usually do not satisfy runtime/resource-safety proof.
 
 ### Rebase-Only Fast Path
@@ -79,6 +92,7 @@ validation.
 
 Before any GitHub write, show the user:
 
+- generated `gate-summary.md` from `scripts/openclaw-gate-summary.sh --workflow <outputs>/workflow.json`
 - branch and head SHA
 - diff summary and changed files
 - commit author/committer

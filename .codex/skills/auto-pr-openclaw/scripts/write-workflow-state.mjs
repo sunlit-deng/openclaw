@@ -39,8 +39,10 @@ const statePath = path.join(outputPath, "workflow.json");
 const mode = values.get("mode");
 const issueRaw = values.get("issue");
 const issue = issueRaw ? Number(issueRaw) : null;
+const createdAt = new Date().toISOString();
+const validationBaseSha = values.get("base-sha");
 const state = {
-  schemaVersion: 1,
+  schemaVersion: 2,
   mode,
   issue,
   pr: values.has("pr") ? Number(values.get("pr")) : null,
@@ -51,7 +53,11 @@ const state = {
   headOwner: values.get("head-owner") || null,
   headRef: values.get("head-ref") || values.get("branch"),
   baseRef: values.get("base-ref"),
-  baseSha: values.get("base-sha"),
+  baseSha: validationBaseSha,
+  validationBaseRef: values.get("base-ref"),
+  validationBaseSha,
+  latestObservedMainSha: validationBaseSha,
+  latestObservedAt: createdAt,
   initialHeadSha: values.get("head-sha"),
   headSha: values.get("head-sha"),
   pnpmStorePath: path.resolve(values.get("pnpm-store-path")),
@@ -64,7 +70,7 @@ const state = {
   maintainerCanModify: values.has("maintainer-can-modify")
     ? values.get("maintainer-can-modify") === "true"
     : null,
-  createdAt: new Date().toISOString(),
+  createdAt,
 };
 
 if (mode !== "local-candidate" && (!Number.isSafeInteger(issue) || issue <= 0)) {

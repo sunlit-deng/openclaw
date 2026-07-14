@@ -212,10 +212,14 @@ if (after.maintainerCanModify !== true) {
 }
 
 workflow.baseSha = baseSha || workflow.baseSha;
+workflow.validationBaseSha = baseSha || workflow.validationBaseSha || workflow.baseSha;
+workflow.validationBaseRef ||= "origin/main";
+workflow.latestObservedMainSha = baseSha || workflow.latestObservedMainSha;
+workflow.latestObservedAt = new Date().toISOString();
 workflow.headSha = currentHead;
 workflow.publishedHeadSha = currentHead;
 workflow.rebaseOnlyPublishedHeadSha = currentHead;
-workflow.rebaseOnlyPublishedAt = new Date().toISOString();
+workflow.rebaseOnlyPublishedAt = workflow.latestObservedAt;
 workflow.updatedAt = workflow.rebaseOnlyPublishedAt;
 fs.writeFileSync(workflowPath, `${JSON.stringify(workflow, null, 2)}\n`, "utf8");
 
