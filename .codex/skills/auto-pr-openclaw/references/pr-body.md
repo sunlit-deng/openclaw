@@ -20,9 +20,9 @@ Fixes an issue where users <do X> would <experience Y> when <condition>.
 
 Fixes #<issue-number>
 
-<!-- Omit the issue link for direct local-candidate PRs that fix a code point
-without an existing GitHub issue. Do not create or attach an unrelated issue
-only to satisfy the template. -->
+<!-- Omit the issue link for direct PRs that fix a code point without an
+existing GitHub issue. Do not create or attach an unrelated issue only to
+satisfy the template, and never use the PR number itself as Related/Fixes. -->
 
 ## Why This Change Was Made
 
@@ -77,7 +77,8 @@ AI-assisted: built with Codex
 - Use `Fixes #<issue>` or `Closes #<issue>` for a fix that should close the issue.
 - Use `Related: #<issue>` only when the PR is related but should not close the issue.
 - Keep the link visible as the last line of `## What Problem This Solves`.
-- For direct local-candidate PRs discovered from code, omit the issue link when no real issue exists.
+- For direct PRs discovered from code, including existing PR maintenance, omit the issue link when no real issue exists.
+- Never use the PR number itself as `Related`, `Fixes`, or `Closes`; a self-link is not an issue link.
 
 ## Evidence
 

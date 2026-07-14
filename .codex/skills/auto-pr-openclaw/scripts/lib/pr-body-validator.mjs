@@ -31,6 +31,7 @@ function sectionBody(body, name) {
 export function validatePrBody({
   bodyPath,
   issue,
+  pr,
   requireIssueLink = true,
   repoPath,
   baseRef = "refs/remotes/origin/main",
@@ -56,15 +57,19 @@ export function validatePrBody({
   }
 
   const hasIssue = Number.isSafeInteger(issue) && issue > 0;
+  const hasSelfIssue = Number.isSafeInteger(pr) && pr > 0 && issue === pr;
   const issueLinkPattern = /^(?:(?:Fixes|Closes):?\s+#(\d+)|Related:\s+#(\d+))[ \t]*$/m;
   const linkedIssue = body.match(issueLinkPattern);
+  if (linkedIssue && Number(linkedIssue[1] ?? linkedIssue[2]) === pr) {
+    errors.push(`visible issue link points to PR #${pr}; omit self-links when no real issue exists`);
+  }
   if (requireIssueLink) {
-    if (!hasIssue) {
+    if (!hasIssue || hasSelfIssue) {
       errors.push("workflow requires a positive issue number");
     } else if (!new RegExp(`^(?:(?:Fixes|Closes):?\\s+#${issue}|Related:\\s+#${issue})[ \\t]*$`, "m").test(body)) {
       errors.push(`missing visible issue link for #${issue}`);
     }
-  } else if (linkedIssue && hasIssue) {
+  } else if (linkedIssue && hasIssue && !hasSelfIssue) {
     const linked = Number(linkedIssue[1] ?? linkedIssue[2]);
     if (linked !== issue) {
       errors.push(`visible issue link points to #${linked}, expected #${issue}`);

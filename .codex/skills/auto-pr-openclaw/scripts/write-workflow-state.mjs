@@ -73,11 +73,11 @@ const state = {
   createdAt,
 };
 
-if (mode !== "local-candidate" && (!Number.isSafeInteger(issue) || issue <= 0)) {
-  throw new Error("--issue must be a positive integer except for --mode local-candidate");
+if (mode !== "local-candidate" && mode !== "existing-pr" && (!Number.isSafeInteger(issue) || issue <= 0)) {
+  throw new Error("--issue must be a positive integer except for --mode local-candidate or --mode existing-pr");
 }
-if (mode === "local-candidate" && issue !== null && (!Number.isSafeInteger(issue) || issue <= 0)) {
-  throw new Error("--issue must be omitted or a positive integer for --mode local-candidate");
+if ((mode === "local-candidate" || mode === "existing-pr") && issue !== null && (!Number.isSafeInteger(issue) || issue <= 0)) {
+  throw new Error(`--issue must be omitted or a positive integer for --mode ${mode}`);
 }
 
 fs.mkdirSync(outputPath, { recursive: true });

@@ -52,7 +52,7 @@ if (pr.state !== "OPEN") throw new Error(`PR #${args.pr} is not open`);
 if (!pr.headRepository?.nameWithOwner || !pr.headRefName || !pr.headRepositoryOwner?.login) {
   throw new Error(`PR #${args.pr} does not expose a usable head repository`);
 }
-const linkedIssue = Number((pr.body ?? "").match(/^(?:Fixes|Closes):?\s+#(\d+)\s*$/mi)?.[1] ?? args.pr);
+const linkedIssue = Number((pr.body ?? "").match(/^(?:Fixes|Closes):?\s+#(\d+)\s*$/mi)?.[1] ?? 0);
 
 fs.mkdirSync(path.join(root, "repos"), { recursive: true });
 fs.mkdirSync(path.join(root, "worktrees"), { recursive: true });
@@ -94,7 +94,7 @@ const stateWriter = path.join(scriptDir, "write-workflow-state.mjs");
 execute(process.execPath, [
   stateWriter,
   "--mode", "existing-pr",
-  "--issue", String(linkedIssue),
+  ...(linkedIssue > 0 ? ["--issue", String(linkedIssue)] : []),
   "--pr", String(args.pr),
   "--root", root,
   "--repo-path", worktreePath,

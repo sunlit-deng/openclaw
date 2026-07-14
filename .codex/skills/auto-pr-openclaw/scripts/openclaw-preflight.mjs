@@ -379,7 +379,8 @@ try {
   const bodyResult = validatePrBody({
     bodyPath: workflow.prBodyPath,
     issue: workflow.issue,
-    requireIssueLink: workflow.mode !== "local-candidate",
+    pr: workflow.pr,
+    requireIssueLink: Number.isSafeInteger(workflow.issue) && workflow.issue > 0,
     repoPath: repo,
     baseRef: validationBaseSha || workflow.baseRef,
     changedFiles,
