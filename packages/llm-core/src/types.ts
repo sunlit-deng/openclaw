@@ -471,8 +471,8 @@ export interface OpenAICompletionsCompat {
   supportsPromptCacheKey?: boolean;
   /** Whether the provider supports long prompt cache retention (`prompt_cache_retention: "24h"` or Anthropic-style `cache_control.ttl: "1h"`, depending on format). Default: true. */
   supportsLongCacheRetention?: boolean;
+  disableBoundaryAwareCache?: boolean;
 }
-
 /** Compatibility settings for OpenAI Responses APIs. */
 export interface OpenAIResponsesCompat {
   /** Whether the model accepts the `temperature` parameter. Default: true. */

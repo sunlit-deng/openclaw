@@ -44,13 +44,14 @@ import {
   getFirstStreamEventTimeoutMs,
   withFirstStreamEventTimeout,
 } from "../utils/stream-first-event-timeout.js";
-import {
-  splitSystemPromptCacheBoundary,
-  stripSystemPromptCacheBoundary,
-} from "../utils/system-prompt-cache-boundary.js";
+import { splitSystemPromptCacheBoundary } from "../utils/system-prompt-cache-boundary.js";
 import { resolveCacheRetention } from "./cache-retention.js";
 import { isCloudflareProvider, resolveCloudflareBaseUrl } from "./cloudflare.js";
 import { buildCopilotDynamicHeaders, hasCopilotVisionInput } from "./github-copilot-headers.js";
+import {
+  resolveOpenAICompletionsSystemPromptBoundary,
+  type OpenAICompletionsPromptCarrier,
+} from "./openai-completions-cache-boundary.js";
 import { clampOpenAIPromptCacheKey } from "./openai-prompt-cache.js";
 import { mapOpenAIStopReason } from "./openai-stop-reason.js";
 import {
@@ -985,7 +986,6 @@ function buildCacheControlledTextParts(
   }
   return parts.length > 0 ? parts : [{ type: "text", text: "" }];
 }
-
 export function convertMessages(
   model: Model<"openai-completions">,
   context: Context,
@@ -996,42 +996,33 @@ export function convertMessages(
   } = {},
 ): ChatCompletionMessageParam[] {
   const params: ChatCompletionMessageParam[] = [];
-
+  let pendingSuffixCarrier: OpenAICompletionsPromptCarrier | undefined;
   const normalizeToolCallId = (id: string): string => {
-    // Handle pipe-separated IDs from OpenAI Responses API
-    // Format: {call_id}|{id} where {id} can be 400+ chars with special chars (+, /, =)
-    // These come from providers like github-copilot, openai, opencode
-    // Extract just the call_id part and normalize it
     if (id.includes("|")) {
       const callId = id.slice(0, id.indexOf("|"));
-      // Sanitize to allowed chars and truncate to 40 chars (OpenAI limit)
       return callId.replace(/[^a-zA-Z0-9_-]/g, "_").slice(0, 40);
     }
-
     if (model.provider === "openai") {
       return id.length > 40 ? id.slice(0, 40) : id;
     }
     return id;
   };
-
   const transformedMessages = transformMessages(context.messages, model, (id) =>
     normalizeToolCallId(id),
   );
-
   if (context.systemPrompt) {
     const useDeveloperRole = model.reasoning && compat.supportsDeveloperRole;
     const role = useDeveloperRole ? "developer" : "system";
-    const systemPrompt = options.preserveSystemPromptCacheBoundary
-      ? context.systemPrompt
-      : stripSystemPromptCacheBoundary(context.systemPrompt);
-    params.push({
+    const resolvedPrompt = resolveOpenAICompletionsSystemPromptBoundary({
+      prompt: context.systemPrompt,
       role,
-      content: sanitizeSurrogates(systemPrompt),
+      disableBoundaryAwareCache: compat.disableBoundaryAwareCache,
+      preserveSystemPromptCacheBoundary: options.preserveSystemPromptCacheBoundary,
     });
+    params.push({ role, content: resolvedPrompt.content });
+    pendingSuffixCarrier = resolvedPrompt.pendingSuffixCarrier;
   }
-
   let lastRole: string | null = null;
-
   for (let i = 0; i < transformedMessages.length; i++) {
     const msg = transformedMessages[i];
     if (!msg) {
@@ -1271,7 +1262,10 @@ export function convertMessages(
 
     lastRole = msg.role;
   }
-
+  if (pendingSuffixCarrier && pendingSuffixCarrier.content.length > 0) {
+    options.cacheOptOutIndexes?.add(params.length);
+    params.push(pendingSuffixCarrier);
+  }
   return params;
 }
 
@@ -1412,6 +1406,7 @@ function detectCompat(model: Model<"openai-completions">): ResolvedOpenAIComplet
     sendSessionAffinityHeaders: false,
     supportsPromptCacheKey: false,
     supportsLongCacheRetention: !(isTogether || isCloudflareWorkersAI || isCloudflareAiGateway),
+    disableBoundaryAwareCache: isDeepSeek,
   };
 }
 
@@ -1451,6 +1446,8 @@ function getCompat(model: Model<"openai-completions">): ResolvedOpenAICompletion
     supportsPromptCacheKey: model.compat.supportsPromptCacheKey ?? detected.supportsPromptCacheKey,
     supportsLongCacheRetention:
       model.compat.supportsLongCacheRetention ?? detected.supportsLongCacheRetention,
+    disableBoundaryAwareCache:
+      model.compat.disableBoundaryAwareCache ?? detected.disableBoundaryAwareCache,
   };
 }
 /* oxlint-disable max-lines -- TODO: split this grandfathered oversized file. */

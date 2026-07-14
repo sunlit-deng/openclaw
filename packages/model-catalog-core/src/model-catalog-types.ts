@@ -59,6 +59,7 @@ export type ModelCatalogCompatConfig = {
   supportsEagerToolInputStreaming?: boolean;
   supportsLongCacheRetention?: boolean;
   supportsPromptCacheKey?: boolean;
+  disableBoundaryAwareCache?: boolean;
   supportsTools?: boolean;
   requiresStringContent?: boolean;
   strictMessageKeys?: boolean;

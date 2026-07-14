@@ -890,6 +890,67 @@ describe("OpenAI-compatible completions params", () => {
     });
   });
 
+  it("preserves the dynamic cache suffix as a trailing system carrier for system-only boundary-aware requests", async () => {
+    let capturedMessages: unknown;
+    const stream = streamOpenAICompletions(
+      {
+        ...createModel(32_000),
+        compat: { disableBoundaryAwareCache: true },
+      },
+      {
+        systemPrompt: `Stable prefix${SYSTEM_PROMPT_CACHE_BOUNDARY}Dynamic suffix`,
+        messages: [],
+      },
+      {
+        apiKey: "sk-test",
+        onPayload(payload) {
+          capturedMessages = (payload as { messages?: unknown }).messages;
+          throw new Error("stop before network");
+        },
+      },
+    );
+
+    const result = await stream.result();
+
+    expect(result.stopReason).toBe("error");
+    // Suffix stays in an instruction-authority role after the stable prefix so
+    // runtime guidance is not demoted to user content and the prefix is stable.
+    expect(capturedMessages).toEqual([
+      { role: "system", content: "Stable prefix" },
+      { role: "system", content: "Dynamic suffix" },
+    ]);
+  });
+
+  it("sanitizes malformed Unicode in the trailing boundary-aware suffix carrier", async () => {
+    let capturedMessages: unknown;
+    const loneSurrogate = String.fromCharCode(0xd83d);
+    const stream = streamOpenAICompletions(
+      {
+        ...createModel(32_000),
+        compat: { disableBoundaryAwareCache: true },
+      },
+      {
+        systemPrompt: `Stable prefix${SYSTEM_PROMPT_CACHE_BOUNDARY}Dynamic ${loneSurrogate}suffix`,
+        messages: [],
+      },
+      {
+        apiKey: "sk-test",
+        onPayload(payload) {
+          capturedMessages = (payload as { messages?: unknown }).messages;
+          throw new Error("stop before network");
+        },
+      },
+    );
+
+    const result = await stream.result();
+
+    expect(result.stopReason).toBe("error");
+    expect(capturedMessages).toEqual([
+      { role: "system", content: "Stable prefix" },
+      { role: "system", content: "Dynamic suffix" },
+    ]);
+  });
+
   it("splits the cache boundary before applying Anthropic cache control for OpenRouter Anthropic models", async () => {
     let capturedMessages: unknown;
     const stream = streamOpenAICompletions(

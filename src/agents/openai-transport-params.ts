@@ -272,6 +272,7 @@ function detectCompat(model: OpenAIModeModel) {
     requiresReasoningContentOnAssistantMessages:
       defaults.requiresReasoningContentOnAssistantMessages,
     requiresNonEmptyUserOrAssistantMessage: defaults.requiresNonEmptyUserOrAssistantMessage,
+    disableBoundaryAwareCache: defaults.disableBoundaryAwareCache,
   };
 }
 
@@ -311,5 +312,11 @@ export function getCompat(model: OpenAIModeModel) {
       compat.requiresReasoningContentOnAssistantMessages ??
       detected.requiresReasoningContentOnAssistantMessages,
     requiresNonEmptyUserOrAssistantMessage: detected.requiresNonEmptyUserOrAssistantMessage,
+    // Respect an explicit `false` opt-out; otherwise auto-detect (true for
+    // prefix-matching cache providers like DeepSeek).
+    disableBoundaryAwareCache:
+      compat.disableBoundaryAwareCache === false
+        ? false
+        : (compat.disableBoundaryAwareCache ?? detected.disableBoundaryAwareCache),
   };
 }

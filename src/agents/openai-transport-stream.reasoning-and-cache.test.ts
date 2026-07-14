@@ -5,10 +5,40 @@ import { describe, expect, it } from "vitest";
 import { buildOpenAICompletionsParams } from "./openai-transport-stream.js";
 import {
   buildOpenAIResponsesParams,
+  createDeepSeekCompletionsModel,
   makeCompletionsModel,
   makeResponsesModel,
   expectRecordFields,
 } from "./openai-transport-stream.test-harness.js";
+
+function openAICompletionsMessages(params: unknown): Array<{
+  role?: string;
+  content?: string | Array<{ type?: string; text?: string }>;
+}> {
+  if (!params || typeof params !== "object") {
+    throw new Error("Expected params object");
+  }
+  const messages = (params as { messages?: unknown }).messages;
+  if (!Array.isArray(messages)) {
+    throw new Error("Expected completions messages");
+  }
+  return messages as Array<{
+    role?: string;
+    content?: string | Array<{ type?: string; text?: string }>;
+  }>;
+}
+
+function messageText(message: {
+  content?: string | Array<{ type?: string; text?: string }>;
+}): string {
+  if (typeof message.content === "string") {
+    return message.content;
+  }
+  if (Array.isArray(message.content)) {
+    return message.content.map((part) => part.text ?? "").join("\n");
+  }
+  return "";
+}
 
 describe("openai transport stream", () => {
   it("omits responses strict tool shaping for proxy-like OpenAI routes", () => {
@@ -314,6 +344,138 @@ describe("openai transport stream", () => {
     ) as { messages?: Array<{ content?: string }> };
 
     expect(params.messages?.[0]?.content).toBe("Stable prefix\nDynamic suffix");
+  });
+
+  it("appends the DeepSeek dynamic cache-boundary suffix as a trailing system carrier, leaving the latest user message unchanged", () => {
+    const params = buildOpenAICompletionsParams(
+      createDeepSeekCompletionsModel(),
+      {
+        systemPrompt: `Stable prefix${SYSTEM_PROMPT_CACHE_BOUNDARY}Project Context`,
+        messages: [{ role: "user", content: "Hello", timestamp: 1 }],
+        tools: [],
+      } as never,
+      undefined,
+    );
+
+    const messages = openAICompletionsMessages(params);
+    expect(messages[0]).toMatchObject({ role: "system", content: "Stable prefix" });
+    expect(messages[1]).toMatchObject({ role: "user", content: "Hello" });
+    expect(messageText(messages[1] ?? {})).not.toContain("Project Context");
+    expect(messages[2]).toMatchObject({ role: "system", content: "Project Context" });
+  });
+
+  it("preserves DeepSeek dynamic cache-boundary suffix for system-only requests", () => {
+    const params = buildOpenAICompletionsParams(
+      createDeepSeekCompletionsModel(),
+      {
+        systemPrompt: `Stable prefix${SYSTEM_PROMPT_CACHE_BOUNDARY}Project Context`,
+        messages: [],
+        tools: [],
+      } as never,
+      undefined,
+    );
+
+    const messages = openAICompletionsMessages(params);
+    expect(messages).toHaveLength(2);
+    expect(messages[0]).toMatchObject({ role: "system", content: "Stable prefix" });
+    expect(messages[1]).toMatchObject({ role: "system", content: "Project Context" });
+  });
+
+  it("sanitizes malformed Unicode in the DeepSeek trailing boundary suffix carrier", () => {
+    const loneSurrogate = String.fromCharCode(0xd83d);
+    const params = buildOpenAICompletionsParams(
+      createDeepSeekCompletionsModel(),
+      {
+        systemPrompt: `Stable prefix${SYSTEM_PROMPT_CACHE_BOUNDARY}Project ${loneSurrogate}Context`,
+        messages: [],
+        tools: [],
+      } as never,
+      undefined,
+    );
+
+    const messages = openAICompletionsMessages(params);
+    expect(messages).toHaveLength(2);
+    expect(messages[0]).toMatchObject({ role: "system", content: "Stable prefix" });
+    expect(messages[1]).toMatchObject({ role: "system", content: "Project Context" });
+  });
+
+  it("keeps DeepSeek multi-turn history byte-stable by trailing the cache-boundary suffix after all turns", () => {
+    const params = buildOpenAICompletionsParams(
+      createDeepSeekCompletionsModel(),
+      {
+        systemPrompt: `Stable prefix${SYSTEM_PROMPT_CACHE_BOUNDARY}Project Context`,
+        messages: [
+          { role: "user", content: "Historical request", timestamp: 1 },
+          {
+            role: "assistant",
+            api: "openai-completions",
+            provider: "deepseek",
+            model: "deepseek-chat",
+            usage: {
+              input: 0,
+              output: 0,
+              cacheRead: 0,
+              cacheWrite: 0,
+              totalTokens: 0,
+              cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0 },
+            },
+            stopReason: "stop",
+            content: [{ type: "text", text: "Historical answer" }],
+            timestamp: 2,
+          },
+          { role: "user", content: "Current request", timestamp: 3 },
+        ],
+        tools: [],
+      } as never,
+      undefined,
+    );
+
+    const messages = openAICompletionsMessages(params);
+    expect(messages[0]).toMatchObject({ role: "system", content: "Stable prefix" });
+    expect(messages[1]).toMatchObject({ role: "user", content: "Historical request" });
+    expect(messages[2]?.role).toBe("assistant");
+    expect(messages[3]).toMatchObject({ role: "user", content: "Current request" });
+    expect(messageText(messages[3] ?? {})).not.toContain("Project Context");
+    expect(messages[4]).toMatchObject({ role: "system", content: "Project Context" });
+  });
+
+  it("respects explicit disableBoundaryAwareCache false for DeepSeek", () => {
+    const params = buildOpenAICompletionsParams(
+      {
+        ...createDeepSeekCompletionsModel(),
+        compat: { thinkingFormat: "deepseek", disableBoundaryAwareCache: false },
+      },
+      {
+        systemPrompt: `Stable prefix${SYSTEM_PROMPT_CACHE_BOUNDARY}Project Context`,
+        messages: [{ role: "user", content: "Hello", timestamp: 1 }],
+        tools: [],
+      } as never,
+      undefined,
+    );
+
+    const messages = openAICompletionsMessages(params);
+    expect(messages[0]?.content).toBe("Stable prefix\nProject Context");
+    expect(messageText(messages[1] ?? {})).toBe("Hello");
+  });
+
+  it("keeps OpenAI completions boundary handling unchanged", () => {
+    const params = buildOpenAICompletionsParams(
+      makeCompletionsModel({
+        id: "gpt-4.1",
+        name: "GPT-4.1",
+        reasoning: false,
+      }),
+      {
+        systemPrompt: `Stable prefix${SYSTEM_PROMPT_CACHE_BOUNDARY}Project Context`,
+        messages: [{ role: "user", content: "Hello", timestamp: 1 }],
+        tools: [],
+      } as never,
+      undefined,
+    );
+
+    const messages = openAICompletionsMessages(params);
+    expect(messages[0]?.content).toBe("Stable prefix\nProject Context");
+    expect(messageText(messages[1] ?? {})).toBe("Hello");
   });
 
   it("uses shared stream reasoning as OpenAI completions effort", () => {

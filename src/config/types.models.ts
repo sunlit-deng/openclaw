@@ -44,6 +44,7 @@ type SupportedOpenAICompatFields = Pick<
   | "cacheControlFormat"
   | "sendSessionAffinityHeaders"
   | "supportsLongCacheRetention"
+  | "disableBoundaryAwareCache"
 >;
 
 type SupportedOpenAIResponsesCompatFields = Pick<

@@ -390,6 +390,7 @@ function normalizeModelCatalogCompat(value: unknown): ModelCatalogCompatConfig |
     "sendSessionIdHeader",
     "supportsEagerToolInputStreaming",
     "supportsLongCacheRetention",
+    "disableBoundaryAwareCache",
     "nativeWebSearchTool",
     "requiresMistralToolIds",
     "requiresOpenAiAnthropicToolPayload",
@@ -399,7 +400,6 @@ function normalizeModelCatalogCompat(value: unknown): ModelCatalogCompatConfig |
       compat[field] = value[field];
     }
   }
-
   const stringFields = ["toolSchemaProfile", "toolCallArgumentsEncoding"] as const;
   for (const field of stringFields) {
     const normalized = normalizeOptionalString(value[field]) ?? "";
