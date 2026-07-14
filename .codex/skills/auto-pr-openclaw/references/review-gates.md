@@ -29,6 +29,7 @@ Use these gates before pushing or updating an OpenClaw PR.
 - Run focused tests first for changed modules.
 - Run `scripts/openclaw-preflight.sh --workflow <path>` so changed-surface validation and focused changed tests are executed against the pinned `validationBaseSha` and recorded against the current HEAD. By default preflight runs pinned-base equivalents of `pnpm check:changed` and `pnpm test:changed`; it does not run full repository `pnpm check` or broad `pnpm check:test-types`. Use `--profile full` only when a full-repository check is intentional, and `--type-script check:test-types` only when the touched surface or user request explicitly needs that broader test-type lane.
 - Treat the main SHA fetched by preflight as one observation, not a moving validation base. Main advancement, behind count, and overlapping files are advisories. A merge conflict against that observed SHA is blocking. Do not restart the gate merely because main advances again after the observation.
+- For an explicit "rebase then publish" request, fetch once, record the exact rebase target SHA, rebase to that SHA, and keep that SHA as `validationBaseSha` through validation and publish. If main advances while checks are running, do not chase it. Publish the validated HEAD unless preflight reports a real merge conflict, the overlapping-file report changes the risk decision, or the user explicitly asks for another rebase after seeing the current gate state.
 - Reuse cached heavy checks only when the receipt fingerprint matches HEAD, `validationBaseSha`, package/lockfile content, lanes, toolchain, platform, and relevant execution environment. Always recompute latest-main merge risk even on a heavy-cache hit.
 - Avoid the default `pnpm check:changed` remote delegation path. Preflight sets `OPENCLAW_CHECK_CHANGED_REMOTE_CHILD=1 OPENCLAW_CHANGED_LANES_RAW_SYNC=1 PNPM_CONFIG_VERIFY_DEPS_BEFORE_RUN=false` and intentionally omits `CI=1` so changed lanes run locally. When checking manually, use the same environment; Testbox/Blacksmith runs are optional supplemental proof, not the default local gate.
 - A passing `preflight.json` is required. Missing, skipped, stale, or failed checks do not pass based on an agent's prose summary.
@@ -46,9 +47,9 @@ be changed.
 Required lightweight checks before the human gate:
 
 - worktree is clean
-- branch contains the latest fetched `origin/main`
-- branch still has a committed diff beyond `origin/main`
-- `git diff --check refs/remotes/origin/main...HEAD` passes
+- branch contains the single approved rebase target SHA
+- branch still has a committed diff beyond the approved rebase target SHA
+- `git diff --check <approved-rebase-target-sha>...HEAD` passes
 - every `sunlit-deng` author/committer email in the PR commits is `yang.jiajun1@xydigit.com`
 - existing PR head owner/ref matches the authenticated GitHub push identity
 - `maintainerCanModify` is `true`

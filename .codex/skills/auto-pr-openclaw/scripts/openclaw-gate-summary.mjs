@@ -72,6 +72,9 @@ const duplicateCheck = readJsonIfPresent(duplicateCheckPath);
 const candidateScore = readJsonIfPresent(candidateScorePath);
 const clean = run("git", ["status", "--porcelain"], { cwd: context.repoPath }).stdout.trim() === "";
 const diffCheck = run("git", ["diff", "--check", `${baseSha}...HEAD`], { cwd: context.repoPath, allowFailure: true });
+const likelyDuplicateCount = duplicateCheck?.summary?.likelyDuplicateCount ?? 0;
+const relatedOpenPrCount = duplicateCheck?.summary?.relatedOpenPrCount ?? 0;
+const duplicateCheckBlocks = !context.workflow.pr && likelyDuplicateCount > 0;
 
 let maintainer = { checked: false, maintainerCanModify: context.workflow.maintainerCanModify ?? null, error: null };
 if (context.workflow.pr) {
@@ -111,7 +114,7 @@ for (const identity of identities) {
     blockers.push(`sunlit-deng commit identity mismatch at ${identity.sha.slice(0, 12)}`);
   }
 }
-if (duplicateCheck?.summary?.likelyDuplicateCount > 0) blockers.push("duplicate-check found likely duplicates");
+if (duplicateCheckBlocks) blockers.push("duplicate-check found likely duplicates");
 if (candidateScore?.verdict && ["needs-work", "poor-fit"].includes(candidateScore.verdict)) {
   blockers.push(`candidate score verdict is ${candidateScore.verdict}`);
 }
@@ -149,8 +152,9 @@ const summary = {
   } : null,
   duplicateCheck: duplicateCheck ? {
     path: duplicateCheckPath,
-    likelyDuplicateCount: duplicateCheck.summary?.likelyDuplicateCount ?? 0,
-    relatedOpenPrCount: duplicateCheck.summary?.relatedOpenPrCount ?? 0,
+    likelyDuplicateCount,
+    relatedOpenPrCount,
+    blocking: duplicateCheckBlocks,
   } : null,
   candidateScore: candidateScore ? {
     path: candidateScorePath,
@@ -191,7 +195,7 @@ ${mdList(nameStatus.map((line) => `\`${line}\``))}
 
 - preflight: ${checkStatus(preflight)}
 - preflight receipt: \`${context.preflightPath}\`
-- duplicate check: ${duplicateCheck ? `${summary.duplicateCheck.likelyDuplicateCount} likely duplicates, ${summary.duplicateCheck.relatedOpenPrCount} related open PRs` : "missing"}
+- duplicate check: ${duplicateCheck ? `${summary.duplicateCheck.likelyDuplicateCount} likely duplicates, ${summary.duplicateCheck.relatedOpenPrCount} related open PRs${summary.duplicateCheck.blocking ? "" : " (advisory)"}` : "missing"}
 - candidate score: ${candidateScore ? `${candidateScore.score} (${candidateScore.verdict})` : "missing"}
 - maintainer edit: ${maintainer.checked ? String(maintainer.maintainerCanModify) : maintainer.maintainerCanModify === null ? "not checked" : String(maintainer.maintainerCanModify)}
 
