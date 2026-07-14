@@ -178,8 +178,9 @@ describe("provider adapters", () => {
   });
 
   it("cancels oversized provider response streams before buffering them fully", async () => {
+    const maxBytes = 256 * 1024;
     const chunk = new TextEncoder().encode("x".repeat(64 * 1024));
-    const totalChunks = 8;
+    const totalChunks = 64;
     let emittedChunks = 0;
     let cancelled = false;
     const response = new Response(
@@ -209,7 +210,8 @@ describe("provider adapters", () => {
       category: "guard_failure",
     });
     expect(cancelled).toBe(true);
-    expect(emittedChunks).toBeLessThan(totalChunks);
+    // Allow the overflow chunk plus one chunk queued by the stream implementation.
+    expect(emittedChunks * chunk.byteLength).toBeLessThanOrEqual(maxBytes + chunk.byteLength * 2);
   });
 
   it("accepts valid provider responses close to the body limit", async () => {
