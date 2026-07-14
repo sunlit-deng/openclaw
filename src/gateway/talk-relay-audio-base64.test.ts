@@ -122,7 +122,32 @@ describe("talk relay audio base64 guards", () => {
     expect(events).toEqual([]);
   });
 
-  it("rejects base64url realtime relay audio before provider delivery", async () => {
+  it("continues to forward base64url realtime relay audio", async () => {
+    const sendAudio = vi.fn();
+    const { context, events } = createBroadcastContext();
+    const session = createTalkRealtimeRelaySession({
+      context,
+      connId: "conn-1",
+      provider: createRealtimeProvider(sendAudio),
+      providerConfig: {},
+      instructions: "brief",
+      tools: [],
+    });
+    realtimeSessions.set(session.relaySessionId, "conn-1");
+    await Promise.resolve();
+    events.length = 0;
+
+    sendTalkRealtimeRelayAudio({
+      relaySessionId: session.relaySessionId,
+      connId: "conn-1",
+      audioBase64: "-_8",
+    });
+
+    expect(sendAudio).toHaveBeenCalledWith(Buffer.from([0xfb, 0xff]));
+    expect(hasInputAudioByteLength(events, 2)).toBe(true);
+  });
+
+  it("rejects non-round-tripping realtime relay audio before provider delivery", async () => {
     const sendAudio = vi.fn();
     const { context, events } = createBroadcastContext();
     const session = createTalkRealtimeRelaySession({
@@ -141,7 +166,7 @@ describe("talk relay audio base64 guards", () => {
       sendTalkRealtimeRelayAudio({
         relaySessionId: session.relaySessionId,
         connId: "conn-1",
-        audioBase64: "-_8",
+        audioBase64: "AB",
       }),
     ).toThrow("Realtime relay audio frame is invalid base64");
 
@@ -199,7 +224,30 @@ describe("talk relay audio base64 guards", () => {
     expect(events).toEqual([]);
   });
 
-  it("rejects base64url transcription relay audio before STT delivery", async () => {
+  it("continues to forward base64url transcription relay audio", async () => {
+    const sendAudio = vi.fn();
+    const { context, events } = createBroadcastContext();
+    const session = createTalkTranscriptionRelaySession({
+      context,
+      connId: "conn-1",
+      provider: createTranscriptionProvider(sendAudio),
+      providerConfig: {},
+    });
+    transcriptionSessions.set(session.transcriptionSessionId, "conn-1");
+    await Promise.resolve();
+    events.length = 0;
+
+    sendTalkTranscriptionRelayAudio({
+      transcriptionSessionId: session.transcriptionSessionId,
+      connId: "conn-1",
+      audioBase64: "-_8",
+    });
+
+    expect(sendAudio).toHaveBeenCalledWith(Buffer.from([0xfb, 0xff]));
+    expect(hasInputAudioByteLength(events, 2)).toBe(true);
+  });
+
+  it("rejects non-round-tripping transcription relay audio before STT delivery", async () => {
     const sendAudio = vi.fn();
     const { context, events } = createBroadcastContext();
     const session = createTalkTranscriptionRelaySession({
@@ -216,7 +264,7 @@ describe("talk relay audio base64 guards", () => {
       sendTalkTranscriptionRelayAudio({
         transcriptionSessionId: session.transcriptionSessionId,
         connId: "conn-1",
-        audioBase64: "-_8",
+        audioBase64: "AB",
       }),
     ).toThrow("Transcription Talk audio frame is invalid base64");
 
