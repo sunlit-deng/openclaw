@@ -17,6 +17,7 @@ import {
 import type { OpenClawConfig } from "../../config/types.openclaw.js";
 import { formatErrorMessage } from "../../infra/errors.js";
 import { isPathInside } from "../../infra/path-guards.js";
+import { readLogWindowFully } from "../../logging/log-tail.js";
 import { resolveSessionAgentIds } from "../agent-scope.js";
 import {
   limitAgentHookHistoryMessages,
@@ -328,8 +329,11 @@ async function readBoundedCliSessionTranscript(
   const handle = await fsp.open(filePath, "r");
   try {
     const buffer = Buffer.alloc(MAX_CLI_SESSION_HISTORY_FILE_BYTES);
-    await handle.read(buffer, 0, buffer.length, fileSize - buffer.length);
-    const tail = buffer.toString("utf-8");
+    // Positional reads may return short (or hit EOF early when the file
+    // shrinks after stat); decode only the bytes actually read so trailing
+    // NUL padding never corrupts the JSONL tail.
+    const bytesRead = await readLogWindowFully(handle, buffer, fileSize - buffer.length);
+    const tail = buffer.subarray(0, bytesRead).toString("utf-8");
     const firstLineEnd = tail.indexOf("\n");
     const completeTail = firstLineEnd >= 0 ? tail.slice(firstLineEnd + 1) : "";
     const headerLine = await readCliSessionHeaderLine(filePath);

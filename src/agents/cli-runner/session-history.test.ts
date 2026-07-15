@@ -1,5 +1,6 @@
 // Covers CLI session transcript loading and reseeding boundaries.
 import fs from "node:fs";
+import fsp from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import { CURRENT_SESSION_VERSION } from "openclaw/plugin-sdk/agent-sessions";
@@ -481,6 +482,81 @@ describe("loadCliSessionHistoryMessages", () => {
         );
       });
     } finally {
+      warnSpy.mockRestore();
+      fs.rmSync(stateDir, { recursive: true, force: true });
+    }
+  });
+
+  it("keeps bounded tails parseable when the transcript shrinks after stat", async () => {
+    const stateDir = fs.mkdtempSync(path.join(os.tmpdir(), "openclaw-cli-state-"));
+    const sessionFile = path.join(
+      stateDir,
+      "agents",
+      "main",
+      "sessions",
+      "session-oversized-shrink.jsonl",
+    );
+    const warnSpy = vi.spyOn(cliBackendLog, "warn").mockImplementation(() => undefined);
+    fs.mkdirSync(path.dirname(sessionFile), { recursive: true });
+    fs.writeFileSync(
+      sessionFile,
+      [
+        JSON.stringify({
+          type: "session",
+          version: CURRENT_SESSION_VERSION,
+          id: "session-oversized-shrink",
+          timestamp: new Date(0).toISOString(),
+          cwd: stateDir,
+        }),
+        JSON.stringify({
+          type: "message",
+          id: "old",
+          parentId: null,
+          timestamp: new Date(1).toISOString(),
+          message: {
+            role: "user",
+            content: "x".repeat(MAX_CLI_SESSION_HISTORY_FILE_BYTES),
+            timestamp: 1,
+          },
+        }),
+        JSON.stringify({
+          type: "message",
+          id: "tail",
+          parentId: "old",
+          timestamp: new Date(2).toISOString(),
+          message: { role: "user", content: "tail history", timestamp: 2 },
+        }),
+      ].join("\n") + "\n",
+      "utf-8",
+    );
+    // Report a stale, larger size for the session file so the bounded
+    // positional read hits EOF early, as when the CLI compacts the transcript
+    // between the size probe and the read.
+    const realFspStat = fsp.stat;
+    const statSpy = vi.spyOn(fsp, "stat").mockImplementation(async (target, ...rest) => {
+      const stats = await realFspStat(target as Parameters<typeof realFspStat>[0], ...rest);
+      if (String(target).endsWith("session-oversized-shrink.jsonl")) {
+        return { ...stats, size: stats.size + 4096, isFile: () => true } as typeof stats;
+      }
+      return stats;
+    });
+
+    try {
+      await withCliSessionState(stateDir, async () => {
+        const history = await loadCliSessionHistoryMessages({
+          sessionId: "session-oversized-shrink",
+          sessionFile,
+          sessionKey: "agent:main:main",
+          agentId: "main",
+        });
+        expect(history).toHaveLength(1);
+        expectMessageFields(history[0], { role: "user", content: "tail history" });
+        expect(warnSpy).not.toHaveBeenCalledWith(
+          expect.stringContaining("cli session history parse failed"),
+        );
+      });
+    } finally {
+      statSpy.mockRestore();
       warnSpy.mockRestore();
       fs.rmSync(stateDir, { recursive: true, force: true });
     }
