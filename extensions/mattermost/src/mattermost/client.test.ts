@@ -678,4 +678,14 @@ describe("fetchMattermostThreadPosts", () => {
     );
     expect(posts.map((p) => p.id)).toEqual(["post1", "post2", "post3"]);
   });
+
+  it("clamps oversized perPage to Mattermost 200-item max", async () => {
+    const { client, calls } = createTestClient({
+      body: { order: [], posts: mockThreadPosts },
+    });
+    await fetchMattermostThreadPosts(client, "post1", { limit: 250 });
+    expect(calls[0]?.url).toBe(
+      "http://localhost:8065/api/v4/posts/post1/thread?perPage=200&direction=up",
+    );
+  });
 });

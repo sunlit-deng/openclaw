@@ -6,7 +6,8 @@ export async function fetchMattermostThreadPosts(
   options: { limit?: number; signal?: AbortSignal } = {},
 ): Promise<MattermostPost[]> {
   const { limit, signal } = options;
-  const query = typeof limit === "number" && limit > 0 ? `?perPage=${limit}&direction=up` : "";
+  const perPage = typeof limit === "number" && limit > 0 ? Math.min(limit, 200) : 0;
+  const query = perPage > 0 ? `?perPage=${perPage}&direction=up` : "";
   const data = await client.request<{
     order: string[];
     posts: Record<string, MattermostPost>;
