@@ -10,6 +10,7 @@ function parseArgs(argv) {
     approvedHead: "",
     pushRemote: "",
     repo: "openclaw/openclaw",
+    target: "",
   };
   for (let index = 0; index < argv.length; index += 1) {
     const arg = argv[index];
@@ -18,6 +19,7 @@ function parseArgs(argv) {
       "--approved-head": "approvedHead",
       "--push-remote": "pushRemote",
       "--repo": "repo",
+      "--target": "target",
     }[arg];
     if (arg === "-h" || arg === "--help") result.help = true;
     else if (!key) throw new Error(`Unknown argument: ${arg}`);
@@ -28,7 +30,7 @@ function parseArgs(argv) {
 
 function usage() {
   return [
-    "Usage: publish-openclaw-rebase-only.mjs --workflow PATH --approved-head SHA --push-remote NAME [--repo OWNER/REPO]",
+    "Usage: publish-openclaw-rebase-only.mjs --workflow PATH --approved-head SHA --push-remote NAME [--target SHA] [--repo OWNER/REPO]",
     "",
     "Force-pushes an existing OpenClaw PR branch after a conflict-only rebase.",
     "This fast path does not read preflight.json, update the PR body, post comments, or request review.",
@@ -133,24 +135,27 @@ if (workflow.branch !== currentBranch) failures.push(`current branch ${currentBr
 if (args.approvedHead !== currentHead) failures.push("current HEAD does not match the human-approved HEAD");
 if (execute("git", ["status", "--porcelain"], { cwd: repoPath })) failures.push("working tree is not clean");
 
-const fetchOrigin = run("git", ["fetch", "origin", "main"], { cwd: repoPath });
-if (fetchOrigin.exitCode !== 0) failures.push(`git fetch origin main failed: ${fetchOrigin.output || fetchOrigin.error}`);
-
 let baseSha = "";
 let mergeBase = "";
 try {
-  baseSha = execute("git", ["rev-parse", "refs/remotes/origin/main^{commit}"], { cwd: repoPath });
+  const target = args.target
+    || workflow.approvedRebaseTargetSha
+    || workflow.rebaseTargetSha
+    || workflow.validationBaseSha
+    || workflow.baseSha
+    || "refs/remotes/origin/main";
+  baseSha = execute("git", ["rev-parse", `${target}^{commit}`], { cwd: repoPath });
   mergeBase = execute("git", ["merge-base", currentHead, baseSha], { cwd: repoPath });
-  if (mergeBase !== baseSha) failures.push(`branch does not contain latest origin/main (${baseSha})`);
+  if (mergeBase !== baseSha) failures.push(`branch does not contain approved rebase target (${baseSha})`);
   const changedFiles = execute("git", ["diff", "--name-only", `${baseSha}...${currentHead}`], { cwd: repoPath });
-  if (!changedFiles) failures.push("branch has no committed diff beyond origin/main");
+  if (!changedFiles) failures.push("branch has no committed diff beyond the approved rebase target");
   const identityProblems = checkSunlitIdentity(repoPath, mergeBase);
   failures.push(...identityProblems);
 } catch (error) {
   failures.push(error.message);
 }
 
-const diffCheck = run("git", ["diff", "--check", "refs/remotes/origin/main...HEAD"], { cwd: repoPath });
+const diffCheck = run("git", ["diff", "--check", `${baseSha}...HEAD`], { cwd: repoPath });
 if (diffCheck.exitCode !== 0) failures.push(`git diff --check failed: ${diffCheck.output || diffCheck.error}`);
 
 if (failures.length > 0) {

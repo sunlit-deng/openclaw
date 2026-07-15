@@ -13,6 +13,7 @@ function parseArgs(argv) {
     checkScript: "",
     testScript: "test:changed",
     typeScript: "",
+    extraScripts: [],
   };
   for (let index = 0; index < argv.length; index += 1) {
     const arg = argv[index];
@@ -21,13 +22,28 @@ function parseArgs(argv) {
     else if (arg === "--check-script") result.checkScript = argv[++index] ?? "";
     else if (arg === "--test-script") result.testScript = argv[++index] ?? "";
     else if (arg === "--type-script") result.typeScript = argv[++index] ?? "";
+    else if (arg === "--extra-script") result.extraScripts.push(argv[++index] ?? "");
     else if (arg === "-h" || arg === "--help") result.help = true;
     else throw new Error(`Unknown argument: ${arg}`);
   }
-  if (!["changed", "full"].includes(result.profile)) {
-    throw new Error("--profile must be changed or full");
+  if (!["quick", "fast", "changed", "full"].includes(result.profile)) {
+    throw new Error("--profile must be quick, fast, changed, or full");
   }
-  if (result.profile === "full") {
+  if (result.profile === "quick") {
+    if (result.checkScript || result.testScript !== "test:changed" || result.typeScript || result.extraScripts.length > 0) {
+      throw new Error("--profile quick cannot be combined with pnpm check, test, type, or extra lanes");
+    }
+    result.checkScript = "";
+    result.testScript = "";
+  } else if (result.profile === "fast") {
+    if (result.checkScript || result.testScript !== "test:changed" || result.typeScript || result.extraScripts.length > 0) {
+      throw new Error("--profile fast uses fixed lint, prod type, and test type lanes; do not combine it with custom lanes");
+    }
+    result.checkScript = "lint";
+    result.testScript = "";
+    result.typeScript = "tsgo:prod";
+    result.extraScripts = ["check:test-types"];
+  } else if (result.profile === "full") {
     if (result.checkScript && result.checkScript !== "check") {
       throw new Error("--profile full cannot be combined with a non-check --check-script");
     }
@@ -43,10 +59,12 @@ function parseArgs(argv) {
 
 function usage() {
   return [
-    "Usage: openclaw-preflight.mjs --workflow PATH [--profile changed|full] [--check-script NAME] [--test-script NAME] [--type-script NAME]",
+    "Usage: openclaw-preflight.mjs --workflow PATH [--profile quick|fast|changed|full] [--check-script NAME] [--test-script NAME] [--type-script NAME] [--extra-script NAME]",
     "",
     "Runs deterministic OpenClaw checks and writes preflight.json next to workflow.json.",
     "The default check lane is pnpm check:changed for all workflows; preflight does not run pnpm check by default.",
+    "Use --profile quick to run deterministic git, identity, PR body, proof, and merge-risk gates without pnpm heavy lanes.",
+    "Use --profile fast to run lint, production type checks, and test type checks without changed tests.",
     "Use --profile full to explicitly opt into the full-repository pnpm check lane.",
     "The default focused test lane is pnpm test:changed.",
     "Use --type-script check:test-types only when broader test type coverage is intentionally needed.",
@@ -402,7 +420,12 @@ try {
   checks.push(staticCheck("package manifest", false, error.message));
 }
 
-if (packageJson) {
+if (packageJson && args.profile === "quick") {
+  checks.push(skippedCheck(
+    "heavy checks",
+    "skipped by --profile quick; no pnpm check or test lanes were run",
+  ));
+} else if (packageJson) {
   checks.push(staticCheck(
     "selected check script exists",
     Boolean(checkScript && typeof packageJson.scripts?.[checkScript] === "string"),
@@ -410,14 +433,21 @@ if (packageJson) {
   ));
   checks.push(staticCheck(
     "focused test script exists",
-    Boolean(args.testScript && typeof packageJson.scripts?.[args.testScript] === "string"),
-    args.testScript || "no focused test script selected",
+    !args.testScript || typeof packageJson.scripts?.[args.testScript] === "string",
+    args.testScript || "not selected",
   ));
   checks.push(staticCheck(
     "optional test type script",
     !args.typeScript || typeof packageJson.scripts?.[args.typeScript] === "string",
     args.typeScript || "not selected",
   ));
+  for (const script of args.extraScripts) {
+    checks.push(staticCheck(
+      `extra script exists: ${script}`,
+      typeof packageJson.scripts?.[script] === "string",
+      script,
+    ));
+  }
 
   const prerequisitesPassed = !checks.some((check) => check.status === "failed");
   if (prerequisitesPassed) {
@@ -438,6 +468,7 @@ if (packageJson) {
         checkScript,
         testScript: args.testScript,
         typeScript: args.typeScript,
+        extraScripts: args.extraScripts,
         packageJsonSha256: fileSha256(path.join(repo, "package.json")),
         lockfileSha256: fileSha256(path.join(repo, "pnpm-lock.yaml")),
         node: process.version,
@@ -480,8 +511,13 @@ if (packageJson) {
         const checkArgs = checkScript === "check:changed"
           ? [checkScript, "--base", validationBaseSha, "--timed"]
           : [checkScript];
+        const checkLabel = args.profile === "full"
+          ? "full-repository lint type and policy checks"
+          : checkScript === "check:changed"
+            ? "changed-surface lint type and policy checks"
+            : `pnpm script: ${checkScript}`;
         const changedCheck = commandCheck(
-          args.profile === "full" ? "full-repository lint type and policy checks" : "changed-surface lint type and policy checks",
+          checkLabel,
           run("pnpm", checkArgs, repo, checkOptions),
         );
         heavyChecks.push(changedCheck);
@@ -495,9 +531,17 @@ if (packageJson) {
         }
         const earlierHeavyFailure = heavyChecks.some((check) => check.status === "failed");
         if (!earlierHeavyFailure && args.typeScript && typeof packageJson.scripts?.[args.typeScript] === "string") {
-          heavyChecks.push(commandCheck("test type checks", run("pnpm", [args.typeScript], repo)));
+          heavyChecks.push(commandCheck(`pnpm script: ${args.typeScript}`, run("pnpm", [args.typeScript], repo)));
         } else if (earlierHeavyFailure && args.typeScript) {
-          heavyChecks.push(skippedCheck("test type checks", "skipped because an earlier heavy lane failed"));
+          heavyChecks.push(skippedCheck(`pnpm script: ${args.typeScript}`, "skipped because an earlier heavy lane failed"));
+        }
+        for (const script of args.extraScripts) {
+          const failedBeforeExtra = heavyChecks.some((check) => check.status === "failed");
+          if (!failedBeforeExtra && typeof packageJson.scripts?.[script] === "string") {
+            heavyChecks.push(commandCheck(`extra pnpm script: ${script}`, run("pnpm", [script], repo)));
+          } else if (failedBeforeExtra) {
+            heavyChecks.push(skippedCheck(`extra pnpm script: ${script}`, "skipped because an earlier heavy lane failed"));
+          }
         }
         checks.push(staticCheck("heavy check cache", true, `cache miss for fingerprint ${heavyFingerprint}`));
       }
@@ -531,6 +575,13 @@ const receipt = {
   headSha,
   branch,
   profile: args.profile,
+  validationDepth: args.profile === "quick"
+    ? "deterministic-no-pnpm"
+    : args.profile === "full"
+      ? "full-pnpm"
+      : args.profile === "fast"
+        ? "fast-lint-prod-and-test-types"
+        : "changed-pnpm",
   freshness,
   heavyFingerprint,
   heavyCacheHit: cacheHit,

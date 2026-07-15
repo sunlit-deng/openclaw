@@ -91,12 +91,12 @@ When the user says remote candidate issues, remote candidates, or asks to screen
 
 3. **Executable local checks**
    - Run `scripts/openclaw-preflight.sh --workflow <outputs>/workflow.json` on macOS/Linux.
-   - Preflight must execute changed-surface validation and focused changed tests against the pinned `validationBaseSha`, plus Git, identity, PR body/proof, and latest-main merge-risk checks. Main advancement alone is advisory and must not invalidate successful heavy checks. A real merge conflict against the single main snapshot fetched at preflight is blocking; overlapping files are reported for human judgment. Do not keep fetching or rebasing during the same gate. After one requested rebase succeeds, do not rebase again in the same publish attempt unless preflight reports an actual conflict or the user explicitly asks for another rebase. By default preflight runs the pinned-base equivalents of `pnpm check:changed` and `pnpm test:changed`; it does not run full repository `pnpm check` or broad `pnpm check:test-types`. Use `--profile full` only for an intentional full-repository check, and `--type-script check:test-types` only when the touched surface or user request explicitly needs that broader test-type lane. A prose claim that checks ran is not a substitute for a passing `preflight.json` tied to the current HEAD and validation base.
+   - Preflight must execute changed-surface validation and focused changed tests against the pinned `validationBaseSha`, plus Git, identity, PR body/proof, and latest-main merge-risk checks. Main advancement alone is advisory and must not invalidate successful heavy checks. A real merge conflict against the single main snapshot fetched at preflight is blocking; overlapping files are reported for human judgment. Do not keep fetching or rebasing during the same gate. After one requested rebase succeeds, do not rebase again in the same publish attempt unless preflight reports an actual conflict or the user explicitly asks for another rebase. By default preflight runs the pinned-base equivalents of `pnpm check:changed` and `pnpm test:changed`; it does not run full repository `pnpm check` or broad `pnpm check:test-types`. Use `--profile quick` only when the user explicitly prioritizes fast publication for a very small, low-risk PR after focused proof/tests have already been collected; it skips pnpm heavy lanes and records `validationDepth: deterministic-no-pnpm`. Use `--profile fast` when timing matters but local lint and type confidence is still required; it runs `pnpm lint`, `pnpm tsgo:prod`, and `pnpm check:test-types`, skips changed tests, and records `validationDepth: fast-lint-prod-and-test-types`. Use `--profile full` only for an intentional full-repository check, and `--type-script check:test-types` only when the touched surface or user request explicitly needs that broader test-type lane. A prose claim that checks ran is not a substitute for a passing `preflight.json` tied to the current HEAD and validation base.
    - Preflight may reuse successful heavy checks only when its fingerprint matches the current HEAD, pinned validation base, package and lockfile content, selected lanes, toolchain, platform, and relevant execution environment. Latest observed main is deliberately excluded from that fingerprint; merge risk is recomputed separately on every run.
    - Do not use a naked `pnpm check:changed` as the release gate when it delegates to Blacksmith/Testbox. Use preflight, which sets `OPENCLAW_CHECK_CHANGED_REMOTE_CHILD=1 OPENCLAW_CHANGED_LANES_RAW_SYNC=1 PNPM_CONFIG_VERIFY_DEPS_BEFORE_RUN=false` and runs the changed lanes locally. If running the lane manually, use the same child environment without `CI=1`; remote Testbox is optional supplemental evidence only after the user explicitly asks for it.
    - Local AI review commands are optional diagnostics only. `codex review` and ClawSweeper local-review are not release gates because their availability is environment-dependent.
 
-   **Rebase-only fast path:** If an existing PR only needs a conflict-resolution or upstream rebase refresh and the PR body will not be changed, the full preflight can be deferred. Before the human gate, verify the lightweight release checks instead: clean worktree, branch contains the single approved rebase target SHA, committed diff exists beyond that target, `git diff --check <approved-rebase-target-sha>...HEAD` passes, `sunlit-deng` commit identity is correct, and `maintainerCanModify` is true. After confirmation, publish with `scripts/publish-openclaw-rebase-only.mjs --workflow <outputs>/workflow.json --approved-head <sha> --push-remote <remote>`. Do not use this fast path for code edits that respond to review findings, proof/body changes, new PR creation, or any case that needs ClawSweeper re-review.
+   **Rebase-only fast path:** If an existing PR only needs a conflict-resolution or upstream rebase refresh and the PR body will not be changed, do not run full preflight by default. Run `scripts/openclaw-rebase-only-check.sh --workflow <outputs>/workflow.json --target <approved-rebase-target-sha>` and then `scripts/openclaw-gate-summary.sh --workflow <outputs>/workflow.json`. The gate summary may use a passing `rebase-only-check.json` for the current HEAD instead of `preflight.json`. After confirmation, publish with `scripts/publish-openclaw-rebase-only.mjs --workflow <outputs>/workflow.json --approved-head <sha> --target <approved-rebase-target-sha> --push-remote <remote>`. Do not use this fast path for code edits that respond to review findings, proof/body changes, new PR creation, or any case that needs ClawSweeper re-review.
 
 4. **Pre-push human gate**
    - Stop before any GitHub write.
@@ -143,6 +143,24 @@ Run executable preflight checks:
 Preflight writes `preflight.json` outside the target repository. It never pushes,
 comments, or edits a PR.
 
+Run a quick deterministic preflight without pnpm heavy lanes for a low-risk PR
+when timing matters and focused proof/tests have already been collected:
+
+```bash
+./.codex/skills/auto-pr-openclaw/scripts/openclaw-preflight.sh \
+  --workflow workspace/openclaw/outputs/issue-94432/workflow.json \
+  --profile quick
+```
+
+Run a fast typed preflight when timing matters but local lint and type coverage
+is still required:
+
+```bash
+./.codex/skills/auto-pr-openclaw/scripts/openclaw-preflight.sh \
+  --workflow workspace/openclaw/outputs/issue-94432/workflow.json \
+  --profile fast
+```
+
 Report local workspace size and largest dependency directories:
 
 ```bash
@@ -179,6 +197,14 @@ Generate the human pre-push approval summary:
   --workflow workspace/openclaw/outputs/issue-94432/workflow.json
 ```
 
+Validate a rebase-only existing PR without heavy pnpm checks:
+
+```bash
+./.codex/skills/auto-pr-openclaw/scripts/openclaw-rebase-only-check.sh \
+  --workflow workspace/openclaw/outputs/pr-93865/workflow.json \
+  --target <approved-rebase-target-sha>
+```
+
 Generate a real-call-chain proof plan:
 
 ```bash
@@ -199,6 +225,7 @@ Publish an existing PR after rebase-only maintenance:
 ./.codex/skills/auto-pr-openclaw/scripts/publish-openclaw-rebase-only.sh \
   --workflow workspace/openclaw/outputs/pr-93865/workflow.json \
   --approved-head <sha> \
+  --target <approved-rebase-target-sha> \
   --push-remote sunlit
 ```
 

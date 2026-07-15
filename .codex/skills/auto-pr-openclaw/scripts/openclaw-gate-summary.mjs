@@ -18,7 +18,7 @@ import {
 } from "./lib/workflow-utils.mjs";
 
 function usage() {
-  return `Usage: openclaw-gate-summary.mjs --workflow PATH [--duplicate-check PATH] [--candidate-score PATH] [--output-md PATH] [--output-json PATH]
+  return `Usage: openclaw-gate-summary.mjs --workflow PATH [--duplicate-check PATH] [--candidate-score PATH] [--rebase-only-check PATH] [--output-md PATH] [--output-json PATH]
 
 Generates the human pre-push gate summary. It performs read-only local checks
 and best-effort read-only gh lookups for existing PR maintainer edit status.`;
@@ -39,6 +39,7 @@ try {
     "--workflow": { name: "workflow" },
     "--duplicate-check": { name: "duplicateCheck" },
     "--candidate-score": { name: "candidateScore" },
+    "--rebase-only-check": { name: "rebaseOnlyCheck" },
     "--output-md": { name: "outputMd" },
     "--output-json": { name: "outputJson" },
   });
@@ -60,18 +61,24 @@ const context = loadWorkflow(args.workflow);
 const baseSha = context.workflow.validationBaseSha || context.workflow.baseSha;
 const headSha = currentHead(context.repoPath);
 const branch = currentBranch(context.repoPath);
-const files = gitChangedFiles(context.repoPath, baseSha);
-const stats = gitDiffStats(context.repoPath, baseSha);
-const nameStatus = gitNameStatus(context.repoPath, baseSha);
-const identities = gitCommitIdentities(context.repoPath, baseSha);
 const body = prBodyInfo(context.prBodyPath);
 const preflight = readJsonIfPresent(context.preflightPath);
 const duplicateCheckPath = args.duplicateCheck || path.join(context.outputPath, "duplicate-check.json");
 const candidateScorePath = args.candidateScore || path.join(context.outputPath, "candidate-score.json");
+const rebaseOnlyCheckPath = args.rebaseOnlyCheck || path.join(context.outputPath, "rebase-only-check.json");
 const duplicateCheck = readJsonIfPresent(duplicateCheckPath);
 const candidateScore = readJsonIfPresent(candidateScorePath);
+const rebaseOnlyCheck = readJsonIfPresent(rebaseOnlyCheckPath);
+const rebaseOnlyPassedForHead = rebaseOnlyCheck?.status === "passed" && rebaseOnlyCheck.headSha === headSha;
+const preflightPassed = checkStatus(preflight) === "passed";
+const rebaseOnlyGateRequired = !preflightPassed || Boolean(args.rebaseOnlyCheck);
+const effectiveBaseSha = rebaseOnlyPassedForHead && rebaseOnlyCheck.targetSha ? rebaseOnlyCheck.targetSha : baseSha;
+const files = gitChangedFiles(context.repoPath, effectiveBaseSha);
+const stats = gitDiffStats(context.repoPath, effectiveBaseSha);
+const nameStatus = gitNameStatus(context.repoPath, effectiveBaseSha);
+const identities = gitCommitIdentities(context.repoPath, effectiveBaseSha);
 const clean = run("git", ["status", "--porcelain"], { cwd: context.repoPath }).stdout.trim() === "";
-const diffCheck = run("git", ["diff", "--check", `${baseSha}...HEAD`], { cwd: context.repoPath, allowFailure: true });
+const diffCheck = run("git", ["diff", "--check", `${effectiveBaseSha}...HEAD`], { cwd: context.repoPath, allowFailure: true });
 const likelyDuplicateCount = duplicateCheck?.summary?.likelyDuplicateCount ?? 0;
 const relatedOpenPrCount = duplicateCheck?.summary?.relatedOpenPrCount ?? 0;
 const duplicateCheckBlocks = !context.workflow.pr && likelyDuplicateCount > 0;
@@ -104,8 +111,10 @@ if (context.workflow.pr) {
 const blockers = [];
 if (!clean) blockers.push("worktree is not clean");
 if (diffCheck.exitCode !== 0) blockers.push("git diff --check failed");
-if (checkStatus(preflight) !== "passed") blockers.push(`preflight is ${checkStatus(preflight)}`);
+if (!preflightPassed && !rebaseOnlyPassedForHead) blockers.push(`preflight is ${checkStatus(preflight)}`);
 if (preflight?.headSha && preflight.headSha !== headSha) blockers.push("preflight head does not match current HEAD");
+if (rebaseOnlyGateRequired && rebaseOnlyCheck && rebaseOnlyCheck.status !== "passed") blockers.push(`rebase-only check is ${rebaseOnlyCheck.status}`);
+if (rebaseOnlyGateRequired && rebaseOnlyCheck?.headSha && rebaseOnlyCheck.headSha !== headSha) blockers.push("rebase-only check head does not match current HEAD");
 if (context.workflow.pr && maintainer.maintainerCanModify !== true) blockers.push("maintainerCanModify is not confirmed true");
 if (body.sha256 !== context.workflow.prBodySha256 && context.workflow.prBodySha256) blockers.push("PR body changed since workflow validation");
 for (const identity of identities) {
@@ -127,7 +136,9 @@ const summary = {
   outputPath: context.outputPath,
   branch,
   headSha,
-  validationBaseSha: baseSha,
+  validationBaseSha: effectiveBaseSha,
+  workflowValidationBaseSha: baseSha,
+  rebaseOnlyFastPathActive: rebaseOnlyPassedForHead,
   clean,
   diffCheck: { status: diffCheck.exitCode === 0 ? "passed" : "failed", output: diffCheck.output.trim() },
   stats,
@@ -147,9 +158,19 @@ const summary = {
     status: preflight.status,
     headSha: preflight.headSha,
     validationBaseSha: preflight.validationBaseSha,
+    profile: preflight.profile ?? null,
+    validationDepth: preflight.validationDepth ?? null,
     heavyCacheHit: preflight.heavyCacheHit ?? null,
     freshness: preflight.freshness ?? null,
     failedBypassEligible: preflight.status === "failed" && preflight.headSha === headSha,
+  } : null,
+  rebaseOnlyCheck: rebaseOnlyCheck ? {
+    path: rebaseOnlyCheckPath,
+    status: rebaseOnlyCheck.status,
+    headSha: rebaseOnlyCheck.headSha,
+    targetSha: rebaseOnlyCheck.targetSha,
+    blockers: rebaseOnlyCheck.blockers ?? [],
+    active: rebaseOnlyPassedForHead,
   } : null,
   duplicateCheck: duplicateCheck ? {
     path: duplicateCheckPath,
@@ -182,7 +203,7 @@ Generated: ${summary.generatedAt}
 
 - branch: \`${branch}\`
 - HEAD: \`${headSha}\`
-- validation base: \`${baseSha}\`
+- validation base: \`${effectiveBaseSha}\`${effectiveBaseSha !== baseSha ? ` (workflow base: \`${baseSha}\`)` : ""}
 - worktree clean: ${clean ? "yes" : "no"}
 - diff check: ${summary.diffCheck.status}
 
@@ -195,8 +216,11 @@ ${mdList(nameStatus.map((line) => `\`${line}\``))}
 ## Checks
 
 - preflight: ${checkStatus(preflight)}
+- preflight profile: ${preflight?.profile ?? "n/a"}${preflight?.validationDepth ? ` (${preflight.validationDepth})` : ""}
 - preflight receipt: \`${context.preflightPath}\`
 - failed-preflight bypass: ${preflight?.status === "failed" && preflight.headSha === headSha ? "available only with explicit user approval for this HEAD and body hash" : "not applicable"}
+- rebase-only check: ${rebaseOnlyCheck ? `${rebaseOnlyCheck.status}${rebaseOnlyPassedForHead ? " (active fast path)" : ""}` : "missing"}
+- rebase-only receipt: \`${rebaseOnlyCheckPath}\`
 - duplicate check: ${duplicateCheck ? `${summary.duplicateCheck.likelyDuplicateCount} likely duplicates, ${summary.duplicateCheck.relatedOpenPrCount} related open PRs${summary.duplicateCheck.blocking ? "" : " (advisory)"}` : "missing"}
 - candidate score: ${candidateScore ? `${candidateScore.score} (${candidateScore.verdict})` : "missing"}
 - maintainer edit: ${maintainer.checked ? String(maintainer.maintainerCanModify) : maintainer.maintainerCanModify === null ? "not checked" : String(maintainer.maintainerCanModify)}
