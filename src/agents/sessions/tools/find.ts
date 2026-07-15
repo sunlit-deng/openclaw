@@ -302,6 +302,9 @@ export function createFindToolDefinition(
               settle(() => reject(new Error(`fd ${stream} error: ${error.message}`)));
             };
 
+            // Decode stderr as UTF-8 at the stream so pipe chunk boundaries
+            // cannot split multibyte characters into U+FFFD replacement noise.
+            child.stderr?.setEncoding("utf8");
             child.stderr?.on("data", (chunk) => {
               stderr = appendBoundedTextTail(stderr, chunk);
             });

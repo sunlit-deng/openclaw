@@ -14,6 +14,10 @@ export function normalizePositiveLimit(value: number | undefined, fallback: numb
 /** Default stderr tail retained for long-running session tools. */
 export const SESSION_TOOL_STDERR_TAIL_BYTES = 64 * 1024;
 
+function isUtf8ContinuationByte(byte: number | undefined): boolean {
+  return byte !== undefined && (byte & 0b1100_0000) === 0b1000_0000;
+}
+
 function decodeUtf8TextTail(buffer: Buffer, maxBytes: number): string {
   const chars = Array.from(buffer.toString("utf8"));
   const kept: string[] = [];
@@ -51,6 +55,12 @@ export function appendBoundedTextTail(
   }
 
   const currentTailBytes = Math.max(0, effectiveMaxBytes - chunkBuffer.byteLength);
-  const currentTail = currentBuffer.subarray(currentBuffer.byteLength - currentTailBytes);
+  // Skip UTF-8 continuation bytes so the byte-window cut never leaves orphan
+  // bytes that decode into U+FFFD noise at the head of the retained tail.
+  let tailStart = currentBuffer.byteLength - currentTailBytes;
+  while (tailStart < currentBuffer.byteLength && isUtf8ContinuationByte(currentBuffer[tailStart])) {
+    tailStart += 1;
+  }
+  const currentTail = currentBuffer.subarray(tailStart);
   return decodeUtf8TextTail(Buffer.concat([currentTail, chunkBuffer]), effectiveMaxBytes);
 }
