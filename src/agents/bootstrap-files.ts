@@ -8,6 +8,7 @@ import { normalizeOptionalString } from "@openclaw/normalization-core/string-coe
 import { parseSqliteSessionFileMarker } from "../config/sessions/sqlite-marker.js";
 import type { AgentContextInjection } from "../config/types.agent-defaults.js";
 import type { OpenClawConfig } from "../config/types.openclaw.js";
+import { readFileWindowFully } from "../infra/file-read.js";
 import { resolveUserPath } from "../utils.js";
 import { resolveAgentConfig, resolveSessionAgentIds } from "./agent-scope.js";
 import { getOrLoadBootstrapFiles } from "./bootstrap-cache.js";
@@ -37,7 +38,6 @@ export const FULL_BOOTSTRAP_COMPLETED_CUSTOM_TYPE = "openclaw:bootstrap-context:
 const BOOTSTRAP_WARNING_DEDUPE_LIMIT = 1024;
 const seenBootstrapWarnings = new Set<string>();
 const bootstrapWarningOrder: string[] = [];
-type BootstrapSessionFileHandle = Awaited<ReturnType<typeof fs.open>>;
 
 function rememberBootstrapWarning(key: string): boolean {
   // Warning keys include workspace/session/message so repeated setup failures
@@ -69,27 +69,6 @@ export function resolveContextInjectionMode(
   return config?.agents?.defaults?.contextInjection ?? "always";
 }
 
-async function readBootstrapTailWindowFully(
-  fh: BootstrapSessionFileHandle,
-  buffer: Buffer,
-  position: number,
-): Promise<number> {
-  let totalRead = 0;
-  while (totalRead < buffer.length) {
-    const { bytesRead } = await fh.read(
-      buffer,
-      totalRead,
-      buffer.length - totalRead,
-      position + totalRead,
-    );
-    if (bytesRead <= 0) {
-      break;
-    }
-    totalRead += bytesRead;
-  }
-  return totalRead;
-}
-
 /** Checks whether the session transcript still has a valid full-bootstrap marker. */
 export async function hasCompletedBootstrapTurn(sessionFile: string): Promise<boolean> {
   if (parseSqliteSessionFileMarker(sessionFile)) {
@@ -109,7 +88,7 @@ export async function hasCompletedBootstrapTurn(sessionFile: string): Promise<bo
       }
       const start = stat.size - bytesToRead;
       const buffer = Buffer.allocUnsafe(bytesToRead);
-      const bytesRead = await readBootstrapTailWindowFully(fh, buffer, start);
+      const bytesRead = await readFileWindowFully(fh, buffer, start);
       let text = buffer.toString("utf-8", 0, bytesRead);
       if (start > 0) {
         const firstNewline = text.indexOf("\n");
