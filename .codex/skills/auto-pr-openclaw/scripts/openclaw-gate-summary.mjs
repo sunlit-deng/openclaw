@@ -149,6 +149,7 @@ const summary = {
     validationBaseSha: preflight.validationBaseSha,
     heavyCacheHit: preflight.heavyCacheHit ?? null,
     freshness: preflight.freshness ?? null,
+    failedBypassEligible: preflight.status === "failed" && preflight.headSha === headSha,
   } : null,
   duplicateCheck: duplicateCheck ? {
     path: duplicateCheckPath,
@@ -195,6 +196,7 @@ ${mdList(nameStatus.map((line) => `\`${line}\``))}
 
 - preflight: ${checkStatus(preflight)}
 - preflight receipt: \`${context.preflightPath}\`
+- failed-preflight bypass: ${preflight?.status === "failed" && preflight.headSha === headSha ? "available only with explicit user approval for this HEAD and body hash" : "not applicable"}
 - duplicate check: ${duplicateCheck ? `${summary.duplicateCheck.likelyDuplicateCount} likely duplicates, ${summary.duplicateCheck.relatedOpenPrCount} related open PRs${summary.duplicateCheck.blocking ? "" : " (advisory)"}` : "missing"}
 - candidate score: ${candidateScore ? `${candidateScore.score} (${candidateScore.verdict})` : "missing"}
 - maintainer edit: ${maintainer.checked ? String(maintainer.maintainerCanModify) : maintainer.maintainerCanModify === null ? "not checked" : String(maintainer.maintainerCanModify)}

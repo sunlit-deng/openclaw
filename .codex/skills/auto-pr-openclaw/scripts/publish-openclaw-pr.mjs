@@ -15,9 +15,15 @@ function parseArgs(argv) {
     base: "main",
     pushRemote: "",
     repo: "openclaw/openclaw",
+    allowFailedPreflight: false,
+    failedPreflightBypassReason: "",
   };
   for (let index = 0; index < argv.length; index += 1) {
     const arg = argv[index];
+    if (arg === "--allow-failed-preflight") {
+      result.allowFailedPreflight = true;
+      continue;
+    }
     const key = {
       "--workflow": "workflow",
       "--approved-head": "approvedHead",
@@ -27,6 +33,7 @@ function parseArgs(argv) {
       "--base": "base",
       "--push-remote": "pushRemote",
       "--repo": "repo",
+      "--failed-preflight-bypass-reason": "failedPreflightBypassReason",
     }[arg];
     if (!key) throw new Error(`Unknown argument: ${arg}`);
     result[key] = argv[++index] ?? "";
@@ -93,7 +100,10 @@ const currentBranch = execute("git", ["branch", "--show-current"], { cwd: repoPa
 const remoteHeadRef = workflow.headRef || currentBranch;
 
 const failures = [];
-if (preflight.status !== "passed") failures.push("preflight status is not passed");
+const failedPreflightBypass = args.allowFailedPreflight && preflight.status === "failed";
+if (args.allowFailedPreflight && preflight.status !== "failed") failures.push("--allow-failed-preflight only applies when preflight status is failed");
+if (args.allowFailedPreflight && !args.failedPreflightBypassReason.trim()) failures.push("--failed-preflight-bypass-reason is required with --allow-failed-preflight");
+if (preflight.status !== "passed" && !failedPreflightBypass) failures.push("preflight status is not passed");
 if (preflight.headSha !== currentHead) failures.push("preflight is stale for the current HEAD");
 if (workflow.branch !== currentBranch) failures.push("current branch does not match workflow.json");
 if (args.approvedHead !== currentHead) failures.push("current HEAD does not match the human-approved HEAD");
@@ -179,6 +189,17 @@ workflow.pr = prNumber;
 workflow.prUrl = remote.url ?? response.url ?? null;
 workflow.publishedHeadSha = currentHead;
 workflow.remoteBodySha256 = sha256(remoteBody);
+if (failedPreflightBypass) {
+  workflow.failedPreflightBypass = {
+    status: "used",
+    reason: args.failedPreflightBypassReason.trim(),
+    preflightPath: path.resolve(workflow.preflightPath),
+    preflightStatus: preflight.status,
+    approvedHead: args.approvedHead,
+    approvedBodySha256: args.approvedBodySha,
+    usedAt: new Date().toISOString(),
+  };
+}
 workflow.updatedAt = new Date().toISOString();
 fs.writeFileSync(workflowPath, `${JSON.stringify(workflow, null, 2)}\n`, "utf8");
 console.log(JSON.stringify({
@@ -187,4 +208,5 @@ console.log(JSON.stringify({
   headSha: currentHead,
   bodySha256: workflow.remoteBodySha256,
   maintainerCanModify: true,
+  failedPreflightBypass: failedPreflightBypass ? workflow.failedPreflightBypass : null,
 }, null, 2));
