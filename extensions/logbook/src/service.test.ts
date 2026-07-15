@@ -74,6 +74,7 @@ describe("LogbookService capture node selection", () => {
 
     await tick();
     expect(invoked).toEqual([{ nodeId: "b-mac-app", command: "screen.snapshot" }]);
+    expect(service.status()).toMatchObject({ pendingFrames: 1, lastCaptureError: undefined });
   });
 
   it("rotates to the next capture node after a failure instead of re-picking the broken one", async () => {
@@ -100,10 +101,14 @@ describe("LogbookService capture node selection", () => {
     expect(service.status().lastCaptureError).toBeUndefined();
   });
 
-  it("rejects malformed snapshot base64 before storing a frame", async () => {
+  it.each([
+    ["malformed string", "not-base64!"],
+    ["object", { encoded: "ZmFrZQ==" }],
+    ["array", ["ZmFrZQ=="]],
+  ])("rejects a %s snapshot payload before storing a frame", async (_label, base64) => {
     const { service, tick, dataDir } = makeService({
       nodes: [{ nodeId: "capture-node", commands: ["logbook.snapshot"] }],
-      invoke: async () => ({ payload: { format: "jpeg", base64: "not-base64!" } }),
+      invoke: async () => ({ payload: { format: "jpeg", base64 } }),
     });
     cleanups.push(() => {
       service.stop();

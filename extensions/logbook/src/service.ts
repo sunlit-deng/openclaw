@@ -2,7 +2,7 @@
 import { createHash } from "node:crypto";
 import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import path from "node:path";
-import { canonicalizeBase64 } from "@openclaw/media-core/base64";
+import { canonicalizeBase64 } from "openclaw/plugin-sdk/media-runtime";
 import type {
   OpenClawConfig,
   OpenClawPluginApi,
@@ -44,7 +44,7 @@ const JPEG_QUALITY = 0.6;
 const STRUCTURED_MEDIA_PROVIDER = "codex";
 type SnapshotPayload = {
   format?: string;
-  base64?: string;
+  base64?: unknown;
   width?: number;
   height?: number;
   error?: string;
@@ -255,9 +255,16 @@ export class LogbookService {
       if (raw?.error) {
         throw new Error(raw.error);
       }
-      const base64 = raw?.base64 && canonicalizeBase64(raw.base64);
+      const rawBase64 = raw?.base64;
+      if (rawBase64 === undefined || rawBase64 === "") {
+        throw new Error(`${node.command} returned no image payload`);
+      }
+      if (typeof rawBase64 !== "string") {
+        throw new Error(`${node.command} returned invalid image payload`);
+      }
+      const base64 = canonicalizeBase64(rawBase64);
       if (!base64) {
-        throw new Error(`${node.command} returned ${raw?.base64 ? "invalid" : "no"} image payload`);
+        throw new Error(`${node.command} returned invalid image payload`);
       }
       const buffer = Buffer.from(base64, "base64");
       const capturedAtMs = Date.now();
