@@ -72,6 +72,14 @@ function createSessionTranscript(params: {
   return sessionFile;
 }
 
+function createOversizedSessionTranscript(rootDir: string, sessionId: string): string {
+  return createSessionTranscript({
+    rootDir,
+    sessionId,
+    messages: ["x".repeat(MAX_CLI_SESSION_HISTORY_FILE_BYTES), "tail history"],
+  });
+}
+
 function requireRecord(value: unknown, label: string): Record<string, unknown> {
   if (!value || typeof value !== "object") {
     throw new Error(`expected ${label}`);
@@ -426,46 +434,8 @@ describe("loadCliSessionHistoryMessages", () => {
 
   it("loads a bounded tail from oversized transcript files", async () => {
     const stateDir = fs.mkdtempSync(path.join(os.tmpdir(), "openclaw-cli-state-"));
-    const sessionFile = path.join(
-      stateDir,
-      "agents",
-      "main",
-      "sessions",
-      "session-oversized.jsonl",
-    );
+    const sessionFile = createOversizedSessionTranscript(stateDir, "session-oversized");
     const warnSpy = vi.spyOn(cliBackendLog, "warn").mockImplementation(() => undefined);
-    fs.mkdirSync(path.dirname(sessionFile), { recursive: true });
-    fs.writeFileSync(
-      sessionFile,
-      [
-        JSON.stringify({
-          type: "session",
-          version: CURRENT_SESSION_VERSION,
-          id: "session-oversized",
-          timestamp: new Date(0).toISOString(),
-          cwd: stateDir,
-        }),
-        JSON.stringify({
-          type: "message",
-          id: "old",
-          parentId: null,
-          timestamp: new Date(1).toISOString(),
-          message: {
-            role: "user",
-            content: "x".repeat(MAX_CLI_SESSION_HISTORY_FILE_BYTES),
-            timestamp: 1,
-          },
-        }),
-        JSON.stringify({
-          type: "message",
-          id: "tail",
-          parentId: "old",
-          timestamp: new Date(2).toISOString(),
-          message: { role: "user", content: "tail history", timestamp: 2 },
-        }),
-      ].join("\n") + "\n",
-      "utf-8",
-    );
 
     try {
       await withCliSessionState(stateDir, async () => {
@@ -489,46 +459,8 @@ describe("loadCliSessionHistoryMessages", () => {
 
   it("keeps bounded tails parseable when the transcript shrinks after stat", async () => {
     const stateDir = fs.mkdtempSync(path.join(os.tmpdir(), "openclaw-cli-state-"));
-    const sessionFile = path.join(
-      stateDir,
-      "agents",
-      "main",
-      "sessions",
-      "session-oversized-shrink.jsonl",
-    );
+    const sessionFile = createOversizedSessionTranscript(stateDir, "session-oversized-shrink");
     const warnSpy = vi.spyOn(cliBackendLog, "warn").mockImplementation(() => undefined);
-    fs.mkdirSync(path.dirname(sessionFile), { recursive: true });
-    fs.writeFileSync(
-      sessionFile,
-      [
-        JSON.stringify({
-          type: "session",
-          version: CURRENT_SESSION_VERSION,
-          id: "session-oversized-shrink",
-          timestamp: new Date(0).toISOString(),
-          cwd: stateDir,
-        }),
-        JSON.stringify({
-          type: "message",
-          id: "old",
-          parentId: null,
-          timestamp: new Date(1).toISOString(),
-          message: {
-            role: "user",
-            content: "x".repeat(MAX_CLI_SESSION_HISTORY_FILE_BYTES),
-            timestamp: 1,
-          },
-        }),
-        JSON.stringify({
-          type: "message",
-          id: "tail",
-          parentId: "old",
-          timestamp: new Date(2).toISOString(),
-          message: { role: "user", content: "tail history", timestamp: 2 },
-        }),
-      ].join("\n") + "\n",
-      "utf-8",
-    );
     // Report a stale, larger size for the session file so the bounded
     // positional read hits EOF early, as when the CLI compacts the transcript
     // between the size probe and the read.
