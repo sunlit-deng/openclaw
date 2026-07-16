@@ -147,6 +147,11 @@ describe("buildMinimaxSpeechProvider", () => {
       expect(provider.isConfigured({ providerConfig: {}, timeoutMs: 30000 })).toBe(true);
     });
 
+    it("returns false when MINIMAX_API_KEY env var is blank", () => {
+      process.env.MINIMAX_API_KEY = "   ";
+      expect(provider.isConfigured({ providerConfig: {}, timeoutMs: 30000 })).toBe(false);
+    });
+
     it("returns true when a MiniMax Token Plan env var is set", () => {
       expect(tokenPlanEnvConfigured).toBe(true);
     });
