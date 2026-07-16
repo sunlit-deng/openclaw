@@ -16,8 +16,8 @@ import {
 } from "../../config/sessions/transcript-tree.js";
 import type { OpenClawConfig } from "../../config/types.openclaw.js";
 import { formatErrorMessage } from "../../infra/errors.js";
+import { readFileWindowFully } from "../../infra/file-read.js";
 import { isPathInside } from "../../infra/path-guards.js";
-import { readLogWindowFully } from "../../logging/log-tail.js";
 import { resolveSessionAgentIds } from "../agent-scope.js";
 import {
   limitAgentHookHistoryMessages,
@@ -332,7 +332,7 @@ async function readBoundedCliSessionTranscript(
     // Positional reads may return short (or hit EOF early when the file
     // shrinks after stat); decode only the bytes actually read so trailing
     // NUL padding never corrupts the JSONL tail.
-    const bytesRead = await readLogWindowFully(handle, buffer, fileSize - buffer.length);
+    const bytesRead = await readFileWindowFully(handle, buffer, fileSize - buffer.length);
     const tail = buffer.subarray(0, bytesRead).toString("utf-8");
     const firstLineEnd = tail.indexOf("\n");
     const completeTail = firstLineEnd >= 0 ? tail.slice(firstLineEnd + 1) : "";
