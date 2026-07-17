@@ -6,8 +6,6 @@ import type WebSocket from "ws";
 import { WebSocketServer } from "ws";
 import { buildXaiRealtimeTranscriptionProvider } from "./realtime-transcription-provider.js";
 
-const TEST_WS_MAX_PAYLOAD_BYTES = 1024 * 1024;
-
 const { isProviderAuthProfileConfiguredMock, resolveApiKeyForProviderMock } = vi.hoisted(() => ({
   isProviderAuthProfileConfiguredMock: vi.fn(() => false),
   resolveApiKeyForProviderMock: vi.fn(
@@ -42,7 +40,7 @@ async function createRealtimeSttServer(params?: {
   initialEvent?: unknown;
 }) {
   const server = createServer();
-  const wss = new WebSocketServer({ maxPayload: TEST_WS_MAX_PAYLOAD_BYTES, noServer: true });
+  const wss = new WebSocketServer({ noServer: true });
   const clients = new Set<WebSocket>();
   const done = vi.fn();
   let resolveDone: (() => void) | undefined;
