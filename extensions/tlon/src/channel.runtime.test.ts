@@ -66,9 +66,15 @@ describe("probeTlonAccount", () => {
   });
 
   it("still releases the guard when response cancellation fails", async () => {
+    const events: string[] = [];
     const response = new Response(new ReadableStream<Uint8Array>());
-    vi.spyOn(response.body!, "cancel").mockRejectedValueOnce(new Error("cancel failed"));
-    const release = vi.fn(async () => {});
+    const cancel = vi.spyOn(response.body!, "cancel").mockImplementationOnce(async () => {
+      events.push("cancel");
+      throw new Error("cancel failed");
+    });
+    const release = vi.fn(async () => {
+      events.push("release");
+    });
     vi.mocked(urbitFetch).mockResolvedValue({
       response,
       finalUrl: "https://example.com/~/name",
@@ -77,6 +83,8 @@ describe("probeTlonAccount", () => {
     });
 
     await expect(probeTlonAccount(account)).resolves.toEqual({ ok: true });
+    expect(cancel).toHaveBeenCalledOnce();
     expect(release).toHaveBeenCalledOnce();
+    expect(events).toEqual(["cancel", "release"]);
   });
 });
