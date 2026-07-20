@@ -5,6 +5,7 @@ usage() {
   cat <<'EOF'
 Usage: new-openclaw-worktree.sh --issue N [--topic TEXT] [--root PATH]
                                [--branch-prefix PREFIX]
+                               [--account PROFILE]
                                [--store-path PATH]
                                [--skip-install --skip-install-reason TEXT]
 
@@ -27,6 +28,7 @@ topic=""
 root="$auto_pr_root/workspace/openclaw"
 branch_prefix="sunlit/fix"
 store_path=""
+account_profile=""
 skip_install=0
 skip_install_reason=""
 
@@ -36,6 +38,7 @@ while [[ $# -gt 0 ]]; do
     --topic) topic="${2:-}"; shift 2 ;;
     --root) root="${2:-}"; shift 2 ;;
     --branch-prefix) branch_prefix="${2:-}"; shift 2 ;;
+    --account) account_profile="${2:-}"; shift 2 ;;
     --store-path) store_path="${2:-}"; shift 2 ;;
     --install-dependencies) shift ;;
     --skip-install) skip_install=1; shift ;;
@@ -69,10 +72,16 @@ if ! command -v gh >/dev/null 2>&1; then
   echo "gh is required for authenticated OpenClaw repository setup" >&2
   exit 1
 fi
+
+root="$(mkdir -p "$root" && cd "$root" && pwd -P)"
+account_args=(shell-env --root "$root")
+if [[ -n "$account_profile" ]]; then
+  account_args+=(--profile "$account_profile")
+fi
+eval "$(node "$script_dir/openclaw-account.mjs" "${account_args[@]}")"
 gh auth status >/dev/null
 gh auth setup-git
 
-root="$(mkdir -p "$root" && cd "$root" && pwd -P)"
 name="issue-$issue"
 branch="$branch_prefix/issue-$issue"
 if [[ -n "${topic// }" ]]; then
@@ -116,6 +125,8 @@ if git -C "$main_repo" show-ref --verify --quiet "refs/heads/$branch"; then
 fi
 
 git -C "$main_repo" worktree add -b "$branch" "$worktree_path" "$base_sha"
+git -C "$worktree_path" config user.name "$OPENCLAW_ACCOUNT_USERNAME"
+git -C "$worktree_path" config user.email "$OPENCLAW_ACCOUNT_EMAIL"
 
 for file in pr-body.md live-proof.md ci-notes.md; do
   : > "$output_path/$file"
@@ -144,4 +155,9 @@ node "$script_dir/write-workflow-state.mjs" \
   --pr-body-path "$output_path/pr-body.md" \
   --preflight-path "$output_path/preflight.json" \
   --dependency-status "$dependency_status" \
-  --skip-reason "$skip_install_reason"
+  --skip-reason "$skip_install_reason" \
+  --account-profile "$OPENCLAW_ACCOUNT_PROFILE" \
+  --account-username "$OPENCLAW_ACCOUNT_USERNAME" \
+  --account-email "$OPENCLAW_ACCOUNT_EMAIL" \
+  --account-login "$OPENCLAW_ACCOUNT_LOGIN" \
+  --account-push-remote "$OPENCLAW_ACCOUNT_PUSH_REMOTE"

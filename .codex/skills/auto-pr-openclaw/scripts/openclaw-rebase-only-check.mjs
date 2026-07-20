@@ -12,6 +12,13 @@ import {
   run,
   writeJson,
 } from "./lib/workflow-utils.mjs";
+import {
+  commitIdentityProblems,
+  ghEnv,
+  identityCheckName,
+  publicAccount,
+  resolveAccount,
+} from "./lib/account-utils.mjs";
 
 function usage() {
   return `Usage: openclaw-rebase-only-check.mjs --workflow PATH [--target SHA] [--repo OWNER/REPO] [--output PATH]
@@ -53,6 +60,8 @@ const outputPath = path.resolve(args.output || path.join(context.outputPath, "re
 const checks = [];
 const blockers = [];
 const workflow = context.workflow;
+const account = resolveAccount({ workflow });
+const accountEnv = ghEnv(account);
 const repoPath = context.repoPath;
 const headSha = currentHead(repoPath);
 const branch = currentBranch(repoPath);
@@ -106,21 +115,18 @@ if (targetSha) {
   );
 
   const identities = gitCommitIdentities(repoPath, targetSha);
-  const identityProblems = identities.filter((identity) => (
-    (identity.authorName === "sunlit-deng" && identity.authorEmail !== "yang.jiajun1@xydigit.com")
-    || (identity.committerName === "sunlit-deng" && identity.committerEmail !== "yang.jiajun1@xydigit.com")
-  ));
+  const identityProblems = commitIdentityProblems(identities, account);
   addCheck(
-    "sunlit-deng commit identity",
+    identityCheckName(account),
     identityProblems.length === 0,
-    identityProblems.map((identity) => identity.sha).join(", ") || "ok",
+    identityProblems.join("; ") || "ok",
     { commitIdentities: identities },
   );
 }
 
 let maintainer = { checked: false, maintainerCanModify: workflow.maintainerCanModify ?? null, error: null };
 let ghLogin = "";
-const ghUser = run("gh", ["api", "user"], { allowFailure: true });
+const ghUser = run("gh", ["api", "user"], { allowFailure: true, env: accountEnv });
 if (ghUser.exitCode === 0) {
   try {
     ghLogin = JSON.parse(ghUser.stdout).login ?? "";
@@ -137,7 +143,7 @@ if (workflow.pr) {
   const prResult = run("gh", [
     "pr", "view", String(workflow.pr), "--repo", repoSlug,
     "--json", "maintainerCanModify,headRepositoryOwner,headRefName,url",
-  ], { allowFailure: true });
+  ], { allowFailure: true, env: accountEnv });
   if (prResult.exitCode === 0) {
     try {
       const parsed = JSON.parse(prResult.stdout);
@@ -182,6 +188,7 @@ const receipt = {
   targetRef,
   targetSha,
   changedFiles,
+  githubAccount: publicAccount(account),
   maintainer,
   checks,
   blockers,

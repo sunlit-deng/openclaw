@@ -16,6 +16,12 @@ import {
   run,
   writeJson,
 } from "./lib/workflow-utils.mjs";
+import {
+  commitIdentityProblems,
+  ghEnv,
+  publicAccount,
+  resolveAccount,
+} from "./lib/account-utils.mjs";
 
 function usage() {
   return `Usage: openclaw-gate-summary.mjs --workflow PATH [--duplicate-check PATH] [--candidate-score PATH] [--rebase-only-check PATH] [--output-md PATH] [--output-json PATH]
@@ -58,6 +64,8 @@ if (!args.workflow) {
 }
 
 const context = loadWorkflow(args.workflow);
+const account = resolveAccount({ workflow: context.workflow });
+const accountEnv = ghEnv(account);
 const baseSha = context.workflow.validationBaseSha || context.workflow.baseSha;
 const headSha = currentHead(context.repoPath);
 const branch = currentBranch(context.repoPath);
@@ -88,7 +96,7 @@ if (context.workflow.pr) {
   const result = run("gh", [
     "pr", "view", String(context.workflow.pr), "--repo", "openclaw/openclaw",
     "--json", "maintainerCanModify,headRepositoryOwner,headRefName,url",
-  ], { allowFailure: true });
+  ], { allowFailure: true, env: accountEnv });
   if (result.exitCode === 0) {
     try {
       const parsed = JSON.parse(result.stdout);
@@ -117,12 +125,7 @@ if (rebaseOnlyGateRequired && rebaseOnlyCheck && rebaseOnlyCheck.status !== "pas
 if (rebaseOnlyGateRequired && rebaseOnlyCheck?.headSha && rebaseOnlyCheck.headSha !== headSha) blockers.push("rebase-only check head does not match current HEAD");
 if (context.workflow.pr && maintainer.maintainerCanModify !== true) blockers.push("maintainerCanModify is not confirmed true");
 if (body.sha256 !== context.workflow.prBodySha256 && context.workflow.prBodySha256) blockers.push("PR body changed since workflow validation");
-for (const identity of identities) {
-  if ((identity.authorName === "sunlit-deng" && identity.authorEmail !== "yang.jiajun1@xydigit.com")
-    || (identity.committerName === "sunlit-deng" && identity.committerEmail !== "yang.jiajun1@xydigit.com")) {
-    blockers.push(`sunlit-deng commit identity mismatch at ${identity.sha.slice(0, 12)}`);
-  }
-}
+for (const problem of commitIdentityProblems(identities, account)) blockers.push(problem);
 if (duplicateCheckBlocks) blockers.push("duplicate-check found likely duplicates");
 if (candidateScore?.verdict && ["needs-work", "poor-fit"].includes(candidateScore.verdict)) {
   blockers.push(`candidate score verdict is ${candidateScore.verdict}`);
@@ -145,6 +148,7 @@ const summary = {
   changedFiles: files,
   nameStatus,
   commitIdentities: identities,
+  githubAccount: publicAccount(account),
   prBody: {
     path: context.prBodyPath,
     sha256: body.sha256,
@@ -227,6 +231,7 @@ ${mdList(nameStatus.map((line) => `\`${line}\``))}
 
 ## Commit Identity
 
+- account: ${account.configured ? `\`${account.profile}\`` : "`legacy gh auth`"} (${account.username} <${account.email}>)
 ${mdList(identities.map((identity) => `\`${identity.sha.slice(0, 12)}\` author=${identity.authorName} <${identity.authorEmail}> committer=${identity.committerName} <${identity.committerEmail}>`))}
 
 ## PR Body

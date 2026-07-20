@@ -9,6 +9,7 @@ import {
   run,
   writeJson,
 } from "./lib/workflow-utils.mjs";
+import { ghEnv, publicAccount, resolveAccount } from "./lib/account-utils.mjs";
 
 function usage() {
   return `Usage: openclaw-duplicate-check.mjs --workflow PATH [--query TEXT ...] [--file PATH ...] [--repo OWNER/REPO] [--output PATH] [--offline]
@@ -43,11 +44,11 @@ function deriveQueries(files, body, manualQueries) {
   return unique(queries).slice(0, 24);
 }
 
-function ghSearch(kind, repo, query) {
+function ghSearch(kind, repo, query, env) {
   const args = ["search", kind, "--repo", repo, "--limit", "10", "--json", "number,title,state,url,updatedAt"];
   if (kind === "prs") args.push("--match", "title,body");
   args.push(query);
-  const result = run("gh", args, { allowFailure: true });
+  const result = run("gh", args, { allowFailure: true, env });
   if (result.exitCode !== 0) {
     return { query, error: result.stderr || result.stdout || result.error, items: [] };
   }
@@ -83,6 +84,8 @@ if (!args.workflow) {
 }
 
 const context = loadWorkflow(args.workflow);
+const account = resolveAccount({ workflow: context.workflow });
+const accountEnv = ghEnv(account);
 const baseSha = context.workflow.validationBaseSha || context.workflow.baseSha;
 const body = prBodyInfo(context.prBodyPath);
 const files = unique([...(args.files ?? []), ...gitChangedFiles(context.repoPath, baseSha)]);
@@ -91,10 +94,10 @@ const queries = deriveQueries(files, body.body, args.queries ?? []);
 const searches = [];
 
 if (!args.offline) {
-  run("gh", ["auth", "status"], { allowFailure: true });
+  run("gh", ["auth", "status"], { allowFailure: true, env: accountEnv });
   for (const query of queries) {
-    searches.push({ kind: "prs", ...ghSearch("prs", repo, query) });
-    if (/^#\d+$/.test(query) || query.length > 8) searches.push({ kind: "issues", ...ghSearch("issues", repo, query) });
+    searches.push({ kind: "prs", ...ghSearch("prs", repo, query, accountEnv) });
+    if (/^#\d+$/.test(query) || query.length > 8) searches.push({ kind: "issues", ...ghSearch("issues", repo, query, accountEnv) });
   }
 }
 
@@ -115,6 +118,7 @@ const receipt = {
   generatedAt: new Date().toISOString(),
   workflowPath: context.workflowPath,
   repo,
+  githubAccount: publicAccount(account),
   offline: Boolean(args.offline),
   validationBaseSha: baseSha,
   changedFiles: files,

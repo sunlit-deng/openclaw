@@ -52,6 +52,83 @@ heads use `gh pr checkout`, and the publication step creates or attaches the
 fork remote with `gh repo fork --remote` after the human gate. Fetch failure is
 a hard stop; cached refs are never described as current main.
 
+## GitHub Accounts
+
+Workflows can pin a GitHub account profile so different PRs use different
+tokens, commit names, emails, and fork remotes. Put account config in
+`workspace/openclaw/accounts.json`, `~/.config/auto-pr/openclaw-accounts.json`,
+or the file named by `OPENCLAW_ACCOUNTS_FILE`:
+
+```json
+{
+  "defaultProfile": "sunlit",
+  "profiles": {
+    "sunlit": {
+      "login": "sunlit-deng",
+      "username": "sunlit-deng",
+      "email": "yang.jiajun1@xydigit.com",
+      "tokenEnv": "GITHUB_TOKEN_SUNLIT",
+      "pushRemote": "sunlit"
+    },
+    "alt": {
+      "login": "other-login",
+      "username": "Other Name",
+      "email": "other@example.com",
+      "tokenEnv": "GITHUB_TOKEN_ALT",
+      "pushRemote": "alt"
+    }
+  }
+}
+```
+
+`workspace/` is ignored by git, so `workspace/openclaw/accounts.json` is the
+most convenient local-only place for this project. Keep tokens out of committed
+files.
+
+Token locations:
+
+- Terminal shells: export token variables in `~/.zshrc`, `~/.zprofile`, or a
+  local direnv file before starting Codex from that shell.
+- Codex desktop app on macOS: GUI apps often do not inherit `~/.zshrc`. Use
+  `launchctl setenv GITHUB_TOKEN_ALT <token>` and restart Codex, or point
+  `OPENCLAW_ACCOUNTS_FILE` at a local ignored config that stores the token.
+- One-off commands: prefix the command, for example
+  `GITHUB_TOKEN_ALT=<token> ./.codex/skills/auto-pr-openclaw/scripts/new-openclaw-worktree.sh ...`.
+
+Select a profile during intake:
+
+```bash
+./.codex/skills/auto-pr-openclaw/scripts/new-openclaw-worktree.sh \
+  --issue 94432 \
+  --account alt
+
+node ./.codex/skills/auto-pr-openclaw/scripts/prepare-openclaw-pr-worktree.mjs \
+  --pr 93865 \
+  --account alt
+```
+
+For existing PRs, `--account` is optional. If omitted, the preparation script
+reads the PR head owner and selects the configured profile whose `login` matches
+that owner. Its JSON output includes `account` and `accountSelection`, which
+Codex should report back before making changes.
+
+Switch an already-prepared workflow:
+
+```bash
+node ./.codex/skills/auto-pr-openclaw/scripts/openclaw-set-account.mjs \
+  --workflow workspace/openclaw/outputs/pr-93865/workflow.json \
+  --account alt
+```
+
+For existing PR workflows, this refuses to switch to an account whose `login`
+does not match the recorded PR head owner unless `--force` is used.
+
+The selected profile is written to `workflow.json`. Preflight and the human
+gate enforce that commits use the profile's `username <email>`, and publish
+scripts run `gh` with the profile token. Without an account profile, the
+previous `gh` login behavior and `sunlit-deng <yang.jiajun1@xydigit.com>` check
+remain in place.
+
 Existing PR maintenance uses `prepare-openclaw-pr-worktree.mjs --pr <number>`.
 It fetches the actual fork head into `worktrees/pr-<number>` and records whether
 the head contains the observed upstream main. Main advancement after intake

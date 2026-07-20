@@ -3,6 +3,7 @@
 import fs from "node:fs";
 import path from "node:path";
 import { spawnSync } from "node:child_process";
+import { commitIdentityProblems, ghEnv, publicAccount, resolveAccount } from "./lib/account-utils.mjs";
 
 function parseArgs(argv) {
   const result = {
@@ -37,10 +38,11 @@ function usage() {
   ].join("\n");
 }
 
-function execute(command, args, { cwd, input } = {}) {
+function execute(command, args, { cwd, input, env } = {}) {
   const result = spawnSync(command, args, {
     cwd,
     input,
+    env,
     encoding: "utf8",
     maxBuffer: 16 * 1024 * 1024,
     shell: false,
@@ -70,35 +72,56 @@ function ownerLogin(value) {
   return typeof value === "string" ? value : value?.login;
 }
 
+function repoNameFromSlug(repo) {
+  const repoName = repo.split("/")[1];
+  if (!repoName) throw new Error(`Invalid repository name: ${repo}`);
+  return repoName;
+}
+
+function remoteOwnerFromUrl(remoteUrl) {
+  return remoteUrl.match(/github\.com(?::|\/)([^/]+)\//i)?.[1];
+}
+
 function sleep(ms) {
   Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, ms);
 }
 
-function viewPr(selector, repo) {
+function viewPr(selector, repo, env = process.env) {
   return JSON.parse(execute("gh", [
     "pr", "view", String(selector), "--repo", repo,
     "--json", "number,url,maintainerCanModify,headRefName,headRefOid,headRepositoryOwner",
-  ]));
+  ], { env }));
 }
 
-function checkSunlitIdentity(repoPath, mergeBase) {
+function currentGhLogin(env) {
+  try {
+    return JSON.parse(execute("gh", ["api", "user"], { env })).login;
+  } catch (error) {
+    const login = execute("gh", [
+      "api",
+      "graphql",
+      "-f",
+      "query=query { viewer { login } }",
+      "--jq",
+      ".data.viewer.login",
+    ], { env });
+    if (!login) throw error;
+    return login;
+  }
+}
+
+function checkAccountIdentity(repoPath, mergeBase, account) {
   const commits = execute("git", [
     "log", "--format=%H%x09%an%x09%ae%x09%cn%x09%ce", `${mergeBase}..HEAD`,
   ], { cwd: repoPath });
-  return commits
+  const identities = commits
     .split("\n")
     .filter(Boolean)
-    .flatMap((line) => {
+    .map((line) => {
       const [sha, authorName, authorEmail, committerName, committerEmail] = line.split("\t");
-      const problems = [];
-      if (authorName === "sunlit-deng" && authorEmail !== "yang.jiajun1@xydigit.com") {
-        problems.push(`${sha}: author email is ${authorEmail}`);
-      }
-      if (committerName === "sunlit-deng" && committerEmail !== "yang.jiajun1@xydigit.com") {
-        problems.push(`${sha}: committer email is ${committerEmail}`);
-      }
-      return problems;
+      return { sha, authorName, authorEmail, committerName, committerEmail };
     });
+  return commitIdentityProblems(identities, account);
 }
 
 let args;
@@ -113,7 +136,7 @@ if (args.help) {
   console.log(usage());
   process.exit(0);
 }
-for (const key of ["workflow", "approvedHead", "pushRemote"]) {
+for (const key of ["workflow", "approvedHead"]) {
   if (!args[key]) {
     console.error(`--${key.replace(/[A-Z]/g, (letter) => `-${letter.toLowerCase()}`)} is required`);
     console.error(usage());
@@ -123,6 +146,14 @@ for (const key of ["workflow", "approvedHead", "pushRemote"]) {
 
 const workflowPath = path.resolve(args.workflow);
 const workflow = JSON.parse(fs.readFileSync(workflowPath, "utf8"));
+const account = resolveAccount({ workflow });
+const accountEnv = ghEnv(account);
+args.pushRemote ||= account.pushRemote;
+if (!args.pushRemote) {
+  console.error("--push-remote is required");
+  console.error(usage());
+  process.exit(2);
+}
 const repoPath = path.resolve(workflow.repoPath);
 const remoteHeadRef = workflow.headRef;
 const failures = [];
@@ -149,7 +180,7 @@ try {
   if (mergeBase !== baseSha) failures.push(`branch does not contain approved rebase target (${baseSha})`);
   const changedFiles = execute("git", ["diff", "--name-only", `${baseSha}...${currentHead}`], { cwd: repoPath });
   if (!changedFiles) failures.push("branch has no committed diff beyond the approved rebase target");
-  const identityProblems = checkSunlitIdentity(repoPath, mergeBase);
+  const identityProblems = checkAccountIdentity(repoPath, mergeBase, account);
   failures.push(...identityProblems);
 } catch (error) {
   failures.push(error.message);
@@ -163,16 +194,16 @@ if (failures.length > 0) {
   process.exit(1);
 }
 
-execute("gh", ["auth", "status"]);
-execute("gh", ["auth", "setup-git"]);
-const ghLogin = JSON.parse(execute("gh", ["api", "user"])).login;
+const ghLogin = currentGhLogin(accountEnv);
+execute("gh", ["auth", "setup-git"], { env: accountEnv });
 let remoteUrl;
 try {
   remoteUrl = execute("git", ["remote", "get-url", args.pushRemote], { cwd: repoPath });
 } catch {
-  const repoName = args.repo.split("/")[1];
-  if (!repoName) throw new Error(`Invalid repository name: ${args.repo}`);
-  remoteUrl = `git@github.com:${ghLogin}/${repoName}.git`;
+  const repoName = repoNameFromSlug(args.repo);
+  remoteUrl = account.token
+    ? `https://github.com/${ghLogin}/${repoName}.git`
+    : `git@github.com:${ghLogin}/${repoName}.git`;
   execute("git", ["remote", "add", args.pushRemote, remoteUrl], { cwd: repoPath });
 }
 try {
@@ -180,12 +211,16 @@ try {
 } catch (error) {
   throw new Error(`Push remote ${args.pushRemote} is unavailable: ${error.message}`);
 }
-const remoteOwner = remoteUrl.match(/github\.com(?::|\/)([^/]+)\//i)?.[1];
+const remoteOwner = remoteOwnerFromUrl(remoteUrl);
 if (!remoteOwner || remoteOwner.toLowerCase() !== ghLogin.toLowerCase()) {
   throw new Error(`Push remote owner (${remoteOwner ?? "unknown"}) does not match gh identity (${ghLogin})`);
 }
+if (account.token && remoteUrl.startsWith("git@github.com:")) {
+  remoteUrl = `https://github.com/${ghLogin}/${repoNameFromSlug(args.repo)}.git`;
+  execute("git", ["remote", "set-url", args.pushRemote, remoteUrl], { cwd: repoPath });
+}
 
-const before = viewPr(workflow.pr, args.repo);
+const before = viewPr(workflow.pr, args.repo, accountEnv);
 if (before.maintainerCanModify !== true) {
   throw new Error("maintainer_can_modify is not true; restore maintainer edit access before push");
 }
@@ -202,12 +237,12 @@ execute("git", [
   "--set-upstream",
   args.pushRemote,
   `${currentBranch}:refs/heads/${remoteHeadRef}`,
-], { cwd: repoPath });
+], { cwd: repoPath, env: accountEnv });
 
-let after = viewPr(workflow.pr, args.repo);
+let after = viewPr(workflow.pr, args.repo, accountEnv);
 for (let attempt = 0; after.headRefOid !== currentHead && attempt < 10; attempt += 1) {
   sleep(1000);
-  after = viewPr(workflow.pr, args.repo);
+  after = viewPr(workflow.pr, args.repo, accountEnv);
 }
 if (after.headRefOid !== currentHead) {
   throw new Error(`remote PR head differs after push (local=${currentHead}, remote=${after.headRefOid ?? "unknown"})`);
@@ -225,6 +260,7 @@ workflow.headSha = currentHead;
 workflow.publishedHeadSha = currentHead;
 workflow.rebaseOnlyPublishedHeadSha = currentHead;
 workflow.rebaseOnlyPublishedAt = workflow.latestObservedAt;
+workflow.githubAccount = publicAccount(account);
 workflow.updatedAt = workflow.rebaseOnlyPublishedAt;
 fs.writeFileSync(workflowPath, `${JSON.stringify(workflow, null, 2)}\n`, "utf8");
 

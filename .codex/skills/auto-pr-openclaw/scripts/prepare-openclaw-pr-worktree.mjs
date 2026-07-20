@@ -4,13 +4,15 @@ import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { spawnSync } from "node:child_process";
+import { ghEnv, publicAccount, resolveAccount, resolveAccountForLogin } from "./lib/account-utils.mjs";
 
 function parseArgs(argv) {
-  const result = { pr: 0, root: "", skipInstall: false, skipInstallReason: "" };
+  const result = { pr: 0, root: "", account: "", skipInstall: false, skipInstallReason: "" };
   for (let index = 0; index < argv.length; index += 1) {
     const arg = argv[index];
     if (arg === "--pr") result.pr = Number(argv[++index]);
     else if (arg === "--root") result.root = argv[++index] ?? "";
+    else if (arg === "--account") result.account = argv[++index] ?? "";
     else if (arg === "--skip-install") result.skipInstall = true;
     else if (arg === "--skip-install-reason") result.skipInstallReason = argv[++index] ?? "";
     else throw new Error(`Unknown argument: ${arg}`);
@@ -18,8 +20,8 @@ function parseArgs(argv) {
   return result;
 }
 
-function execute(command, args, { cwd } = {}) {
-  const result = spawnSync(command, args, { cwd, encoding: "utf8", shell: false, maxBuffer: 16 * 1024 * 1024 });
+function execute(command, args, { cwd, env } = {}) {
+  const result = spawnSync(command, args, { cwd, env, encoding: "utf8", shell: false, maxBuffer: 16 * 1024 * 1024 });
   if (result.status !== 0) {
     throw new Error(`${command} ${args.join(" ")} failed: ${result.stderr || result.stdout || result.error?.message}`);
   }
@@ -34,6 +36,8 @@ if (!args.skipInstall && args.skipInstallReason.trim()) throw new Error("--skip-
 const scriptDir = path.dirname(fileURLToPath(import.meta.url));
 const autoPrRoot = path.resolve(scriptDir, "../../../..");
 const root = path.resolve(args.root || path.join(autoPrRoot, "workspace/openclaw"));
+let account = resolveAccount({ profile: args.account, root });
+let accountEnv = ghEnv(account);
 const mainRepo = path.join(root, "repos/openclaw");
 const name = `pr-${args.pr}`;
 const worktreePath = path.join(root, "worktrees", name);
@@ -41,17 +45,26 @@ const outputPath = path.join(root, "outputs", name);
 const storePath = path.join(root, ".pnpm-store");
 const localBranch = `sunlit/pr-${args.pr}`;
 
-execute("gh", ["auth", "status"]);
-execute("gh", ["auth", "setup-git"]);
+execute("gh", ["auth", "status"], { env: accountEnv });
+execute("gh", ["auth", "setup-git"], { env: accountEnv });
 
 const pr = JSON.parse(execute("gh", [
   "pr", "view", String(args.pr), "--repo", "openclaw/openclaw",
   "--json", "body,state,headRefName,headRepository,headRepositoryOwner,maintainerCanModify,url",
-]));
+], { env: accountEnv }));
 if (pr.state !== "OPEN") throw new Error(`PR #${args.pr} is not open`);
 if (!pr.headRepository?.nameWithOwner || !pr.headRefName || !pr.headRepositoryOwner?.login) {
   throw new Error(`PR #${args.pr} does not expose a usable head repository`);
 }
+const accountSelection = resolveAccountForLogin({
+  login: pr.headRepositoryOwner.login,
+  profile: args.account,
+  root,
+});
+account = accountSelection.account;
+accountEnv = ghEnv(account);
+execute("gh", ["auth", "status"], { env: accountEnv });
+execute("gh", ["auth", "setup-git"], { env: accountEnv });
 const linkedIssue = Number((pr.body ?? "").match(/^(?:Fixes|Closes):?\s+#(\d+)\s*$/mi)?.[1] ?? 0);
 
 fs.mkdirSync(path.join(root, "repos"), { recursive: true });
@@ -59,7 +72,7 @@ fs.mkdirSync(path.join(root, "worktrees"), { recursive: true });
 fs.mkdirSync(outputPath, { recursive: true });
 fs.mkdirSync(storePath, { recursive: true });
 if (!fs.existsSync(path.join(mainRepo, ".git"))) {
-  execute("gh", ["repo", "clone", "openclaw/openclaw", mainRepo]);
+  execute("gh", ["repo", "clone", "openclaw/openclaw", mainRepo], { env: accountEnv });
 }
 
 execute("git", ["fetch", "origin", "main"], { cwd: mainRepo });
@@ -69,9 +82,11 @@ if (branchExists) throw new Error(`Local branch already exists and will not be r
 if (execute("git", ["status", "--porcelain"], { cwd: mainRepo })) {
   throw new Error(`Main clone is not clean: ${mainRepo}`);
 }
-execute("gh", ["pr", "checkout", String(args.pr), "--repo", "openclaw/openclaw", "--branch", localBranch], { cwd: mainRepo });
+execute("gh", ["pr", "checkout", String(args.pr), "--repo", "openclaw/openclaw", "--branch", localBranch], { cwd: mainRepo, env: accountEnv });
 execute("git", ["switch", "main"], { cwd: mainRepo });
 execute("git", ["worktree", "add", worktreePath, localBranch], { cwd: mainRepo });
+execute("git", ["config", "user.name", account.username], { cwd: worktreePath });
+execute("git", ["config", "user.email", account.email], { cwd: worktreePath });
 
 for (const file of ["pr-body.md", "live-proof.md", "ci-notes.md"]) {
   fs.writeFileSync(path.join(outputPath, file), file === "pr-body.md" ? `${pr.body ?? ""}` : "", "utf8");
@@ -111,6 +126,11 @@ execute(process.execPath, [
   "--dependency-status", dependencyStatus,
   "--skip-reason", args.skipInstallReason,
   "--maintainer-can-modify", String(pr.maintainerCanModify === true),
+  "--account-profile", account.profile,
+  "--account-username", account.username,
+  "--account-email", account.email,
+  "--account-login", account.login,
+  "--account-push-remote", account.pushRemote,
 ]);
 
 const mergeBase = execute("git", ["merge-base", headSha, baseSha], { cwd: worktreePath });
@@ -124,4 +144,6 @@ console.log(JSON.stringify({
   latestBaseSha: baseSha,
   containsLatestBase: mergeBase === baseSha,
   maintainerCanModify: pr.maintainerCanModify === true,
+  account: publicAccount(account),
+  accountSelection: accountSelection.selection,
 }, null, 2));

@@ -70,6 +70,16 @@ const state = {
   maintainerCanModify: values.has("maintainer-can-modify")
     ? values.get("maintainer-can-modify") === "true"
     : null,
+  githubAccountProfile: values.get("account-profile") || null,
+  githubAccount: values.has("account-profile")
+    ? {
+        profile: values.get("account-profile"),
+        username: values.get("account-username") || null,
+        email: values.get("account-email") || null,
+        login: values.get("account-login") || values.get("account-username") || null,
+        pushRemote: values.get("account-push-remote") || values.get("account-profile"),
+      }
+    : null,
   createdAt,
 };
 

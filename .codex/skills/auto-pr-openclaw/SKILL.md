@@ -14,7 +14,7 @@ Use this skill for `openclaw/openclaw` contributor work. Keep the process conser
 - For existing PR maintenance that only resolves merge conflicts or rebases onto the latest upstream without changing the PR body, use the rebase-only fast path after human confirmation. This path may force-push the existing fork head through `scripts/publish-openclaw-rebase-only.mjs`; it must not update the PR body, post comments, or request bot review.
 - Do not chase moving `main`. When an existing PR needs a rebase, fetch once, record the exact target SHA, rebase to that SHA, and keep that SHA as the validation base through preflight, gate, and publish. If `main` advances after that point, treat it as advisory unless there is a real merge conflict, direct file overlap that changes the risk judgment, or the user explicitly asks for another rebase after seeing the current gate summary.
 - Use high-level `gh` commands for GitHub reads, repository download/fork setup, CI, comments, and review operations, including `gh repo clone`, `gh repo fork`, `gh issue`, `gh pr`, `gh run`, and `gh search`. PR creation and PR body updates are the exception: use `gh api` with the GitHub REST pulls API because both operations carry the complete body/proof and must avoid the GraphQL editing path. Do not replace failed `gh` download/fork operations with anonymous HTTPS, stale local refs, or a different GitHub tool unless the user explicitly authorizes it.
-- Authorship email is a hard requirement: all commits authored or committed by `sunlit-deng` must use `sunlit-deng <yang.jiajun1@xydigit.com>`. Do not create, amend, cherry-pick, rebase, or push a `sunlit-deng` commit with any other author or committer email unless the user explicitly overrides this requirement for that specific operation.
+- GitHub account identity is a hard requirement. When a workflow records `githubAccountProfile`, every workflow commit must use that profile's configured `username <email>` for both author and committer, and all `gh` reads/writes must run with that profile's token. When no account profile is selected, keep the legacy rule: commits authored or committed by `sunlit-deng` must use `sunlit-deng <yang.jiajun1@xydigit.com>`. Do not create, amend, cherry-pick, rebase, or push a commit with mismatched selected-account metadata unless the user explicitly overrides this requirement for that specific operation.
 - Fork PR maintainer edit access is a release gate. Do not pass `--no-maintainer-edit`. This machine's `gh` may not support `--maintainer-edit` because maintainer edits are enabled by default, so omit both flags unless intentionally disabling edits. For existing PRs, verify `maintainerCanModify: true` with `gh pr view <number> --repo openclaw/openclaw --json maintainerCanModify,headRepositoryOwner,headRefName,url`. For new PRs, verify the same immediately after creation, or manually confirm the GitHub web checkbox `Allow edits and access to secrets by maintainers` remains checked when the API cannot prove it.
 - Use one worktree per issue by default: `worktrees/issue-<number>` and `outputs/issue-<number>`. Add a topic suffix only when one issue needs multiple candidate PRs.
 - Keep the workspace pruned intentionally. The shared pnpm store belongs at `workspace/openclaw/.pnpm-store`, but each worktree still has a private `node_modules` for checkout-specific links. Use `scripts/openclaw-workspace-maintenance.sh` to report size, warm the store, prune old clean `node_modules`, or explicitly remove finished worktrees.
@@ -23,10 +23,19 @@ Use this skill for `openclaw/openclaw` contributor work. Keep the process conser
 - Use low-token mode by default. Prefer `scripts/openclaw-context-pack.sh` and local receipts over re-reading large diffs, logs, comment histories, or full JSON outputs. Read `references/token-budget.md` before broad candidate mining, PR maintenance, CI debugging, or any resumed task with an existing workflow.
 - Keep PR explanations durable in the PR body. If a bot or maintainer asks for evidence or context, update the PR body before posting a short pointer comment.
 - Keep PR bodies concise by default: required sections, short human paragraphs, compact evidence bullets, and no report-style filler.
-- After the human gate, publish branches through the `gh`-authenticated GitHub identity: check `gh auth status`, use a fork/SSH remote matching that identity for the unavoidable `git push`, and create/update PRs with `gh`. Do not push to HTTPS remotes whose cached credentials can differ from `gh auth`.
+- After the human gate, publish branches through the workflow's selected GitHub account: check `gh auth status` with that token/profile, use a fork/SSH remote matching that identity for the unavoidable `git push`, and create/update PRs with `gh`. Do not push to HTTPS remotes whose cached credentials can differ from the selected `gh` identity.
 - When requesting ClawSweeper review, the comment body must be exactly `@clawsweeper re-review`.
 - Never print secrets. Redact tokens, account ids, cookies, private endpoints, and other private values in live proof.
 - For Codex/provider/external API behavior, inspect upstream source or official docs and collect live behavior proof when feasible.
+
+## GitHub Account Selection
+
+Use account profiles from `workspace/openclaw/accounts.json`, `~/.config/auto-pr/openclaw-accounts.json`, or `OPENCLAW_ACCOUNTS_FILE`.
+
+- If the user says "切换成 <profile>", "用 <profile> 账号", or names a configured account for a PR workflow, pass `--account <profile>` at intake and tell the user which profile/login/email is active.
+- For existing PR maintenance, run `prepare-openclaw-pr-worktree.mjs --pr <number>` without `--account` unless the user explicitly requested a profile. The script auto-selects a configured profile whose `login` matches the PR head owner. Read its JSON output and explicitly tell the user, for example: `已切换到账号 alt (login=octo-alt, email=alt@example.com)，因为 PR #123 的 head owner 是 octo-alt`.
+- For already-prepared workflows, trust `workflow.json`'s `githubAccountProfile`/`githubAccount`; preflight, duplicate-check, gate, and publish scripts will use that account automatically. If the user asks to switch an existing workflow to another account, run `scripts/openclaw-set-account.mjs --workflow <workflow.json> --account <profile>` and tell the user what profile/login/email is now active. Do not use `--force` unless the user explicitly approves an intentional PR ownership migration.
+- Never ask the user to paste a token into normal conversation unless they explicitly choose that route. Prefer environment variables, a local ignored account config, or another local secret mechanism.
 
 ## Candidate Mining
 
@@ -70,6 +79,7 @@ When the user says remote candidate issues, remote candidates, or asks to screen
 
 1. **Issue intake**
    - Create a per-issue worktree with `scripts/new-openclaw-worktree.sh` on macOS/Linux. The helper derives the canonical workspace root, fetches `origin/main`, refuses implicit reuse of stale local branches, and pins that fetched commit as `validationBaseSha` in `workflow.json`.
+   - To use a non-default GitHub account, pass `--account <profile>` at intake. The helper reads `accounts.json`, exports the matching token for `gh`, configures the worktree `user.name` and `user.email`, and records the selected profile in `workflow.json`. Existing PR intake supports the same `--account <profile>` flag.
    - For an existing PR, use `scripts/prepare-openclaw-pr-worktree.mjs --pr <number>`. It reads the live PR with `gh pr view`, fetches the exact fork head into `worktrees/pr-<number>`, records the remote owner/ref separately, and pins the observed main SHA as the validation base. Do not rebase merely because main advanced; rebase for a real merge conflict, risky overlapping upstream changes, or an explicit up-to-date requirement. If a rebase is performed, record the single rebase target SHA and do not refresh it again during the same publish attempt just because `origin/main` moved.
    - Share only `workspace/openclaw/.pnpm-store` across worktrees; keep each worktree's `node_modules` private. Dependency installation is the default. Skipping it requires an explicit reason and is recorded as an incomplete validation state.
    - Read the issue or PR, latest comments, current PR diff, CI state, root `AGENTS.md`, relevant scoped `AGENTS.md`, `CONTRIBUTING.md`, and `.github/pull_request_template.md`.
@@ -102,7 +112,7 @@ When the user says remote candidate issues, remote candidates, or asks to screen
    - Stop before any GitHub write.
    - Run `scripts/openclaw-gate-summary.sh --workflow <outputs>/workflow.json` and use the generated `gate-summary.md` as the human approval packet.
    - Show the user: diff summary, commit author/committer, tests/checks from `preflight.json`, PR body draft path or summary, live proof summary, and any unresolved risks.
-   - Verify every `sunlit-deng` commit that will be pushed uses author and committer email `yang.jiajun1@xydigit.com`. If any `sunlit-deng` commit uses another email, fix the local commit metadata before asking for push approval. Do not rewrite other contributors' authored commits merely to change their author email.
+   - Verify every workflow commit uses the selected account's author and committer identity. If no account profile was selected, verify every `sunlit-deng` commit uses author and committer email `yang.jiajun1@xydigit.com`. Fix local commit metadata before asking for push approval. Do not rewrite other contributors' authored commits merely to change their author email unless the selected-account rule is intentionally being applied to this workflow.
    - For existing fork PRs, show the current maintainer edit status from `maintainerCanModify`. If it is `false`, stop and ask the user to re-enable `Allow edits and access to secrets by maintainers` in the GitHub web UI before push, PR update, or re-review. For new PRs, show that the PR will be created without `--no-maintainer-edit` and must be checked immediately after creation.
    - When the PR already has a ClawSweeper review, show ClawSweeper's current verdict and any unresolved blocking findings before asking for push or re-review confirmation.
    - Continue with push/PR/comment only after explicit user confirmation.
@@ -131,6 +141,22 @@ Create a worktree on macOS/Linux:
 
 ```bash
 ./.codex/skills/auto-pr-openclaw/scripts/new-openclaw-worktree.sh --issue 94432
+```
+
+Create a worktree with a configured GitHub account profile:
+
+```bash
+./.codex/skills/auto-pr-openclaw/scripts/new-openclaw-worktree.sh \
+  --issue 94432 \
+  --account alt-account
+```
+
+Prepare an existing PR with a configured GitHub account profile:
+
+```bash
+node ./.codex/skills/auto-pr-openclaw/scripts/prepare-openclaw-pr-worktree.mjs \
+  --pr 93865 \
+  --account alt-account
 ```
 
 Run executable preflight checks:

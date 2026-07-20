@@ -57,7 +57,7 @@ Required lightweight checks before the human gate:
 - branch contains the single approved rebase target SHA
 - branch still has a committed diff beyond the approved rebase target SHA
 - `git diff --check <approved-rebase-target-sha>...HEAD` passes
-- every `sunlit-deng` author/committer email in the PR commits is `yang.jiajun1@xydigit.com`
+- every workflow commit uses the selected account's configured author/committer identity, or, for legacy workflows without an account profile, every `sunlit-deng` author/committer email is `yang.jiajun1@xydigit.com`
 - existing PR head owner/ref matches the authenticated GitHub push identity
 - `maintainerCanModify` is `true`
 

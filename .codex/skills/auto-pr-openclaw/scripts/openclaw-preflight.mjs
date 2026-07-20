@@ -5,6 +5,12 @@ import fs from "node:fs";
 import path from "node:path";
 import { spawnSync } from "node:child_process";
 import { validatePrBody } from "./lib/pr-body-validator.mjs";
+import {
+  commitIdentityProblems,
+  identityCheckName,
+  publicAccount,
+  resolveAccount,
+} from "./lib/account-utils.mjs";
 
 function parseArgs(argv) {
   const result = {
@@ -193,6 +199,7 @@ if (!args.workflow) {
 
 const workflowPath = path.resolve(args.workflow);
 const workflow = JSON.parse(fs.readFileSync(workflowPath, "utf8"));
+const account = resolveAccount({ workflow });
 const checkScript = args.checkScript;
 const repo = path.resolve(workflow.repoPath);
 const root = path.resolve(workflow.root);
@@ -305,22 +312,16 @@ try {
   ));
 
   const commits = git(repo, "log", "--format=%H%x09%an%x09%ae%x09%cn%x09%ce", `${validationMergeBase}..HEAD`);
-  const identityProblems = commits
+  const identities = commits
     .split("\n")
     .filter(Boolean)
-    .flatMap((line) => {
+    .map((line) => {
       const [sha, authorName, authorEmail, committerName, committerEmail] = line.split("\t");
-      const problems = [];
-      if (authorName === "sunlit-deng" && authorEmail !== "yang.jiajun1@xydigit.com") {
-        problems.push(`${sha}: author email is ${authorEmail}`);
-      }
-      if (committerName === "sunlit-deng" && committerEmail !== "yang.jiajun1@xydigit.com") {
-        problems.push(`${sha}: committer email is ${committerEmail}`);
-      }
-      return problems;
+      return { sha, authorName, authorEmail, committerName, committerEmail };
     });
+  const identityProblems = commitIdentityProblems(identities, account);
   checks.push(staticCheck(
-    "sunlit-deng commit identity",
+    identityCheckName(account),
     identityProblems.length === 0,
     identityProblems.join("; ") || "ok",
   ));
@@ -583,6 +584,7 @@ const receipt = {
         ? "fast-lint-prod-and-test-types"
         : "changed-pnpm",
   freshness,
+  githubAccount: publicAccount(account),
   heavyFingerprint,
   heavyCacheHit: cacheHit,
   heavyChecks,

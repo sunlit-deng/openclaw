@@ -1,6 +1,6 @@
 {
-  "pid": 66027,
+  "pid": 32154,
   "version": "0.9.6",
-  "socketPath": "/Users/yangjiajun/projects/auto-pr/.codegraph/daemon.sock",
-  "startedAt": 1783954557232
+  "socketPath": "/Volumes/Sunlit/auto-pr/.codegraph/daemon.sock",
+  "startedAt": 1784244034211
 }

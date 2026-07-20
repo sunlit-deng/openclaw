@@ -25,10 +25,11 @@ export function parseKeyArgs(argv, spec = {}) {
   return result;
 }
 
-export function run(command, args, { cwd, input, allowFailure = false } = {}) {
+export function run(command, args, { cwd, input, allowFailure = false, env } = {}) {
   const result = spawnSync(command, args, {
     cwd,
     input,
+    env,
     encoding: "utf8",
     maxBuffer: 32 * 1024 * 1024,
     shell: false,
