@@ -189,9 +189,11 @@ Use `--profile changed` only when you intentionally want the heavier local
 Preflight validates branch state, commit identity, PR body proof, focused tests
 against the pinned validation base, and latest-main merge compatibility, then
 writes `preflight.json` tied to the checked HEAD. Successful heavy checks are
-safely reused when their fingerprint is unchanged. Use `--profile full` only for
-an intentional full-repository `pnpm check`. Local AI reviews are optional
-diagnostics rather than gates.
+safely reused when their fingerprint is unchanged; successful focused test runs
+are also cached across `quick`, `focused`, and `changed` profile switches for
+the same HEAD and validation base. Use `--profile full` only for an intentional
+full-repository `pnpm check`. Local AI reviews are optional diagnostics rather
+than gates.
 
 Generate the human approval packet before any GitHub write:
 

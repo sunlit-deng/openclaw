@@ -208,8 +208,9 @@ fs.writeFileSync(file, String(count + 1));
   assert.equal(focused.profile, "focused");
   assert.equal(focused.validationDepth, "focused-changed-tests");
   assert.deepEqual(focused.heavyChecks.map((check) => check.name), ["focused tests"]);
+  assert.equal(focused.heavyChecks[0].cached, true);
   assert.equal(fs.readFileSync(path.join(counter, "check"), "utf8"), "1");
-  assert.equal(fs.readFileSync(path.join(counter, "test"), "utf8"), "2");
+  assert.equal(fs.readFileSync(path.join(counter, "test"), "utf8"), "1");
 
   write(path.join(updater, "docs/example.md"), "conflicting upstream edit\n");
   git(updater, "add", "docs/example.md");
@@ -226,7 +227,7 @@ fs.writeFileSync(file, String(count + 1));
   assert.deepEqual(conflicted.freshness.overlappingFiles, ["docs/example.md"]);
   assert.equal(conflicted.heavyChecks.length, 0);
   assert.equal(fs.readFileSync(path.join(counter, "check"), "utf8"), "1");
-  assert.equal(fs.readFileSync(path.join(counter, "test"), "utf8"), "2");
+  assert.equal(fs.readFileSync(path.join(counter, "test"), "utf8"), "1");
 });
 
 test("documents profiles through --help without requiring a workflow", () => {

@@ -211,6 +211,63 @@ function readJsonIfPresent(file) {
   }
 }
 
+function cacheFileForPreflight(preflightPath) {
+  return path.join(path.dirname(preflightPath), "preflight-cache.json");
+}
+
+function cachedCommandCheck(check, fingerprint) {
+  return {
+    ...check,
+    durationMs: 0,
+    cachedDurationMs: check.cachedDurationMs ?? check.durationMs ?? null,
+    cached: true,
+    cacheFingerprint: fingerprint,
+    reusedAt: new Date().toISOString(),
+  };
+}
+
+function readCachedHeavyChecks(previousReceipt, cache, fingerprint) {
+  if (previousReceipt?.heavyFingerprint === fingerprint &&
+    Array.isArray(previousReceipt.heavyChecks) &&
+    previousReceipt.heavyChecks.length > 0 &&
+    previousReceipt.heavyChecks.every((check) => check.status === "passed")) {
+    return previousReceipt.heavyChecks.map((check) => cachedCommandCheck(check, fingerprint));
+  }
+
+  const cached = cache?.heavyChecksByFingerprint?.[fingerprint];
+  if (Array.isArray(cached) && cached.length > 0 && cached.every((check) => check.status === "passed")) {
+    return cached.map((check) => cachedCommandCheck(check, fingerprint));
+  }
+
+  return null;
+}
+
+function readCachedFocusedTest(cache, fingerprint) {
+  const cached = cache?.focusedTestsByFingerprint?.[fingerprint];
+  if (cached?.status === "passed") {
+    return cachedCommandCheck(cached, fingerprint);
+  }
+  return null;
+}
+
+function storeCommandCheck(check) {
+  const {
+    cached: _cached,
+    cacheFingerprint: _cacheFingerprint,
+    reusedAt: _reusedAt,
+    ...stored
+  } = check;
+  if (stored.cachedDurationMs != null) {
+    stored.durationMs = stored.cachedDurationMs;
+    delete stored.cachedDurationMs;
+  }
+  return stored;
+}
+
+function pruneCacheEntries(entries, limit = 32) {
+  return Object.fromEntries(Object.entries(entries).slice(-limit));
+}
+
 function commandCheck(name, result) {
   return {
     name,
@@ -243,7 +300,9 @@ const repo = path.resolve(workflow.repoPath);
 const root = path.resolve(workflow.root);
 const outputPath = path.resolve(workflow.outputPath);
 const preflightPath = path.resolve(workflow.preflightPath);
+const cachePath = cacheFileForPreflight(preflightPath);
 const previousReceipt = readJsonIfPresent(preflightPath);
+const preflightCache = readJsonIfPresent(cachePath) ?? {};
 const checks = [];
 let heavyChecks = [];
 let heavyFingerprint = "";
@@ -331,6 +390,7 @@ let branch = "";
 let status = "";
 let changedFiles = [];
 let requestedProfile = args.profile;
+let focusedTestFingerprint = "";
 try {
   headSha = git(repo, "rev-parse", "HEAD");
   if (!validationBaseSha) throw new Error("workflow has no pinned validation base SHA");
@@ -533,19 +593,29 @@ if (packageJson && args.profile === "quick") {
         environment: relevantEnvironment,
       }));
 
-      cacheHit = previousReceipt?.heavyFingerprint === heavyFingerprint &&
-        Array.isArray(previousReceipt.heavyChecks) &&
-        previousReceipt.heavyChecks.length > 0 &&
-        previousReceipt.heavyChecks.every((check) => check.status === "passed");
+      focusedTestFingerprint = args.testScript
+        ? sha256(JSON.stringify({
+            schemaVersion: 1,
+            headSha,
+            validationBaseSha,
+            testScript: args.testScript,
+            packageJsonSha256: fileSha256(path.join(repo, "package.json")),
+            lockfileSha256: fileSha256(path.join(repo, "pnpm-lock.yaml")),
+            node: process.version,
+            platform: process.platform,
+            arch: process.arch,
+            pnpm: pnpmVersion.stdout.trim(),
+            testProjectsScriptSha256: fileSha256(path.join(repo, "scripts/test-projects.mjs")),
+            preflightScriptSha256: fileSha256(path.resolve(process.argv[1])),
+            environment: relevantEnvironment,
+          }))
+        : "";
+
+      const cachedHeavyChecks = readCachedHeavyChecks(previousReceipt, preflightCache, heavyFingerprint);
+      cacheHit = Boolean(cachedHeavyChecks);
 
       if (cacheHit) {
-        heavyChecks = previousReceipt.heavyChecks.map((check) => ({
-          ...check,
-          durationMs: 0,
-          cachedDurationMs: check.cachedDurationMs ?? check.durationMs ?? null,
-          cached: true,
-          reusedAt: new Date().toISOString(),
-        }));
+        heavyChecks = cachedHeavyChecks;
         checks.push(staticCheck(
           "heavy check cache",
           true,
@@ -578,10 +648,15 @@ if (packageJson && args.profile === "quick") {
         }
         const checkFailed = heavyChecks.some((check) => check.status === "failed");
         if (!checkFailed && args.testScript && typeof packageJson.scripts?.[args.testScript] === "string") {
-          const testResult = args.testScript === "test:changed"
-            ? run(process.execPath, ["scripts/test-projects.mjs", "--changed", validationBaseSha], repo)
-            : run("pnpm", [args.testScript], repo);
-          heavyChecks.push(commandCheck("focused tests", testResult));
+          const cachedFocusedTest = readCachedFocusedTest(preflightCache, focusedTestFingerprint);
+          if (cachedFocusedTest) {
+            heavyChecks.push(cachedFocusedTest);
+          } else {
+            const testResult = args.testScript === "test:changed"
+              ? run(process.execPath, ["scripts/test-projects.mjs", "--changed", validationBaseSha], repo)
+              : run("pnpm", [args.testScript], repo);
+            heavyChecks.push(commandCheck("focused tests", testResult));
+          }
         } else if (args.testScript) {
           heavyChecks.push(skippedCheck("focused tests", "skipped because the selected check lane failed"));
         }
@@ -652,6 +727,22 @@ const receipt = {
 
 fs.mkdirSync(path.dirname(preflightPath), { recursive: true });
 fs.writeFileSync(preflightPath, `${JSON.stringify(receipt, null, 2)}\n`, "utf8");
+
+const successfulHeavyChecks = heavyChecks.filter((check) => check.status === "passed");
+const focusedTestCheck = successfulHeavyChecks.find((check) => check.name === "focused tests");
+const nextPreflightCache = {
+  schemaVersion: 1,
+  updatedAt: new Date().toISOString(),
+  heavyChecksByFingerprint: pruneCacheEntries(preflightCache.heavyChecksByFingerprint ?? {}),
+  focusedTestsByFingerprint: pruneCacheEntries(preflightCache.focusedTestsByFingerprint ?? {}),
+};
+if (heavyFingerprint && successfulHeavyChecks.length === heavyChecks.length && heavyChecks.length > 0) {
+  nextPreflightCache.heavyChecksByFingerprint[heavyFingerprint] = successfulHeavyChecks.map(storeCommandCheck);
+}
+if (focusedTestFingerprint && focusedTestCheck) {
+  nextPreflightCache.focusedTestsByFingerprint[focusedTestFingerprint] = storeCommandCheck(focusedTestCheck);
+}
+fs.writeFileSync(cachePath, `${JSON.stringify(nextPreflightCache, null, 2)}\n`, "utf8");
 
 for (const check of checks) {
   const label = check.status === "passed"
