@@ -1,297 +1,73 @@
-/**
- * Tests Talk relay base64 guards before audio reaches providers.
- */
 import { afterEach, describe, expect, it, vi } from "vitest";
-import type { RealtimeVoiceProviderPlugin } from "../plugins/types.js";
-import type { RealtimeTranscriptionProviderPlugin } from "../plugins/types.js";
-import {
-  createTalkRealtimeRelaySession,
-  sendTalkRealtimeRelayAudio,
-  stopTalkRealtimeRelaySession,
-} from "./talk-realtime-relay.js";
-import {
-  createTalkTranscriptionRelaySession,
-  sendTalkTranscriptionRelayAudio,
-  stopTalkTranscriptionRelaySession,
-} from "./talk-transcription-relay.js";
+import type { RealtimeTranscriptionProviderPlugin, RealtimeVoiceProviderPlugin } from "../plugins/types.js";
+import { createTalkRealtimeRelaySession, sendTalkRealtimeRelayAudio, stopTalkRealtimeRelaySession } from "./talk-realtime-relay.js";
+import { createTalkTranscriptionRelaySession, sendTalkTranscriptionRelayAudio, stopTalkTranscriptionRelaySession } from "./talk-transcription-relay.js";
+import { decodeTalkRelayAudioBase64 } from "./talk-relay-audio-base64.js";
 
-type BroadcastEvent = { event: string; payload: unknown; connIds: string[] };
+const realtime = new Map<string, string>();
+const transcription = new Map<string, string>();
 
-const realtimeSessions = new Map<string, string>();
-const transcriptionSessions = new Map<string, string>();
-
-function createBroadcastContext() {
-  const events: BroadcastEvent[] = [];
-  const context = {
-    getRuntimeConfig: () => ({}),
-    broadcastToConnIds: (event: string, payload: unknown, connIds: ReadonlySet<string>) => {
-      events.push({ event, payload, connIds: [...connIds] });
-    },
-  } as never;
-  return { context, events };
+function context() {
+  const events: unknown[] = [];
+  return { events, context: { getRuntimeConfig: () => ({}), broadcastToConnIds: (_event: string, payload: unknown) => events.push(payload) } as never };
 }
 
-function createRealtimeProvider(sendAudio = vi.fn()): RealtimeVoiceProviderPlugin {
-  return {
-    id: "relay-test",
-    label: "Relay Test",
-    isConfigured: () => true,
-    createBridge: () => ({
-      connect: vi.fn(async () => undefined),
-      sendAudio,
-      setMediaTimestamp: vi.fn(),
-      handleBargeIn: vi.fn(),
-      submitToolResult: vi.fn(),
-      acknowledgeMark: vi.fn(),
-      close: vi.fn(),
-      isConnected: vi.fn(() => true),
-    }),
-  };
+function voiceProvider(sendAudio: ReturnType<typeof vi.fn>): RealtimeVoiceProviderPlugin {
+  return { id: "test", label: "Test", isConfigured: () => true, createBridge: () => ({ connect: async () => {}, sendAudio, setMediaTimestamp: () => {}, handleBargeIn: () => {}, submitToolResult: () => {}, acknowledgeMark: () => {}, close: () => {}, isConnected: () => true }) };
 }
 
-function createTranscriptionProvider(sendAudio = vi.fn()): RealtimeTranscriptionProviderPlugin {
-  return {
-    id: "stt-test",
-    label: "STT Test",
-    isConfigured: () => true,
-    createSession: () => ({
-      connect: vi.fn(async () => undefined),
-      sendAudio,
-      close: vi.fn(),
-      isConnected: vi.fn(() => true),
-    }),
-  };
+function transcriptionProvider(sendAudio: ReturnType<typeof vi.fn>): RealtimeTranscriptionProviderPlugin {
+  return { id: "test", label: "Test", isConfigured: () => true, createSession: () => ({ connect: async () => {}, sendAudio, close: () => {}, isConnected: () => true }) };
 }
 
-function inputAudioEvents(events: BroadcastEvent[]): BroadcastEvent[] {
-  return events.filter(
-    (event) =>
-      typeof event.payload === "object" &&
-      event.payload !== null &&
-      "type" in event.payload &&
-      event.payload.type === "inputAudio",
-  );
-}
-
-function hasInputAudioByteLength(events: BroadcastEvent[], byteLength: number): boolean {
-  return inputAudioEvents(events).some(
-    (event) =>
-      typeof event.payload === "object" &&
-      event.payload !== null &&
-      "byteLength" in event.payload &&
-      event.payload.byteLength === byteLength,
-  );
-}
-
-describe("talk relay audio base64 guards", () => {
+describe("Talk relay audio base64", () => {
   afterEach(() => {
-    for (const [relaySessionId, connId] of realtimeSessions) {
-      stopTalkRealtimeRelaySession({ relaySessionId, connId });
-    }
-    realtimeSessions.clear();
-    for (const [transcriptionSessionId, connId] of transcriptionSessions) {
-      stopTalkTranscriptionRelaySession({ transcriptionSessionId, connId });
-    }
-    transcriptionSessions.clear();
+    for (const [relaySessionId, connId] of realtime) stopTalkRealtimeRelaySession({ relaySessionId, connId });
+    for (const [transcriptionSessionId, connId] of transcription) stopTalkTranscriptionRelaySession({ transcriptionSessionId, connId });
+    realtime.clear(); transcription.clear();
   });
 
-  it("rejects malformed realtime relay audio before provider delivery", async () => {
-    const sendAudio = vi.fn();
-    const { context, events } = createBroadcastContext();
-    const session = createTalkRealtimeRelaySession({
-      context,
-      connId: "conn-1",
-      provider: createRealtimeProvider(sendAudio),
-      providerConfig: {},
-      instructions: "brief",
-      tools: [],
-    });
-    realtimeSessions.set(session.relaySessionId, "conn-1");
-    await Promise.resolve();
-    events.length = 0;
-
-    expect(() =>
-      sendTalkRealtimeRelayAudio({
-        relaySessionId: session.relaySessionId,
-        connId: "conn-1",
-        audioBase64: "not-base64!",
-      }),
-    ).toThrow("Realtime relay audio frame is invalid base64");
-
-    expect(sendAudio).not.toHaveBeenCalled();
-    expect(events).toEqual([]);
+  it.each([["YXVkaW8taW4=", Buffer.from("audio-in")], ["-_8", Buffer.from([0xfb, 0xff])]])("decodes valid input", (input, expected) => {
+    expect(decodeTalkRelayAudioBase64(input, "Talk")).toEqual(expected);
   });
 
-  it("continues to forward base64url realtime relay audio", async () => {
-    const sendAudio = vi.fn();
-    const { context, events } = createBroadcastContext();
-    const session = createTalkRealtimeRelaySession({
-      context,
-      connId: "conn-1",
-      provider: createRealtimeProvider(sendAudio),
-      providerConfig: {},
-      instructions: "brief",
-      tools: [],
-    });
-    realtimeSessions.set(session.relaySessionId, "conn-1");
-    await Promise.resolve();
-    events.length = 0;
-
-    sendTalkRealtimeRelayAudio({
-      relaySessionId: session.relaySessionId,
-      connId: "conn-1",
-      audioBase64: "-_8",
-    });
-
-    expect(sendAudio).toHaveBeenCalledWith(Buffer.from([0xfb, 0xff]));
-    expect(hasInputAudioByteLength(events, 2)).toBe(true);
+  it.each(["not-base64!", "AB"])("rejects malformed input: %s", (input) => {
+    expect(() => decodeTalkRelayAudioBase64(input, "Talk")).toThrow(
+      "Talk audio frame is invalid base64",
+    );
   });
 
-  it("rejects non-round-tripping realtime relay audio before provider delivery", async () => {
-    const sendAudio = vi.fn();
-    const { context, events } = createBroadcastContext();
-    const session = createTalkRealtimeRelaySession({
-      context,
-      connId: "conn-1",
-      provider: createRealtimeProvider(sendAudio),
-      providerConfig: {},
-      instructions: "brief",
-      tools: [],
-    });
-    realtimeSessions.set(session.relaySessionId, "conn-1");
-    await Promise.resolve();
-    events.length = 0;
-
-    expect(() =>
-      sendTalkRealtimeRelayAudio({
-        relaySessionId: session.relaySessionId,
-        connId: "conn-1",
-        audioBase64: "AB",
-      }),
-    ).toThrow("Realtime relay audio frame is invalid base64");
-
-    expect(sendAudio).not.toHaveBeenCalled();
-    expect(events).toEqual([]);
+  it("rejects non-round-tripping realtime audio before delivery", async () => {
+    const sendAudio = vi.fn(); const { context: relayContext, events } = context();
+    const session = createTalkRealtimeRelaySession({ context: relayContext, connId: "conn", provider: voiceProvider(sendAudio), providerConfig: {}, instructions: "brief", tools: [] });
+    realtime.set(session.relaySessionId, "conn"); await Promise.resolve(); events.length = 0;
+    expect(() => sendTalkRealtimeRelayAudio({ relaySessionId: session.relaySessionId, connId: "conn", audioBase64: "AB" })).toThrow("Realtime relay audio frame is invalid base64");
+    expect(sendAudio).not.toHaveBeenCalled(); expect(events).toEqual([]);
   });
 
-  it("continues to forward valid realtime relay audio", async () => {
-    const sendAudio = vi.fn();
-    const { context, events } = createBroadcastContext();
-    const session = createTalkRealtimeRelaySession({
-      context,
-      connId: "conn-1",
-      provider: createRealtimeProvider(sendAudio),
-      providerConfig: {},
-      instructions: "brief",
-      tools: [],
-    });
-    realtimeSessions.set(session.relaySessionId, "conn-1");
-    await Promise.resolve();
-    events.length = 0;
-
-    sendTalkRealtimeRelayAudio({
-      relaySessionId: session.relaySessionId,
-      connId: "conn-1",
-      audioBase64: Buffer.from("audio-in").toString("base64"),
-    });
-
+  it("forwards valid realtime audio", async () => {
+    const sendAudio = vi.fn(); const { context: relayContext, events } = context();
+    const session = createTalkRealtimeRelaySession({ context: relayContext, connId: "conn", provider: voiceProvider(sendAudio), providerConfig: {}, instructions: "brief", tools: [] });
+    realtime.set(session.relaySessionId, "conn"); await Promise.resolve(); events.length = 0;
+    sendTalkRealtimeRelayAudio({ relaySessionId: session.relaySessionId, connId: "conn", audioBase64: "YXVkaW8taW4=" });
     expect(sendAudio).toHaveBeenCalledWith(Buffer.from("audio-in"));
-    expect(hasInputAudioByteLength(events, 8)).toBe(true);
+    expect(events).toContainEqual(expect.objectContaining({ type: "inputAudio", byteLength: 8 }));
   });
 
-  it("rejects malformed transcription relay audio before STT delivery", async () => {
-    const sendAudio = vi.fn();
-    const { context, events } = createBroadcastContext();
-    const session = createTalkTranscriptionRelaySession({
-      context,
-      connId: "conn-1",
-      provider: createTranscriptionProvider(sendAudio),
-      providerConfig: {},
-    });
-    transcriptionSessions.set(session.transcriptionSessionId, "conn-1");
-    await Promise.resolve();
-    events.length = 0;
-
-    expect(() =>
-      sendTalkTranscriptionRelayAudio({
-        transcriptionSessionId: session.transcriptionSessionId,
-        connId: "conn-1",
-        audioBase64: "not-base64!",
-      }),
-    ).toThrow("Transcription Talk audio frame is invalid base64");
-
-    expect(sendAudio).not.toHaveBeenCalled();
-    expect(events).toEqual([]);
+  it("rejects non-round-tripping transcription audio before delivery", async () => {
+    const sendAudio = vi.fn(); const { context: relayContext, events } = context();
+    const session = createTalkTranscriptionRelaySession({ context: relayContext, connId: "conn", provider: transcriptionProvider(sendAudio), providerConfig: {} });
+    transcription.set(session.transcriptionSessionId, "conn"); await Promise.resolve(); events.length = 0;
+    expect(() => sendTalkTranscriptionRelayAudio({ transcriptionSessionId: session.transcriptionSessionId, connId: "conn", audioBase64: "AB" })).toThrow("Transcription Talk audio frame is invalid base64");
+    expect(sendAudio).not.toHaveBeenCalled(); expect(events).toEqual([]);
   });
 
-  it("continues to forward base64url transcription relay audio", async () => {
-    const sendAudio = vi.fn();
-    const { context, events } = createBroadcastContext();
-    const session = createTalkTranscriptionRelaySession({
-      context,
-      connId: "conn-1",
-      provider: createTranscriptionProvider(sendAudio),
-      providerConfig: {},
-    });
-    transcriptionSessions.set(session.transcriptionSessionId, "conn-1");
-    await Promise.resolve();
-    events.length = 0;
-
-    sendTalkTranscriptionRelayAudio({
-      transcriptionSessionId: session.transcriptionSessionId,
-      connId: "conn-1",
-      audioBase64: "-_8",
-    });
-
-    expect(sendAudio).toHaveBeenCalledWith(Buffer.from([0xfb, 0xff]));
-    expect(hasInputAudioByteLength(events, 2)).toBe(true);
-  });
-
-  it("rejects non-round-tripping transcription relay audio before STT delivery", async () => {
-    const sendAudio = vi.fn();
-    const { context, events } = createBroadcastContext();
-    const session = createTalkTranscriptionRelaySession({
-      context,
-      connId: "conn-1",
-      provider: createTranscriptionProvider(sendAudio),
-      providerConfig: {},
-    });
-    transcriptionSessions.set(session.transcriptionSessionId, "conn-1");
-    await Promise.resolve();
-    events.length = 0;
-
-    expect(() =>
-      sendTalkTranscriptionRelayAudio({
-        transcriptionSessionId: session.transcriptionSessionId,
-        connId: "conn-1",
-        audioBase64: "AB",
-      }),
-    ).toThrow("Transcription Talk audio frame is invalid base64");
-
-    expect(sendAudio).not.toHaveBeenCalled();
-    expect(events).toEqual([]);
-  });
-
-  it("continues to forward valid transcription relay audio", async () => {
-    const sendAudio = vi.fn();
-    const { context, events } = createBroadcastContext();
-    const session = createTalkTranscriptionRelaySession({
-      context,
-      connId: "conn-1",
-      provider: createTranscriptionProvider(sendAudio),
-      providerConfig: {},
-    });
-    transcriptionSessions.set(session.transcriptionSessionId, "conn-1");
-    await Promise.resolve();
-    events.length = 0;
-
-    sendTalkTranscriptionRelayAudio({
-      transcriptionSessionId: session.transcriptionSessionId,
-      connId: "conn-1",
-      audioBase64: Buffer.from("audio-in").toString("base64"),
-    });
-
+  it("forwards valid transcription audio", async () => {
+    const sendAudio = vi.fn(); const { context: relayContext, events } = context();
+    const session = createTalkTranscriptionRelaySession({ context: relayContext, connId: "conn", provider: transcriptionProvider(sendAudio), providerConfig: {} });
+    transcription.set(session.transcriptionSessionId, "conn"); await Promise.resolve(); events.length = 0;
+    sendTalkTranscriptionRelayAudio({ transcriptionSessionId: session.transcriptionSessionId, connId: "conn", audioBase64: "YXVkaW8taW4=" });
     expect(sendAudio).toHaveBeenCalledWith(Buffer.from("audio-in"));
-    expect(hasInputAudioByteLength(events, 8)).toBe(true);
+    expect(events).toContainEqual(expect.objectContaining({ type: "inputAudio", byteLength: 8 }));
   });
 });
