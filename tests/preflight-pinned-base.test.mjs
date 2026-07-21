@@ -4,6 +4,10 @@ import os from "node:os";
 import path from "node:path";
 import { spawnSync } from "node:child_process";
 import test from "node:test";
+import {
+  isDocumentationOnly,
+  resolveValidationProfile,
+} from "../.codex/skills/auto-pr-openclaw/scripts/lib/validation-profile.mjs";
 
 const repoRoot = path.resolve(import.meta.dirname, "..");
 const preflight = path.join(
@@ -13,6 +17,10 @@ const preflight = path.join(
 const stateWriter = path.join(
   repoRoot,
   ".codex/skills/auto-pr-openclaw/scripts/write-workflow-state.mjs",
+);
+const preflightShell = path.join(
+  repoRoot,
+  ".codex/skills/auto-pr-openclaw/scripts/openclaw-preflight.sh",
 );
 
 function run(command, args, options = {}) {
@@ -142,7 +150,12 @@ fs.writeFileSync(file, String(count + 1));
   ]);
 
   const env = { ...process.env, FAKE_COUNTER_DIR: counter };
-  run(process.execPath, [preflight, "--workflow", path.join(output, "workflow.json")], { env });
+  const changedArgs = [
+    preflight,
+    "--workflow", path.join(output, "workflow.json"),
+    "--profile", "changed",
+  ];
+  run(process.execPath, changedArgs, { env });
   const first = JSON.parse(fs.readFileSync(path.join(output, "preflight.json"), "utf8"));
   assert.equal(first.status, "passed");
   assert.equal(first.validationBaseSha, validationBase);
@@ -160,7 +173,7 @@ fs.writeFileSync(file, String(count + 1));
   git(updater, "push", "origin", "main");
   const latestMain = git(updater, "rev-parse", "HEAD");
 
-  run(process.execPath, [preflight, "--workflow", path.join(output, "workflow.json")], { env });
+  run(process.execPath, changedArgs, { env });
   const second = JSON.parse(fs.readFileSync(path.join(output, "preflight.json"), "utf8"));
   const workflow = JSON.parse(fs.readFileSync(path.join(output, "workflow.json"), "utf8"));
   assert.equal(second.status, "passed");
@@ -174,6 +187,29 @@ fs.writeFileSync(file, String(count + 1));
   assert.equal(workflow.latestObservedMainSha, latestMain);
   assert.equal(fs.readFileSync(path.join(counter, "check"), "utf8"), "1");
   assert.equal(fs.readFileSync(path.join(counter, "test"), "utf8"), "1");
+
+  run(process.execPath, [preflight, "--workflow", path.join(output, "workflow.json")], { env });
+  const automatic = JSON.parse(fs.readFileSync(path.join(output, "preflight.json"), "utf8"));
+  assert.equal(automatic.status, "passed");
+  assert.equal(automatic.requestedProfile, "auto");
+  assert.equal(automatic.profile, "quick");
+  assert.equal(automatic.validationDepth, "deterministic-no-pnpm");
+  assert.equal(automatic.heavyChecks.length, 0);
+  assert.equal(fs.readFileSync(path.join(counter, "check"), "utf8"), "1");
+  assert.equal(fs.readFileSync(path.join(counter, "test"), "utf8"), "1");
+
+  run(process.execPath, [
+    preflight,
+    "--workflow", path.join(output, "workflow.json"),
+    "--profile", "focused",
+  ], { env });
+  const focused = JSON.parse(fs.readFileSync(path.join(output, "preflight.json"), "utf8"));
+  assert.equal(focused.status, "passed");
+  assert.equal(focused.profile, "focused");
+  assert.equal(focused.validationDepth, "focused-changed-tests");
+  assert.deepEqual(focused.heavyChecks.map((check) => check.name), ["focused tests"]);
+  assert.equal(fs.readFileSync(path.join(counter, "check"), "utf8"), "1");
+  assert.equal(fs.readFileSync(path.join(counter, "test"), "utf8"), "2");
 
   write(path.join(updater, "docs/example.md"), "conflicting upstream edit\n");
   git(updater, "add", "docs/example.md");
@@ -190,7 +226,30 @@ fs.writeFileSync(file, String(count + 1));
   assert.deepEqual(conflicted.freshness.overlappingFiles, ["docs/example.md"]);
   assert.equal(conflicted.heavyChecks.length, 0);
   assert.equal(fs.readFileSync(path.join(counter, "check"), "utf8"), "1");
-  assert.equal(fs.readFileSync(path.join(counter, "test"), "utf8"), "1");
+  assert.equal(fs.readFileSync(path.join(counter, "test"), "utf8"), "2");
+});
+
+test("documents profiles through --help without requiring a workflow", () => {
+  for (const [command, args] of [
+    [process.execPath, [preflight, "--help"]],
+    [preflightShell, ["--help"]],
+  ]) {
+    const result = spawnSync(command, args, { encoding: "utf8" });
+    assert.equal(result.status, 0, result.stderr);
+    assert.match(result.stdout, /--profile PROFILE/);
+    assert.match(result.stdout, /auto \(default\)/);
+    assert.match(result.stdout, /focused.*focused changed tests/);
+    assert.match(result.stdout, /documentation-only diffs/);
+    assert.match(result.stdout, /can be slower than changed/);
+  }
+});
+
+test("auto profile is quick only for documentation-only diffs", () => {
+  assert.equal(isDocumentationOnly(["README.md", "docs/guide.md", "LICENSE"]), true);
+  assert.equal(resolveValidationProfile("auto", ["README.md"]), "quick");
+  assert.equal(resolveValidationProfile("auto", ["README.md", "src/index.ts"]), "focused");
+  assert.equal(resolveValidationProfile("auto", []), "focused");
+  assert.equal(resolveValidationProfile("full", ["README.md"]), "full");
 });
 
 test("requires an explicit full profile for pnpm check", () => {

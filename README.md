@@ -166,12 +166,32 @@ Run deterministic checks before the human publication gate:
   --workflow workspace/openclaw/outputs/issue-94432/workflow.json
 ```
 
-This executes OpenClaw's changed-surface checks and focused tests against the
-pinned validation base, validates branch state, commit identity, PR body proof,
-and latest-main merge compatibility, then writes `preflight.json` tied to the
-checked HEAD. Successful heavy checks are safely reused when their fingerprint
-is unchanged. Use `--profile full` only for an intentional full-repository
-`pnpm check`. Local AI reviews are optional diagnostics rather than gates.
+The default `auto` profile skips pnpm-heavy lanes for documentation-only diffs
+and uses focused changed tests for every other change. To inspect
+all profiles and options, run:
+
+```bash
+./.codex/skills/auto-pr-openclaw/scripts/openclaw-preflight.sh --help
+```
+
+For source changes, the default release preflight runs the focused tests selected
+from the changed surface and writes a passing receipt when the normal Git,
+identity, PR-body/proof, and merge-risk gates also pass:
+
+```bash
+./.codex/skills/auto-pr-openclaw/scripts/openclaw-preflight.sh \
+  --workflow workspace/openclaw/outputs/issue-94432/workflow.json
+```
+
+Use `--profile changed` only when you intentionally want the heavier local
+`pnpm check:changed` lane in addition to focused tests.
+
+Preflight validates branch state, commit identity, PR body proof, focused tests
+against the pinned validation base, and latest-main merge compatibility, then
+writes `preflight.json` tied to the checked HEAD. Successful heavy checks are
+safely reused when their fingerprint is unchanged. Use `--profile full` only for
+an intentional full-repository `pnpm check`. Local AI reviews are optional
+diagnostics rather than gates.
 
 Generate the human approval packet before any GitHub write:
 

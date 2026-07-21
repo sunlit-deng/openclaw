@@ -11,11 +11,12 @@ import {
   publicAccount,
   resolveAccount,
 } from "./lib/account-utils.mjs";
+import { resolveValidationProfile } from "./lib/validation-profile.mjs";
 
 function parseArgs(argv) {
   const result = {
     workflow: "",
-    profile: "changed",
+    profile: "auto",
     checkScript: "",
     testScript: "test:changed",
     typeScript: "",
@@ -32,10 +33,29 @@ function parseArgs(argv) {
     else if (arg === "-h" || arg === "--help") result.help = true;
     else throw new Error(`Unknown argument: ${arg}`);
   }
-  if (!["quick", "fast", "changed", "full"].includes(result.profile)) {
-    throw new Error("--profile must be quick, fast, changed, or full");
+  if (!["auto", "focused", "iterate", "quick", "fast", "changed", "full"].includes(result.profile)) {
+    throw new Error("--profile must be auto, focused, iterate, quick, fast, changed, or full");
   }
-  if (result.profile === "quick") {
+  if (result.checkScript === "check" && result.profile !== "full") {
+    throw new Error("pnpm check is a full-repository lane; use --profile full explicitly");
+  }
+  if (result.profile === "auto" && (
+    result.checkScript || result.testScript !== "test:changed" || result.typeScript || result.extraScripts.length > 0
+  )) {
+    throw new Error("--profile auto cannot be combined with custom pnpm lanes; select a concrete profile first");
+  }
+  return result;
+}
+
+function configureProfile(result, changedFiles) {
+  const requestedProfile = result.profile;
+  result.profile = resolveValidationProfile(requestedProfile, changedFiles);
+  if (result.profile === "focused" || result.profile === "iterate") {
+    if (result.checkScript || result.testScript !== "test:changed" || result.typeScript || result.extraScripts.length > 0) {
+      throw new Error(`--profile ${result.profile} uses the fixed focused changed-test lane; do not combine it with custom lanes`);
+    }
+    result.checkScript = "";
+  } else if (result.profile === "quick") {
     if (result.checkScript || result.testScript !== "test:changed" || result.typeScript || result.extraScripts.length > 0) {
       throw new Error("--profile quick cannot be combined with pnpm check, test, type, or extra lanes");
     }
@@ -60,20 +80,39 @@ function parseArgs(argv) {
       throw new Error("pnpm check is a full-repository lane; use --profile full explicitly");
     }
   }
-  return result;
+  return requestedProfile;
 }
 
 function usage() {
   return [
-    "Usage: openclaw-preflight.mjs --workflow PATH [--profile quick|fast|changed|full] [--check-script NAME] [--test-script NAME] [--type-script NAME] [--extra-script NAME]",
+    "Usage: openclaw-preflight.sh --workflow PATH [options]",
     "",
     "Runs deterministic OpenClaw checks and writes preflight.json next to workflow.json.",
-    "The default check lane is pnpm check:changed for all workflows; preflight does not run pnpm check by default.",
-    "Use --profile quick to run deterministic git, identity, PR body, proof, and merge-risk gates without pnpm heavy lanes.",
-    "Use --profile fast to run lint, production type checks, and test type checks without changed tests.",
-    "Use --profile full to explicitly opt into the full-repository pnpm check lane.",
-    "The default focused test lane is pnpm test:changed.",
-    "Use --type-script check:test-types only when broader test type coverage is intentionally needed.",
+    "",
+    "Options:",
+    "  --workflow PATH       Workflow JSON to validate (required).",
+    "  --profile PROFILE     auto (default), focused, quick, changed, fast, or full.",
+    "  --check-script NAME   Override the check lane for the changed profile.",
+    "  --test-script NAME    Override the focused test lane (default: test:changed).",
+    "  --type-script NAME    Add an optional type-check lane.",
+    "  --extra-script NAME   Add a pnpm lane; may be repeated.",
+    "  -h, --help            Show this help and exit.",
+    "",
+    "Profiles:",
+    "  auto     Select quick for documentation-only diffs; focused otherwise.",
+    "  focused  Run focused changed tests only. This is the default release profile for code diffs.",
+    "  iterate  Alias for focused, kept for older edit-loop commands.",
+    "  quick    Run Git, identity, PR-body/proof, and merge-risk gates only.",
+    "  changed  Optional heavier lane: run pnpm check:changed and focused changed tests.",
+    "  fast     Run full lint, production types, and test types; despite its name,",
+    "           this can be slower than changed on a large repository.",
+    "  full     Run the full-repository pnpm check plus focused changed tests.",
+    "",
+    "Examples:",
+    "  openclaw-preflight.sh --workflow outputs/issue-123/workflow.json",
+    "  openclaw-preflight.sh --workflow outputs/issue-123/workflow.json --profile focused",
+    "  openclaw-preflight.sh --workflow outputs/issue-123/workflow.json --profile quick",
+    "  openclaw-preflight.sh --workflow outputs/issue-123/workflow.json --profile changed",
   ].join("\n");
 }
 
@@ -200,7 +239,6 @@ if (!args.workflow) {
 const workflowPath = path.resolve(args.workflow);
 const workflow = JSON.parse(fs.readFileSync(workflowPath, "utf8"));
 const account = resolveAccount({ workflow });
-const checkScript = args.checkScript;
 const repo = path.resolve(workflow.repoPath);
 const root = path.resolve(workflow.root);
 const outputPath = path.resolve(workflow.outputPath);
@@ -292,6 +330,7 @@ let latestMainSha = "";
 let branch = "";
 let status = "";
 let changedFiles = [];
+let requestedProfile = args.profile;
 try {
   headSha = git(repo, "rev-parse", "HEAD");
   if (!validationBaseSha) throw new Error("workflow has no pinned validation base SHA");
@@ -390,6 +429,20 @@ try {
   checks.push(staticCheck("git repository state", false, error.message));
 }
 
+try {
+  requestedProfile = configureProfile(args, changedFiles);
+  checks.push(staticCheck(
+    "validation profile selection",
+    true,
+    requestedProfile === args.profile
+      ? args.profile
+      : `${requestedProfile} -> ${args.profile} (${args.profile === "quick" ? "documentation-only diff" : "code, test, config, dependency, or unknown diff"})`,
+  ));
+} catch (error) {
+  checks.push(staticCheck("validation profile selection", false, error.message));
+}
+const checkScript = args.checkScript;
+
 if (validationBaseSha) {
   checks.push(commandCheck("git diff check", run("git", ["diff", "--check", `${validationBaseSha}...HEAD`], repo)));
 }
@@ -429,8 +482,8 @@ if (packageJson && args.profile === "quick") {
 } else if (packageJson) {
   checks.push(staticCheck(
     "selected check script exists",
-    Boolean(checkScript && typeof packageJson.scripts?.[checkScript] === "string"),
-    checkScript || "no check script selected",
+    ["focused", "iterate"].includes(args.profile) || Boolean(checkScript && typeof packageJson.scripts?.[checkScript] === "string"),
+    checkScript || "not selected for focused-test profile",
   ));
   checks.push(staticCheck(
     "focused test script exists",
@@ -509,20 +562,22 @@ if (packageJson && args.profile === "quick") {
               },
             }
           : {};
-        const checkArgs = checkScript === "check:changed"
-          ? [checkScript, "--base", validationBaseSha, "--timed"]
-          : [checkScript];
-        const checkLabel = args.profile === "full"
-          ? "full-repository lint type and policy checks"
-          : checkScript === "check:changed"
-            ? "changed-surface lint type and policy checks"
-            : `pnpm script: ${checkScript}`;
-        const changedCheck = commandCheck(
-          checkLabel,
-          run("pnpm", checkArgs, repo, checkOptions),
-        );
-        heavyChecks.push(changedCheck);
-        if (changedCheck.status === "passed" && args.testScript && typeof packageJson.scripts?.[args.testScript] === "string") {
+        if (checkScript) {
+          const checkArgs = checkScript === "check:changed"
+            ? [checkScript, "--base", validationBaseSha, "--timed"]
+            : [checkScript];
+          const checkLabel = args.profile === "full"
+            ? "full-repository lint type and policy checks"
+            : checkScript === "check:changed"
+              ? "changed-surface lint type and policy checks"
+              : `pnpm script: ${checkScript}`;
+          heavyChecks.push(commandCheck(
+            checkLabel,
+            run("pnpm", checkArgs, repo, checkOptions),
+          ));
+        }
+        const checkFailed = heavyChecks.some((check) => check.status === "failed");
+        if (!checkFailed && args.testScript && typeof packageJson.scripts?.[args.testScript] === "string") {
           const testResult = args.testScript === "test:changed"
             ? run(process.execPath, ["scripts/test-projects.mjs", "--changed", validationBaseSha], repo)
             : run("pnpm", [args.testScript], repo);
@@ -568,21 +623,24 @@ workflow.updatedAt = new Date().toISOString();
 fs.writeFileSync(workflowPath, `${JSON.stringify(workflow, null, 2)}\n`, "utf8");
 const receipt = {
   schemaVersion: 2,
-  status: failed.length === 0 ? "passed" : "failed",
+  status: failed.length > 0 ? "failed" : "passed",
   workflowPath,
   repoPath: repo,
   validationBaseSha,
   latestObservedMainSha: latestMainSha,
   headSha,
   branch,
+  requestedProfile,
   profile: args.profile,
   validationDepth: args.profile === "quick"
     ? "deterministic-no-pnpm"
-    : args.profile === "full"
-      ? "full-pnpm"
-      : args.profile === "fast"
-        ? "fast-lint-prod-and-test-types"
-        : "changed-pnpm",
+    : ["focused", "iterate"].includes(args.profile)
+      ? "focused-changed-tests"
+      : args.profile === "full"
+        ? "full-pnpm"
+        : args.profile === "fast"
+          ? "fast-lint-prod-and-test-types"
+          : "changed-pnpm",
   freshness,
   githubAccount: publicAccount(account),
   heavyFingerprint,
@@ -606,4 +664,4 @@ for (const check of checks) {
   console.log(`${label}  ${check.name}`);
 }
 console.log(`\n${receipt.status.toUpperCase()}: ${preflightPath}`);
-process.exit(receipt.status === "passed" ? 0 : 1);
+process.exit(receipt.status === "failed" ? 1 : 0);
