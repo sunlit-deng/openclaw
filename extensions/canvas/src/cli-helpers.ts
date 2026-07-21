@@ -25,8 +25,14 @@ function normalizeCanvasSnapshotFormat(value: string | undefined): CanvasSnapsho
 }
 
 function canonicalizeCanvasSnapshotBase64(value: string | undefined): string | undefined {
-  if (!value || /[\0-\x08\x0B\x0E-\x1F\x7F]/.test(value)) {
+  if (!value) {
     return undefined;
+  }
+  for (let index = 0; index < value.length; index += 1) {
+    const code = value.charCodeAt(index);
+    if (code <= 0x20 && code !== 0x09 && code !== 0x0a && code !== 0x0c && code !== 0x0d) {
+      return undefined;
+    }
   }
   const canonical = canonicalizeBase64(value);
   if (!canonical) {
