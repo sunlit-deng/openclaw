@@ -87,7 +87,7 @@ describe("Talk relay audio base64", () => {
   });
 
   it("rejects non-round-tripping realtime audio before delivery", async () => {
-    const sendAudio = vi.fn();
+    const sendAudio = vi.fn<(audio: Buffer) => void>();
     const { context: relayContext, events } = context();
     const session = createTalkRealtimeRelaySession({
       context: relayContext,
@@ -112,7 +112,7 @@ describe("Talk relay audio base64", () => {
   });
 
   it("forwards valid realtime audio", async () => {
-    const sendAudio = vi.fn();
+    const sendAudio = vi.fn<(audio: Buffer) => void>();
     const { context: relayContext, events } = context();
     const session = createTalkRealtimeRelaySession({
       context: relayContext,
@@ -135,7 +135,7 @@ describe("Talk relay audio base64", () => {
   });
 
   it("rejects non-round-tripping transcription audio before delivery", async () => {
-    const sendAudio = vi.fn();
+    const sendAudio = vi.fn<(audio: Buffer) => void>();
     const { context: relayContext, events } = context();
     const session = createTalkTranscriptionRelaySession({
       context: relayContext,
@@ -158,7 +158,7 @@ describe("Talk relay audio base64", () => {
   });
 
   it("forwards valid transcription audio", async () => {
-    const sendAudio = vi.fn();
+    const sendAudio = vi.fn<(audio: Buffer) => void>();
     const { context: relayContext, events } = context();
     const session = createTalkTranscriptionRelaySession({
       context: relayContext,
