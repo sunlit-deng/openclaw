@@ -20,6 +20,7 @@ import type {
   AssistantMessage,
   Context,
   Model,
+  ModelThinkingLevel,
   SimpleStreamOptions,
   StreamOptions,
   TextContent,
@@ -549,7 +550,7 @@ export function resolveResponsesReasoningEffort<TApi extends Api>(
 
 function resolveResponsesReasoningEffortForPayload<TApi extends Api>(
   model: Model<TApi>,
-  effort: string,
+  effort: ModelThinkingLevel,
 ): string {
   const reasoningEffortMap = resolveOpenAIReasoningEffortMap(model);
   return reasoningEffortMap[effort] ?? model.thinkingLevelMap?.[effort] ?? effort;
