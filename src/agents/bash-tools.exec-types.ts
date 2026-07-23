@@ -121,6 +121,7 @@ export type ExecToolFailureKind =
   | "signal"
   | "aborted"
   | "runtime-error"
+  | "approval_required"
   | "approval-denied"
   | "node-run-failed";
 
