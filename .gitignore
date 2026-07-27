@@ -1,2 +1,5 @@
 workspace/
 outputs/
+.pnpm-store/
+.codegraph/
+.tmp/

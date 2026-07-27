@@ -5,6 +5,7 @@ import fs from "node:fs";
 import path from "node:path";
 import { spawnSync } from "node:child_process";
 import { ghEnv, publicAccount, resolveAccount } from "./lib/account-utils.mjs";
+import { validatePrBody } from "./lib/pr-body-validator.mjs";
 
 function parseArgs(argv) {
   const result = {
@@ -128,6 +129,21 @@ if (workflow.branch !== currentBranch) failures.push("current branch does not ma
 if (args.approvedHead !== currentHead) failures.push("current HEAD does not match the human-approved HEAD");
 if (args.approvedBodySha !== bodySha) failures.push("current PR body does not match the human-approved SHA-256");
 if (workflow.prBodySha256 !== bodySha) failures.push("PR body has changed since validation");
+try {
+  const bodyValidation = validatePrBody({
+    bodyPath: workflow.prBodyPath,
+    issue: workflow.issue,
+    pr: workflow.pr,
+    requireIssueLink: Number.isSafeInteger(workflow.issue) && workflow.issue > 0,
+    repoPath,
+    baseRef: workflow.validationBaseSha || workflow.baseRef,
+  });
+  if (bodyValidation.status !== "passed") {
+    failures.push(`current PR body failed validation: ${bodyValidation.errors.join("; ")}`);
+  }
+} catch (error) {
+  failures.push(`current PR body validation failed: ${error.message}`);
+}
 if (execute("git", ["status", "--porcelain"], { cwd: repoPath })) failures.push("working tree is not clean");
 if (failures.length > 0) {
   console.error(failures.map((failure) => `- ${failure}`).join("\n"));

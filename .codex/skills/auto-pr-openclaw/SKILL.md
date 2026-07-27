@@ -23,6 +23,7 @@ Use this skill for `openclaw/openclaw` contributor work. Keep the process conser
 - Use low-token mode by default. Prefer `scripts/openclaw-context-pack.sh` and local receipts over re-reading large diffs, logs, comment histories, or full JSON outputs. Read `references/token-budget.md` before broad candidate mining, PR maintenance, CI debugging, or any resumed task with an existing workflow.
 - Keep PR explanations durable in the PR body. If a bot or maintainer asks for evidence or context, update the PR body before posting a short pointer comment.
 - Keep PR bodies concise by default: required sections, short human paragraphs, compact evidence bullets, and no report-style filler.
+- Never expose local machine or workspace paths in a PR body. Use repository-root commands and committed or embedded proof source; do not paste `/Users/...`, `/Volumes/...`, `/home/...`, Windows user paths, or local `outputs/`, `worktrees/`, or `workspace/openclaw/...` references.
 - After the human gate, publish branches through the workflow's selected GitHub account: check `gh auth status` with that token/profile, use a fork/SSH remote matching that identity for the unavoidable `git push`, and create/update PRs with `gh`. Do not push to HTTPS remotes whose cached credentials can differ from the selected `gh` identity.
 - When requesting ClawSweeper review, the comment body must be exactly `@clawsweeper re-review`.
 - Never print secrets. Redact tokens, account ids, cookies, private endpoints, and other private values in live proof.

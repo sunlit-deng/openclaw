@@ -10,6 +10,29 @@ const REQUIRED_SECTIONS = [
   "Evidence",
 ];
 
+const FORBIDDEN_LOCAL_PATH_PATTERNS = [
+  {
+    name: "macOS/Linux home path",
+    pattern: /(?:^|[\s`'"(<])((?:\/Users|\/home)\/[^\s`'"<>)]+)/g,
+  },
+  {
+    name: "mounted volume path",
+    pattern: /(?:^|[\s`'"(<])(\/Volumes\/[^\s`'"<>)]+)/g,
+  },
+  {
+    name: "Windows user path",
+    pattern: /(?:^|[\s`'"(<])([A-Za-z]:\\Users\\[^\s`'"<>)]+)/g,
+  },
+  {
+    name: "local OpenClaw output/worktree path",
+    pattern: /(?:^|[\s`'"(<])((?:\.\.\/)+(?:outputs|worktrees|workspace)\/[^\s`'"<>)]+)/g,
+  },
+  {
+    name: "local OpenClaw workspace path",
+    pattern: /(?:^|[\s`'"(<])((?:workspace\/openclaw\/)?(?:outputs|worktrees)\/[^\s`'"<>)]+)/g,
+  },
+];
+
 function git(repo, args) {
   const result = spawnSync("git", args, { cwd: repo, encoding: "utf8", shell: false });
   if (result.status !== 0) {
@@ -28,6 +51,35 @@ function sectionBody(body, name) {
   return body.slice(contentStart + 1, nextHeading < 0 ? body.length : nextHeading).trim();
 }
 
+function unique(values) {
+  return [...new Set(values)];
+}
+
+function findForbiddenLocalPathLeaks(body, { bodyPath, repoPath }) {
+  const leaks = [];
+  const candidates = [
+    bodyPath && path.resolve(bodyPath),
+    repoPath && path.resolve(repoPath),
+    repoPath && path.dirname(path.resolve(repoPath)),
+    repoPath && path.dirname(path.dirname(path.resolve(repoPath))),
+    process.env.HOME,
+  ].filter(Boolean);
+
+  for (const candidate of unique(candidates)) {
+    if (candidate.length > 1 && body.includes(candidate)) {
+      leaks.push(candidate);
+    }
+  }
+
+  for (const { pattern } of FORBIDDEN_LOCAL_PATH_PATTERNS) {
+    for (const match of body.matchAll(pattern)) {
+      if (match[1]) leaks.push(match[1]);
+    }
+  }
+
+  return unique(leaks).slice(0, 8);
+}
+
 export function validatePrBody({
   bodyPath,
   issue,
@@ -44,6 +96,14 @@ export function validatePrBody({
   if (body.includes("\r")) {
     errors.push("PR body must use LF line endings");
     body = body.replace(/\r\n?/g, "\n");
+  }
+
+  const localPathLeaks = findForbiddenLocalPathLeaks(body, {
+    bodyPath: resolvedBodyPath,
+    repoPath,
+  });
+  if (localPathLeaks.length > 0) {
+    errors.push(`PR body must not expose local absolute paths or output/worktree paths: ${localPathLeaks.join(", ")}`);
   }
 
   const positions = REQUIRED_SECTIONS.map((name) => body.indexOf(`## ${name}`));

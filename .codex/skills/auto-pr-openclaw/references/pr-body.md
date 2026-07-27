@@ -93,7 +93,9 @@ AI-assisted: built with Codex
 - **Proof script availability.** If the proof script is not committed, include its full source in a `<details>` fold block in the PR body Evidence section, or link a durable artifact produced with the branch. Keep the script focused enough for reviewers to inspect quickly, and make sure its imports reference files that exist in the diff or repository at the PR head. For embedded source, show the command as if the reviewer saves the block in the repository root, such as `npx tsx proof-live.ts` or `pnpm exec tsx proof-live.ts`; do not use local output-workspace paths like `../../outputs/.../proof-live.ts` unless that path is a committed artifact available from the PR head.
 - **Evidence must match the diff.** Every Evidence claim must correspond to changed files, added tests, committed proof artifacts, or production modules that exist on the branch. Do not mention scripts, files, tests, or commands that are absent from the branch or cannot be reproduced from the PR head.
 - Good terminal proof shows the command, the trigger, and the negative control reviewers care about.
-- Use relative commands or redact local paths. Never paste local usernames, tokens, account ids, private URLs, cookies, or full sensitive responses.
+- Use commands that can run from the repository root. Never paste local absolute paths such as `/Users/...`, `/Volumes/...`, `/home/...`, or `C:\Users\...`.
+- Do not reference local `outputs/`, `worktrees/`, or `workspace/openclaw/...` paths in commands, imports, artifacts, or embedded proof source. If a proof script is not committed, embed it in the PR body and show a repository-root command such as `npx tsx proof-live.ts`.
+- Redact local usernames, tokens, account ids, private URLs, cookies, and full sensitive responses.
 - Move long logs, long command output, and detailed notes into an output artifact; summarize only the key line in the PR body.
 
 ### Local Proof Script Pattern
@@ -107,7 +109,7 @@ Use this pattern only when a live external path is unavailable or would be less 
 - After fix: `npx tsx proof-live.ts` imports the real changed production module and shows <correct behavior>; negative control still <expected result>.
 
 ```text
-$ npx tsx proof-live.ts
+$ pnpm exec tsx proof-live.ts
 before: <bad behavior, if captured by this script or a base-branch run>
 after: <correct behavior>
 negative-control: <expected unchanged behavior>
