@@ -84,6 +84,35 @@ if (!args.workflow) {
 }
 
 const context = loadWorkflow(args.workflow);
+const output = path.resolve(args.output || path.join(context.outputPath, "duplicate-check.json"));
+if (context.workflow.pr) {
+  const receipt = {
+    schemaVersion: 1,
+    generatedAt: new Date().toISOString(),
+    workflowPath: context.workflowPath,
+    applicable: false,
+    skipped: true,
+    skippedReason: `existing PR #${context.workflow.pr} does not need duplicate screening`,
+    searches: [],
+    summary: {
+      queryCount: 0,
+      relatedOpenPrCount: 0,
+      likelyDuplicateCount: 0,
+      errors: [],
+    },
+    likelyDuplicates: [],
+    relatedOpenPrs: [],
+  };
+  writeJson(output, receipt);
+  console.log(JSON.stringify({
+    output,
+    applicable: false,
+    skipped: true,
+    reason: receipt.skippedReason,
+  }, null, 2));
+  process.exit(0);
+}
+
 const account = resolveAccount({ workflow: context.workflow });
 const accountEnv = ghEnv(account);
 const baseSha = context.workflow.validationBaseSha || context.workflow.baseSha;
@@ -134,7 +163,6 @@ const receipt = {
   relatedOpenPrs: relatedOpenPrs.slice(0, 30),
 };
 
-const output = path.resolve(args.output || path.join(context.outputPath, "duplicate-check.json"));
 writeJson(output, receipt);
 console.log(JSON.stringify({
   output,

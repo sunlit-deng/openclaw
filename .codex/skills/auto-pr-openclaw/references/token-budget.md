@@ -5,7 +5,7 @@ judgment, not on repeatedly pasting logs, full JSON receipts, or large diffs.
 
 ## Default Behavior
 
-- Prefer local receipts over prose: `duplicate-check.json`, `candidate-score.json`, `preflight.json`, `gate-summary.json`, and `context-pack.md`.
+- Prefer local receipts over prose: `candidate-score.json`, `preflight.json`, `gate-summary.json`, and `context-pack.md`, plus `duplicate-check.json` for unpublished candidates only.
 - Generate `context-pack.md` after intake and after each material validation state change:
 
 ```bash
@@ -22,8 +22,9 @@ judgment, not on repeatedly pasting logs, full JSON receipts, or large diffs.
   comments first.
 - Use `gh --json` with explicit fields and small limits. Avoid broad issue/PR
   mining unless the user asks for candidate discovery.
-- Run `openclaw-duplicate-check.sh --offline` first when only planning queries;
-  run live GitHub duplicate checks only after the candidate is concrete.
+- For unpublished candidates, run `openclaw-duplicate-check.sh --offline` first
+  when only planning queries, then run live GitHub duplicate checks only after
+  the candidate is concrete. Skip duplicate checks entirely for existing PRs.
 - Prefer CodeGraph for structural code questions and `rg` for literal strings.
   Do not run broad grep/read loops over OpenClaw.
 - Avoid subagents for normal PR work. Use one agent and compact receipts unless

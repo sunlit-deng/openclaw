@@ -64,6 +64,7 @@ if (!args.workflow) {
 }
 
 const context = loadWorkflow(args.workflow);
+const duplicateCheckApplicable = !context.workflow.pr;
 const account = resolveAccount({ workflow: context.workflow });
 const accountEnv = ghEnv(account);
 const baseSha = context.workflow.validationBaseSha || context.workflow.baseSha;
@@ -74,8 +75,11 @@ const preflight = readJsonIfPresent(context.preflightPath);
 const duplicateCheckPath = args.duplicateCheck || path.join(context.outputPath, "duplicate-check.json");
 const candidateScorePath = args.candidateScore || path.join(context.outputPath, "candidate-score.json");
 const rebaseOnlyCheckPath = args.rebaseOnlyCheck || path.join(context.outputPath, "rebase-only-check.json");
-const duplicateCheck = readJsonIfPresent(duplicateCheckPath);
+const duplicateCheck = duplicateCheckApplicable ? readJsonIfPresent(duplicateCheckPath) : null;
 const candidateScore = readJsonIfPresent(candidateScorePath);
+const candidateScoreStaleForExistingPr = Boolean(
+  context.workflow.pr && candidateScore && candidateScore.duplicateCheckApplicable !== false,
+);
 const rebaseOnlyCheck = readJsonIfPresent(rebaseOnlyCheckPath);
 const rebaseOnlyPassedForHead = rebaseOnlyCheck?.status === "passed" && rebaseOnlyCheck.headSha === headSha;
 const preflightPassed = checkStatus(preflight) === "passed";
@@ -89,7 +93,7 @@ const clean = run("git", ["status", "--porcelain"], { cwd: context.repoPath }).s
 const diffCheck = run("git", ["diff", "--check", `${effectiveBaseSha}...HEAD`], { cwd: context.repoPath, allowFailure: true });
 const likelyDuplicateCount = duplicateCheck?.summary?.likelyDuplicateCount ?? 0;
 const relatedOpenPrCount = duplicateCheck?.summary?.relatedOpenPrCount ?? 0;
-const duplicateCheckBlocks = !context.workflow.pr && likelyDuplicateCount > 0;
+const duplicateCheckBlocks = duplicateCheckApplicable && likelyDuplicateCount > 0;
 
 let maintainer = { checked: false, maintainerCanModify: context.workflow.maintainerCanModify ?? null, error: null };
 if (context.workflow.pr) {
@@ -127,7 +131,7 @@ if (context.workflow.pr && maintainer.maintainerCanModify !== true) blockers.pus
 if (body.sha256 !== context.workflow.prBodySha256 && context.workflow.prBodySha256) blockers.push("PR body changed since workflow validation");
 for (const problem of commitIdentityProblems(identities, account)) blockers.push(problem);
 if (duplicateCheckBlocks) blockers.push("duplicate-check found likely duplicates");
-if (candidateScore?.verdict && ["needs-work", "poor-fit"].includes(candidateScore.verdict)) {
+if (!candidateScoreStaleForExistingPr && candidateScore?.verdict && ["needs-work", "poor-fit"].includes(candidateScore.verdict)) {
   blockers.push(`candidate score verdict is ${candidateScore.verdict}`);
 }
 
@@ -176,6 +180,7 @@ const summary = {
     blockers: rebaseOnlyCheck.blockers ?? [],
     active: rebaseOnlyPassedForHead,
   } : null,
+  duplicateCheckApplicable,
   duplicateCheck: duplicateCheck ? {
     path: duplicateCheckPath,
     likelyDuplicateCount,
@@ -186,6 +191,7 @@ const summary = {
     path: candidateScorePath,
     score: candidateScore.score,
     verdict: candidateScore.verdict,
+    staleForExistingPr: candidateScoreStaleForExistingPr,
   } : null,
   maintainer,
   blockers,
@@ -225,8 +231,8 @@ ${mdList(nameStatus.map((line) => `\`${line}\``))}
 - failed-preflight bypass: ${preflight?.status === "failed" && preflight.headSha === headSha ? "available only with explicit user approval for this HEAD and body hash" : "not applicable"}
 - rebase-only check: ${rebaseOnlyCheck ? `${rebaseOnlyCheck.status}${rebaseOnlyPassedForHead ? " (active fast path)" : ""}` : "missing"}
 - rebase-only receipt: \`${rebaseOnlyCheckPath}\`
-- duplicate check: ${duplicateCheck ? `${summary.duplicateCheck.likelyDuplicateCount} likely duplicates, ${summary.duplicateCheck.relatedOpenPrCount} related open PRs${summary.duplicateCheck.blocking ? "" : " (advisory)"}` : "missing"}
-- candidate score: ${candidateScore ? `${candidateScore.score} (${candidateScore.verdict})` : "missing"}
+- duplicate check: ${duplicateCheckApplicable ? (duplicateCheck ? `${summary.duplicateCheck.likelyDuplicateCount} likely duplicates, ${summary.duplicateCheck.relatedOpenPrCount} related open PRs${summary.duplicateCheck.blocking ? "" : " (advisory)"}` : "missing") : "not applicable (existing PR)"}
+- candidate score: ${candidateScore ? (candidateScoreStaleForExistingPr ? "stale pre-existing-PR receipt (ignored; rerun scoring)" : `${candidateScore.score} (${candidateScore.verdict})`) : "missing"}
 - maintainer edit: ${maintainer.checked ? String(maintainer.maintainerCanModify) : maintainer.maintainerCanModify === null ? "not checked" : String(maintainer.maintainerCanModify)}
 
 ## Commit Identity

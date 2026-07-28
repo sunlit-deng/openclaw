@@ -11,18 +11,19 @@ Use these gates before pushing or updating an OpenClaw PR.
 
 ## Duplicate and Canonical Gate
 
+- This gate applies only to unpublished candidates and new PR preparation. Once `workflow.pr` identifies an already-published PR, skip duplicate searches entirely for score-driven changes, review feedback, proof updates, CI fixes, rebases, and re-review preparation. Ignore any stale `duplicate-check.json` in that workflow.
 - Use `gh` for GitHub reads by default. Prefer `gh issue view`, `gh pr view`, `gh pr diff`, `gh pr checks`, `gh run view`, and `gh api`; use another GitHub tool only when `gh` is unavailable, unauthenticated, or missing the needed capability.
 - Search linked issues, related PRs, latest comments, and ClawSweeper comments for canonical work.
 - Before claiming a PR is not duplicate, verify current head SHA, actual changed files, and whether sibling PRs solve the same remaining problem.
-- When a workflow exists, run `scripts/openclaw-duplicate-check.sh --workflow <outputs>/workflow.json`. Keep `duplicate-check.json` with the output artifacts. A likely duplicate count above zero is a stop-and-triage signal, not something to wave away in prose.
+- When an unpublished-candidate workflow exists, run `scripts/openclaw-duplicate-check.sh --workflow <outputs>/workflow.json`. Keep `duplicate-check.json` with the output artifacts. A likely duplicate count above zero is a stop-and-triage signal, not something to wave away in prose.
 
 ## Candidate Score Gate
 
 - Run `scripts/openclaw-candidate-score.sh --workflow <outputs>/workflow.json` after the PR body draft and changed files exist. This writes `candidate-score.json`.
-- Treat `strong` and `promising` as publishable only when duplicate and validation gates also pass.
-- Treat `needs-work` as a local fix signal: tighten scope, add matching proof, add focused tests, or resolve duplicate risk before publication.
+- Treat `strong` and `promising` as publishable only when the applicable gates pass: duplicate and validation for unpublished candidates, validation for existing PR maintenance.
+- Treat `needs-work` as a local fix signal: tighten scope, add matching proof, add focused tests, or, for an unpublished candidate, resolve duplicate risk before publication.
 - Treat `poor-fit` as a likely drop or redesign signal unless the user explicitly wants to pursue a high-risk PR.
-- The score is advisory; deterministic blockers from preflight, duplicate checks, identity, maintainer edit access, and proof requirements still win.
+- The score is advisory; deterministic blockers from preflight, applicable unpublished-candidate duplicate checks, identity, maintainer edit access, and proof requirements still win.
 
 ## Validation Gate
 
@@ -33,7 +34,7 @@ Use these gates before pushing or updating an OpenClaw PR.
 - Reuse cached heavy checks only when the receipt fingerprint matches HEAD, `validationBaseSha`, package/lockfile content, lanes, toolchain, platform, and relevant execution environment. Focused changed-test results may also be reused across profile switches when their focused-test fingerprint matches. Always recompute latest-main merge risk even on a cache hit.
 - Avoid the default `pnpm check:changed` remote delegation path. Preflight sets `OPENCLAW_CHECK_CHANGED_REMOTE_CHILD=1 OPENCLAW_CHANGED_LANES_RAW_SYNC=1 PNPM_CONFIG_VERIFY_DEPS_BEFORE_RUN=false` and intentionally omits `CI=1` so changed lanes run locally. When checking manually, use the same environment; Testbox/Blacksmith runs are optional supplemental proof, not the default local gate.
 - A passing `preflight.json` is required. Missing, skipped, stale, or failed checks do not pass based on an agent's prose summary.
-- A user may explicitly approve a temporary bypass for `preflight.status === "failed"` after seeing the human gate packet. This bypass is scoped to the same workflow task, approved HEAD, and approved PR body hash. It must be passed to `scripts/publish-openclaw-pr.mjs` as `--allow-failed-preflight --failed-preflight-bypass-reason "<user reason>"`. It does not apply to missing preflight, stale preflight, changed HEAD/body, dirty worktree, identity failures, maintainer edit failures, duplicate blockers, or proof/re-review blockers.
+- A user may explicitly approve a temporary bypass for `preflight.status === "failed"` after seeing the human gate packet. This bypass is scoped to the same workflow task, approved HEAD, and approved PR body hash. It must be passed to `scripts/publish-openclaw-pr.mjs` as `--allow-failed-preflight --failed-preflight-bypass-reason "<user reason>"`. It does not apply to missing preflight, stale preflight, changed HEAD/body, dirty worktree, identity failures, maintainer edit failures, duplicate blockers on unpublished candidates, or proof/re-review blockers.
 - For live external behavior, execute the real path when feasible and summarize only redacted proof.
 - If true live external proof is infeasible, run `scripts/openclaw-proof-plan.sh --workflow <outputs>/workflow.json` and use the highest real local boundary: CLI command, server/route handler, provider/client entrypoint, sandbox/subprocess path, or production module boundary. Substitute unavailable external dependencies only at the network/process boundary with localhost, loopback, or fixtures.
 - Do not treat isolated helper calls, copied parser logic, `node -e` simulations, or test output as real-call-chain fallback proof.

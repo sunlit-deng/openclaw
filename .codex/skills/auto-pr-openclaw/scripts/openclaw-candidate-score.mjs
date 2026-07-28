@@ -43,13 +43,14 @@ if (!args.workflow) {
 }
 
 const context = loadWorkflow(args.workflow);
+const duplicateCheckApplicable = !context.workflow.pr;
 const baseSha = context.workflow.validationBaseSha || context.workflow.baseSha;
 const files = gitChangedFiles(context.repoPath, baseSha);
 const stats = gitDiffStats(context.repoPath, baseSha);
 const body = prBodyInfo(context.prBodyPath);
 const preflight = readJsonIfPresent(context.preflightPath);
 const duplicateCheckPath = args.duplicateCheck || path.join(context.outputPath, "duplicate-check.json");
-const duplicateCheck = readJsonIfPresent(duplicateCheckPath);
+const duplicateCheck = duplicateCheckApplicable ? readJsonIfPresent(duplicateCheckPath) : null;
 const proofRecipe = classifyProofRecipe(files, body);
 const flags = riskFlags(files, stats, context.workflow, preflight, duplicateCheck, body);
 
@@ -88,10 +89,11 @@ const receipt = {
     hasBoundaryControls: body.hasBoundaryControls,
     hasSyntheticEvidence: body.hasSyntheticEvidence,
   },
+  duplicateCheckApplicable,
   duplicateCheckPath: duplicateCheck ? duplicateCheckPath : null,
   flags,
   recommendations: [
-    ...(duplicateCheck ? [] : ["Run openclaw-duplicate-check before the human gate."]),
+    ...(duplicateCheckApplicable && !duplicateCheck ? ["Run openclaw-duplicate-check before the human gate."] : []),
     ...(preflight?.status === "passed" ? [] : ["Run openclaw-preflight and fix blockers before publishing."]),
     ...(proofRecipe.needsLiveProof && !body.hasTerminalFence && !body.hasDetailsProofSource
       ? ["Add live or proof-script evidence that exercises the real changed path."]

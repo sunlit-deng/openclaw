@@ -49,6 +49,7 @@ if (!args.workflow) {
 }
 
 const context = loadWorkflow(args.workflow);
+const duplicateCheckApplicable = !context.workflow.pr;
 const baseSha = context.workflow.validationBaseSha || context.workflow.baseSha;
 const files = gitChangedFiles(context.repoPath, baseSha);
 const stats = gitDiffStats(context.repoPath, baseSha);
@@ -57,8 +58,11 @@ const preflight = readJsonIfPresent(context.preflightPath);
 const duplicateCheckPath = path.join(context.outputPath, "duplicate-check.json");
 const candidateScorePath = path.join(context.outputPath, "candidate-score.json");
 const gateSummaryPath = path.join(context.outputPath, "gate-summary.json");
-const duplicateCheck = readJsonIfPresent(duplicateCheckPath);
+const duplicateCheck = duplicateCheckApplicable ? readJsonIfPresent(duplicateCheckPath) : null;
 const candidateScore = readJsonIfPresent(candidateScorePath);
+const candidateScoreStaleForExistingPr = Boolean(
+  context.workflow.pr && candidateScore && candidateScore.duplicateCheckApplicable !== false,
+);
 const gateSummary = readJsonIfPresent(gateSummaryPath);
 const clean = run("git", ["status", "--porcelain"], { cwd: context.repoPath }).stdout.trim() === "";
 
@@ -74,13 +78,19 @@ const packet = {
   branch: currentBranch(context.repoPath),
   headSha: currentHead(context.repoPath),
   validationBaseSha: baseSha,
+  duplicateCheckApplicable,
   clean,
   stats,
   changedFiles: files,
   receipts: {
     preflight: preflight ? { path: context.preflightPath, status: preflight.status, headSha: preflight.headSha, cacheHit: preflight.heavyCacheHit ?? null } : null,
     duplicateCheck: duplicateCheck ? { path: duplicateCheckPath, summary: duplicateCheck.summary } : null,
-    candidateScore: candidateScore ? { path: candidateScorePath, score: candidateScore.score, verdict: candidateScore.verdict } : null,
+    candidateScore: candidateScore ? {
+      path: candidateScorePath,
+      score: candidateScore.score,
+      verdict: candidateScore.verdict,
+      staleForExistingPr: candidateScoreStaleForExistingPr,
+    } : null,
     gateSummary: gateSummary ? { path: gateSummaryPath, blockers: gateSummary.blockers?.length ?? null } : null,
   },
   prBody: {
@@ -95,7 +105,9 @@ const packet = {
     hasBoundaryControls: body.hasBoundaryControls,
   },
   nextCommands: [
-    `./.codex/skills/auto-pr-openclaw/scripts/openclaw-duplicate-check.sh --workflow ${path.relative(process.cwd(), context.workflowPath)}`,
+    ...(duplicateCheckApplicable
+      ? [`./.codex/skills/auto-pr-openclaw/scripts/openclaw-duplicate-check.sh --workflow ${path.relative(process.cwd(), context.workflowPath)}`]
+      : []),
     `./.codex/skills/auto-pr-openclaw/scripts/openclaw-candidate-score.sh --workflow ${path.relative(process.cwd(), context.workflowPath)}`,
     `./.codex/skills/auto-pr-openclaw/scripts/openclaw-preflight.sh --workflow ${path.relative(process.cwd(), context.workflowPath)}`,
     `./.codex/skills/auto-pr-openclaw/scripts/openclaw-gate-summary.sh --workflow ${path.relative(process.cwd(), context.workflowPath)}`,
@@ -127,8 +139,8 @@ ${packet.changedFiles.length ? packet.changedFiles.map((file) => `- \`${file}\``
 ## Receipts
 
 - preflight: ${packet.receipts.preflight ? `${packet.receipts.preflight.status} at \`${packet.receipts.preflight.path}\`` : "missing"}
-- duplicate: ${packet.receipts.duplicateCheck ? `${packet.receipts.duplicateCheck.summary?.likelyDuplicateCount ?? 0} likely duplicates` : "missing"}
-- score: ${packet.receipts.candidateScore ? `${packet.receipts.candidateScore.score} (${packet.receipts.candidateScore.verdict})` : "missing"}
+- duplicate: ${packet.duplicateCheckApplicable ? (packet.receipts.duplicateCheck ? `${packet.receipts.duplicateCheck.summary?.likelyDuplicateCount ?? 0} likely duplicates` : "missing") : "not applicable (existing PR)"}
+- score: ${packet.receipts.candidateScore ? (packet.receipts.candidateScore.staleForExistingPr ? "stale pre-existing-PR receipt (ignored; rerun scoring)" : `${packet.receipts.candidateScore.score} (${packet.receipts.candidateScore.verdict})`) : "missing"}
 - gate: ${packet.receipts.gateSummary ? `${packet.receipts.gateSummary.blockers} blockers` : "missing"}
 
 ## PR Body

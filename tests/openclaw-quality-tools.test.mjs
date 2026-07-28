@@ -178,4 +178,83 @@ AI-assisted: built with Codex
   assert.equal(contextJson.prBody.proofSignal, "real-call-chain");
   assert.match(contextMd, /OpenClaw Context Pack/);
   assert.match(contextMd, /Next Commands/);
+
+  const workflowPath = path.join(output, "workflow.json");
+  const existingPrWorkflow = JSON.parse(fs.readFileSync(workflowPath, "utf8"));
+  existingPrWorkflow.mode = "existing-pr";
+  existingPrWorkflow.pr = 123;
+  existingPrWorkflow.maintainerCanModify = true;
+  write(workflowPath, `${JSON.stringify(existingPrWorkflow, null, 2)}\n`);
+  write(path.join(output, "duplicate-check.json"), JSON.stringify({
+    applicable: true,
+    summary: {
+      likelyDuplicateCount: 9,
+      relatedOpenPrCount: 12,
+      errors: [],
+    },
+  }));
+
+  run(process.execPath, [
+    duplicateCheck,
+    "--workflow", workflowPath,
+  ]);
+  const skippedDuplicate = JSON.parse(fs.readFileSync(path.join(output, "duplicate-check.json"), "utf8"));
+  assert.equal(skippedDuplicate.applicable, false);
+  assert.equal(skippedDuplicate.skipped, true);
+  assert.deepEqual(skippedDuplicate.searches, []);
+
+  // A stale pre-publication receipt must not affect score or gate results.
+  write(path.join(output, "duplicate-check.json"), JSON.stringify({
+    applicable: true,
+    summary: {
+      likelyDuplicateCount: 9,
+      relatedOpenPrCount: 12,
+      errors: [],
+    },
+  }));
+  run(process.execPath, [
+    candidateScore,
+    "--workflow", workflowPath,
+  ]);
+  const existingPrScore = JSON.parse(fs.readFileSync(path.join(output, "candidate-score.json"), "utf8"));
+  assert.equal(existingPrScore.duplicateCheckApplicable, false);
+  assert.equal(existingPrScore.duplicateCheckPath, null);
+  assert.ok(!existingPrScore.flags.some((flag) => /duplicate|crowded/i.test(flag.reason)));
+  assert.ok(!existingPrScore.recommendations.some((item) => /duplicate/i.test(item)));
+
+  write(path.join(output, "candidate-score.json"), JSON.stringify({
+    score: 40,
+    verdict: "poor-fit",
+    duplicateCheckApplicable: true,
+    flags: [{ level: "blocker", reason: "duplicate check found likely duplicate PRs" }],
+  }));
+  const fakeBin = path.join(temp, "fake-bin");
+  const fakeGh = path.join(fakeBin, "gh");
+  write(fakeGh, "#!/bin/sh\nexit 1\n");
+  fs.chmodSync(fakeGh, 0o755);
+  const testEnv = { ...process.env, PATH: `${fakeBin}${path.delimiter}${process.env.PATH}` };
+  run(process.execPath, [
+    gateSummary,
+    "--workflow", workflowPath,
+  ], { env: testEnv });
+  const existingPrGate = JSON.parse(fs.readFileSync(path.join(output, "gate-summary.json"), "utf8"));
+  const existingPrGateMd = fs.readFileSync(path.join(output, "gate-summary.md"), "utf8");
+  assert.equal(existingPrGate.duplicateCheckApplicable, false);
+  assert.equal(existingPrGate.duplicateCheck, null);
+  assert.ok(!existingPrGate.blockers.some((item) => /duplicate/i.test(item)));
+  assert.ok(!existingPrGate.blockers.some((item) => /candidate score/i.test(item)));
+  assert.equal(existingPrGate.candidateScore.staleForExistingPr, true);
+  assert.match(existingPrGateMd, /duplicate check: not applicable \(existing PR\)/);
+  assert.match(existingPrGateMd, /stale pre-existing-PR receipt \(ignored; rerun scoring\)/);
+
+  run(process.execPath, [
+    contextPack,
+    "--workflow", workflowPath,
+  ]);
+  const existingPrContext = JSON.parse(fs.readFileSync(path.join(output, "context-pack.json"), "utf8"));
+  const existingPrContextMd = fs.readFileSync(path.join(output, "context-pack.md"), "utf8");
+  assert.equal(existingPrContext.duplicateCheckApplicable, false);
+  assert.ok(!existingPrContext.nextCommands.some((command) => command.includes("duplicate-check")));
+  assert.match(existingPrContextMd, /duplicate: not applicable \(existing PR\)/);
+  assert.match(existingPrContextMd, /stale pre-existing-PR receipt \(ignored; rerun scoring\)/);
 });
