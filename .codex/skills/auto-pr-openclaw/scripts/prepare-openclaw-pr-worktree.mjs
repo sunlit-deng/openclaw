@@ -28,6 +28,18 @@ function execute(command, args, { cwd, env } = {}) {
   return result.stdout.trim();
 }
 
+function executeOptional(command, args, { cwd, env } = {}) {
+  const result = spawnSync(command, args, { cwd, env, encoding: "utf8", shell: false, maxBuffer: 16 * 1024 * 1024 });
+  if (result.status !== 0) {
+    process.stderr.write(result.stderr || result.stdout || result.error?.message || `${command} failed\n`);
+    process.stderr.write("Warning: CodeGraph setup failed; the worktree remains usable.\n");
+    return false;
+  }
+  if (result.stdout) process.stdout.write(result.stdout);
+  if (result.stderr) process.stderr.write(result.stderr);
+  return true;
+}
+
 const args = parseArgs(process.argv.slice(2));
 if (!Number.isSafeInteger(args.pr) || args.pr <= 0) throw new Error("--pr must be a positive integer");
 if (args.skipInstall && !args.skipInstallReason.trim()) throw new Error("--skip-install requires --skip-install-reason");
@@ -76,6 +88,7 @@ if (!fs.existsSync(path.join(mainRepo, ".git"))) {
 }
 
 execute("git", ["fetch", "origin", "main"], { cwd: mainRepo });
+const baseSha = execute("git", ["rev-parse", "refs/remotes/origin/main^{commit}"], { cwd: mainRepo });
 if (fs.existsSync(worktreePath)) throw new Error(`Worktree already exists: ${worktreePath}`);
 const branchExists = spawnSync("git", ["show-ref", "--verify", "--quiet", `refs/heads/${localBranch}`], { cwd: mainRepo }).status === 0;
 if (branchExists) throw new Error(`Local branch already exists and will not be reused implicitly: ${localBranch}`);
@@ -87,6 +100,12 @@ execute("git", ["switch", "main"], { cwd: mainRepo });
 execute("git", ["worktree", "add", worktreePath, localBranch], { cwd: mainRepo });
 execute("git", ["config", "user.name", account.username], { cwd: worktreePath });
 execute("git", ["config", "user.email", account.email], { cwd: worktreePath });
+executeOptional(path.join(scriptDir, "ensure-openclaw-codegraph.sh"), [
+  "--repo-path", worktreePath,
+  "--main-repo", mainRepo,
+  "--root", root,
+  "--base-sha", baseSha,
+]);
 
 for (const file of ["pr-body.md", "live-proof.md", "ci-notes.md"]) {
   fs.writeFileSync(path.join(outputPath, file), file === "pr-body.md" ? `${pr.body ?? ""}` : "", "utf8");
@@ -103,7 +122,6 @@ if (args.skipInstall) {
   ]);
 }
 
-const baseSha = execute("git", ["rev-parse", "refs/remotes/origin/main^{commit}"], { cwd: worktreePath });
 const headSha = execute("git", ["rev-parse", "HEAD"], { cwd: worktreePath });
 const stateWriter = path.join(scriptDir, "write-workflow-state.mjs");
 execute(process.execPath, [

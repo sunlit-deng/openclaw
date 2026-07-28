@@ -7,6 +7,9 @@ Use one worktree per issue by default.
   repos/
     openclaw/
   .pnpm-store/
+  .codegraph-cache/
+    base-sha
+    repo/
   worktrees/
     issue-94432/
   outputs/
@@ -35,6 +38,37 @@ Keep `repos/openclaw` as the main clone. Use it for:
 Do active coding in `worktrees/issue-<number>`. Existing PR maintenance uses
 `worktrees/pr-<number>` with its fork owner and remote head recorded separately
 in `workflow.json`.
+
+## CodeGraph
+
+Each active worktree keeps its own `.codegraph` database. Do not symlink or
+otherwise share a live database between worktrees: each branch must be able to
+incrementally update its graph without changing another PR's results.
+
+The worktree helpers automatically maintain a detached baseline checkout at
+`<workspace>/openclaw/.codegraph-cache/repo`. Its index is tied to the exact
+`origin/main` SHA recorded in `.codegraph-cache/base-sha`. When main advances,
+only that baseline is incrementally synchronized. A new worktree receives a
+copy-on-write clone of the baseline database on APFS (or a reflink/normal copy
+on other filesystems), followed by `codegraph sync` for its branch delta.
+
+This makes the first baseline initialization the only expected full
+`codegraph init -i`. Later issue worktrees created from the same base normally
+need only a file scan, while existing PR worktrees parse the files changed by
+that PR. The database is private even though its initial disk blocks may be
+shared by the filesystem.
+
+CodeGraph is an optional developer aid and does not block worktree creation.
+If the CLI is unavailable or setup fails, the helper prints a warning. Retry
+without recreating the worktree:
+
+```bash
+./.codex/skills/auto-pr-openclaw/scripts/ensure-openclaw-codegraph.sh \
+  --repo-path ./workspace/openclaw/worktrees/issue-94432 \
+  --main-repo ./workspace/openclaw/repos/openclaw \
+  --root ./workspace/openclaw \
+  --base-sha "$(git -C ./workspace/openclaw/repos/openclaw rev-parse origin/main)"
+```
 
 ## Dependencies
 

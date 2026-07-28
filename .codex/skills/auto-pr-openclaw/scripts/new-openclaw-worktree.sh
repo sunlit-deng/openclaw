@@ -128,6 +128,15 @@ git -C "$main_repo" worktree add -b "$branch" "$worktree_path" "$base_sha"
 git -C "$worktree_path" config user.name "$OPENCLAW_ACCOUNT_USERNAME"
 git -C "$worktree_path" config user.email "$OPENCLAW_ACCOUNT_EMAIL"
 
+if ! "$script_dir/ensure-openclaw-codegraph.sh" \
+  --repo-path "$worktree_path" \
+  --main-repo "$main_repo" \
+  --root "$root" \
+  --base-sha "$base_sha"; then
+  echo "Warning: CodeGraph setup failed; the worktree remains usable." >&2
+  echo "Retry with ensure-openclaw-codegraph.sh after fixing the reported error." >&2
+fi
+
 for file in pr-body.md live-proof.md ci-notes.md; do
   : > "$output_path/$file"
 done
