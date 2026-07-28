@@ -33,8 +33,8 @@ function parseArgs(argv) {
     else if (arg === "-h" || arg === "--help") result.help = true;
     else throw new Error(`Unknown argument: ${arg}`);
   }
-  if (!["auto", "targeted", "focused", "iterate", "quick", "fast", "changed", "full"].includes(result.profile)) {
-    throw new Error("--profile must be auto, targeted, focused, iterate, quick, fast, changed, or full");
+  if (!["auto", "targeted", "focused", "iterate", "quick", "conflict", "fast", "changed", "full"].includes(result.profile)) {
+    throw new Error("--profile must be auto, targeted, focused, iterate, quick, conflict, fast, changed, or full");
   }
   if (result.checkScript === "check" && result.profile !== "full") {
     throw new Error("pnpm check is a full-repository lane; use --profile full explicitly");
@@ -60,9 +60,9 @@ function configureProfile(result, changedFiles) {
       throw new Error(`--profile ${result.profile} uses the fixed focused changed-test lane; do not combine it with custom lanes`);
     }
     result.checkScript = "";
-  } else if (result.profile === "quick") {
+  } else if (result.profile === "quick" || result.profile === "conflict") {
     if (result.checkScript || result.testScript !== "test:changed" || result.typeScript || result.extraScripts.length > 0) {
-      throw new Error("--profile quick cannot be combined with pnpm check, test, type, or extra lanes");
+      throw new Error(`--profile ${result.profile} cannot be combined with pnpm check, test, type, or extra lanes`);
     }
     result.checkScript = "";
     result.testScript = "";
@@ -96,7 +96,7 @@ function usage() {
     "",
     "Options:",
     "  --workflow PATH       Workflow JSON to validate (required).",
-    "  --profile PROFILE     auto (default), targeted, focused, quick, changed, fast, or full.",
+    "  --profile PROFILE     auto (default), targeted, focused, quick, conflict, changed, fast, or full.",
     "  --check-script NAME   Override the check lane for the changed profile.",
     "  --test-script NAME    Override the focused test lane (default: test:changed).",
     "  --type-script NAME    Add an optional type-check lane.",
@@ -112,6 +112,8 @@ function usage() {
     "  focused  Run focused changed tests only.",
     "  iterate  Alias for focused, kept for older edit-loop commands.",
     "  quick    Run Git, identity, PR-body/proof, and merge-risk gates only.",
+    "  conflict Require a current conflict-resolution receipt, then run only the",
+    "           deterministic Git, identity, PR-body/proof, and merge-risk gates.",
     "  changed  Optional heavier lane: run pnpm check:changed and focused changed tests.",
     "  fast     Run full lint, production types, and test types; despite its name,",
     "           this can be slower than changed on a large repository.",
@@ -122,6 +124,7 @@ function usage() {
     "  openclaw-preflight.sh --workflow outputs/issue-123/workflow.json --profile targeted",
     "  openclaw-preflight.sh --workflow outputs/issue-123/workflow.json --profile focused",
     "  openclaw-preflight.sh --workflow outputs/issue-123/workflow.json --profile quick",
+    "  openclaw-preflight.sh --workflow outputs/pr-123/workflow.json --profile conflict",
     "  openclaw-preflight.sh --workflow outputs/issue-123/workflow.json --profile changed",
   ].join("\n");
 }
@@ -338,58 +341,64 @@ checks.push(staticCheck(
   path.dirname(workflowPath) === outputPath,
   workflowPath,
 ));
-checks.push(staticCheck(
-  "dependencies installed",
-  workflow.dependencies?.status === "installed" && fs.existsSync(path.join(repo, "node_modules", ".modules.yaml")),
-  workflow.dependencies?.status === "installed"
-    ? fs.existsSync(path.join(repo, "node_modules", ".modules.yaml")) ? "installed" : "node_modules/.modules.yaml is missing"
-    : `not installed: ${workflow.dependencies?.skipReason ?? "no reason recorded"}`,
-));
-
-const storeResult = run("pnpm", ["--dir", repo, "store", "path", "--store-dir", workflow.pnpmStorePath], repo);
-const expectedStore = path.resolve(workflow.pnpmStorePath);
-const reportedStore = storeResult.stdout.split("\n").filter(Boolean).at(-1) ?? "";
-const actualStore = reportedStore ? path.resolve(reportedStore) : "";
-checks.push(staticCheck(
-  "shared pnpm store",
-  storeResult.exitCode === 0 && (actualStore === expectedStore || actualStore.startsWith(`${expectedStore}${path.sep}`)),
-  storeResult.exitCode === 0 ? `root=${expectedStore} actual=${actualStore}` : storeResult.error || storeResult.output,
-));
-const modulesPath = path.join(repo, "node_modules", ".modules.yaml");
-let modulesStore = "";
-if (fs.existsSync(modulesPath)) {
-  const modulesMetadata = fs.readFileSync(modulesPath, "utf8");
-  try {
-    const parsed = JSON.parse(modulesMetadata);
-    modulesStore = typeof parsed.storeDir === "string" ? parsed.storeDir : "";
-  } catch {
-    modulesStore = modulesMetadata.match(/^storeDir:\s*["']?(.+?)["']?\s*$/m)?.[1] ?? "";
-  }
-}
-const resolvedModulesStore = modulesStore ? path.resolve(repo, modulesStore) : "";
-checks.push(staticCheck(
-  "node_modules uses shared store",
-  Boolean(resolvedModulesStore) && (
-    resolvedModulesStore === expectedStore || resolvedModulesStore.startsWith(`${expectedStore}${path.sep}`)
-  ),
-  resolvedModulesStore || "node_modules/.modules.yaml has no storeDir",
-));
-const dependencyMarker = path.join(repo, "node_modules", ".auto-pr-deps-fingerprint");
-if (fs.existsSync(dependencyMarker)) {
-  const installedFingerprint = fs.readFileSync(dependencyMarker, "utf8").trim();
-  const expectedFingerprint = dependencyFingerprint(repo);
-  checks.push(staticCheck(
-    "dependency fingerprint",
-    installedFingerprint === expectedFingerprint,
-    installedFingerprint === expectedFingerprint
-      ? expectedFingerprint
-      : `stale node_modules fingerprint: installed=${installedFingerprint} expected=${expectedFingerprint}`,
+if (args.profile === "conflict") {
+  checks.push(skippedCheck(
+    "dependency environment",
+    "validated by the focused conflict-resolution receipt; preflight will not repeat dependency checks",
   ));
 } else {
-  checks.push(advisoryCheck(
-    "dependency fingerprint",
-    "legacy node_modules has no dependency fingerprint; run ensure-openclaw-deps.sh once to enable lockfile-aware reuse",
+  checks.push(staticCheck(
+    "dependencies installed",
+    workflow.dependencies?.status === "installed" && fs.existsSync(path.join(repo, "node_modules", ".modules.yaml")),
+    workflow.dependencies?.status === "installed"
+      ? fs.existsSync(path.join(repo, "node_modules", ".modules.yaml")) ? "installed" : "node_modules/.modules.yaml is missing"
+      : `not installed: ${workflow.dependencies?.skipReason ?? "no reason recorded"}`,
   ));
+  const storeResult = run("pnpm", ["--dir", repo, "store", "path", "--store-dir", workflow.pnpmStorePath], repo);
+  const expectedStore = path.resolve(workflow.pnpmStorePath);
+  const reportedStore = storeResult.stdout.split("\n").filter(Boolean).at(-1) ?? "";
+  const actualStore = reportedStore ? path.resolve(reportedStore) : "";
+  checks.push(staticCheck(
+    "shared pnpm store",
+    storeResult.exitCode === 0 && (actualStore === expectedStore || actualStore.startsWith(`${expectedStore}${path.sep}`)),
+    storeResult.exitCode === 0 ? `root=${expectedStore} actual=${actualStore}` : storeResult.error || storeResult.output,
+  ));
+  const modulesPath = path.join(repo, "node_modules", ".modules.yaml");
+  let modulesStore = "";
+  if (fs.existsSync(modulesPath)) {
+    const modulesMetadata = fs.readFileSync(modulesPath, "utf8");
+    try {
+      const parsed = JSON.parse(modulesMetadata);
+      modulesStore = typeof parsed.storeDir === "string" ? parsed.storeDir : "";
+    } catch {
+      modulesStore = modulesMetadata.match(/^storeDir:\s*["']?(.+?)["']?\s*$/m)?.[1] ?? "";
+    }
+  }
+  const resolvedModulesStore = modulesStore ? path.resolve(repo, modulesStore) : "";
+  checks.push(staticCheck(
+    "node_modules uses shared store",
+    Boolean(resolvedModulesStore) && (
+      resolvedModulesStore === expectedStore || resolvedModulesStore.startsWith(`${expectedStore}${path.sep}`)
+    ),
+    resolvedModulesStore || "node_modules/.modules.yaml has no storeDir",
+  ));
+  const dependencyMarker = path.join(repo, "node_modules", ".auto-pr-deps-fingerprint");
+  if (fs.existsSync(dependencyMarker)) {
+    const installedFingerprint = fs.readFileSync(dependencyMarker, "utf8").trim();
+    const expectedFingerprint = dependencyFingerprint(repo);
+    checks.push(staticCheck(
+      "dependency fingerprint",
+      installedFingerprint === expectedFingerprint,
+      installedFingerprint === expectedFingerprint
+        ? expectedFingerprint
+        : `stale node_modules fingerprint: installed=${installedFingerprint} expected=${expectedFingerprint}`,
+    ));
+  } else {
+    checks.push(advisoryCheck(
+      "dependency fingerprint",
+      "legacy node_modules has no dependency fingerprint; run ensure-openclaw-deps.sh once to enable lockfile-aware reuse",
+    ));
+  }
 }
 
 const fetchResult = run("git", ["fetch", "origin", "main"], repo);
@@ -403,6 +412,7 @@ let status = "";
 let changedFiles = [];
 let requestedProfile = args.profile;
 let focusedTestFingerprint = "";
+let conflictReceipt = null;
 try {
   headSha = git(repo, "rev-parse", "HEAD");
   if (!validationBaseSha) throw new Error("workflow has no pinned validation base SHA");
@@ -517,6 +527,33 @@ try {
 } catch (error) {
   checks.push(staticCheck("validation profile selection", false, error.message));
 }
+if (args.profile === "conflict") {
+  const conflictReceiptPath = path.join(outputPath, "conflict-resolution-check.json");
+  conflictReceipt = readJsonIfPresent(conflictReceiptPath);
+  const problems = [];
+  if (!conflictReceipt) {
+    problems.push("receipt is missing or invalid JSON");
+  } else {
+    if (!workflow.pr) problems.push("conflict profile is only valid for an existing PR");
+    if (conflictReceipt.status !== "passed") problems.push(`status=${conflictReceipt.status ?? "missing"}`);
+    if (conflictReceipt.workflowPath !== workflowPath) problems.push("workflow path mismatch");
+    if (conflictReceipt.repoPath !== repo) problems.push("repository path mismatch");
+    if (conflictReceipt.headSha !== headSha) problems.push("HEAD mismatch");
+    if (conflictReceipt.targetSha !== validationBaseSha) problems.push("validation base mismatch");
+    if (conflictReceipt.branch !== branch) problems.push("branch mismatch");
+    if (conflictReceipt.nonConflictPatchEquivalent !== true) problems.push("non-conflict patch equivalence is not proven");
+    if (!Array.isArray(conflictReceipt.commandResults)
+      || conflictReceipt.commandResults.length === 0
+      || conflictReceipt.commandResults.some((result) => result.status !== "passed")) {
+      problems.push("focused validation commands are missing or failed");
+    }
+  }
+  checks.push(staticCheck(
+    "conflict resolution receipt",
+    problems.length === 0,
+    problems.join("; ") || conflictReceiptPath,
+  ));
+}
 const checkScript = args.checkScript;
 
 if (validationBaseSha) {
@@ -550,10 +587,12 @@ try {
   checks.push(staticCheck("package manifest", false, error.message));
 }
 
-if (packageJson && args.profile === "quick") {
+if (packageJson && ["quick", "conflict"].includes(args.profile)) {
   checks.push(skippedCheck(
     "heavy checks",
-    "skipped by --profile quick; no pnpm check or test lanes were run",
+    args.profile === "conflict"
+      ? "focused checks are recorded in conflict-resolution-check.json; no pnpm lanes were repeated"
+      : "skipped by --profile quick; no pnpm check or test lanes were run",
   ));
 } else if (packageJson) {
   checks.push(staticCheck(
@@ -736,6 +775,8 @@ const receipt = {
   profile: args.profile,
   validationDepth: args.profile === "quick"
     ? "deterministic-no-pnpm"
+    : args.profile === "conflict"
+      ? "conflict-resolution-focused"
     : args.profile === "targeted"
       ? "targeted-files-and-owning-projects"
     : ["focused", "iterate"].includes(args.profile)
@@ -746,6 +787,16 @@ const receipt = {
           ? "fast-lint-prod-and-test-types"
           : "changed-pnpm",
   freshness,
+  conflictResolutionReceipt: conflictReceipt ? {
+    path: path.join(outputPath, "conflict-resolution-check.json"),
+    status: conflictReceipt.status,
+    headSha: conflictReceipt.headSha,
+    targetSha: conflictReceipt.targetSha,
+    conflictFiles: conflictReceipt.conflictFiles,
+    commandResults: conflictReceipt.commandResults?.map(({ name, kind, status, durationMs }) => ({
+      name, kind, status, durationMs,
+    })),
+  } : null,
   githubAccount: publicAccount(account),
   heavyFingerprint,
   heavyCacheHit: cacheHit,

@@ -202,9 +202,70 @@ fs.writeFileSync(file, String(count + 1));
   assert.equal(fs.readFileSync(path.join(counter, "check"), "utf8"), "1");
   assert.equal(fs.readFileSync(path.join(counter, "test"), "utf8"), "1");
 
+  const workflowPath = path.join(output, "workflow.json");
+  const existingPrWorkflow = JSON.parse(fs.readFileSync(workflowPath, "utf8"));
+  existingPrWorkflow.mode = "existing-pr";
+  existingPrWorkflow.pr = 123;
+  write(workflowPath, `${JSON.stringify(existingPrWorkflow, null, 2)}\n`);
+  write(path.join(output, "conflict-resolution-check.json"), `${JSON.stringify({
+    schemaVersion: 1,
+    status: "passed",
+    workflowPath,
+    repoPath: worktree,
+    branch: "sunlit/fix/issue-1",
+    originalHeadSha: head,
+    originalBaseSha: validationBase,
+    targetSha: validationBase,
+    headSha: head,
+    conflictFiles: ["docs/example.md"],
+    nonConflictPatchEquivalent: true,
+    commandResults: [{
+      name: "focused docs check",
+      kind: "focused-test",
+      status: "passed",
+      durationMs: 1,
+    }],
+  }, null, 2)}\n`);
   run(process.execPath, [
     preflight,
-    "--workflow", path.join(output, "workflow.json"),
+    "--workflow", workflowPath,
+    "--profile", "conflict",
+  ], { env });
+  const conflictProfile = JSON.parse(fs.readFileSync(path.join(output, "preflight.json"), "utf8"));
+  assert.equal(conflictProfile.status, "passed");
+  assert.equal(conflictProfile.profile, "conflict");
+  assert.equal(conflictProfile.validationDepth, "conflict-resolution-focused");
+  assert.equal(conflictProfile.heavyChecks.length, 0);
+  assert.equal(conflictProfile.conflictResolutionReceipt.status, "passed");
+  assert.equal(fs.readFileSync(path.join(counter, "check"), "utf8"), "1");
+  assert.equal(fs.readFileSync(path.join(counter, "test"), "utf8"), "1");
+
+  const staleConflictReceipt = JSON.parse(
+    fs.readFileSync(path.join(output, "conflict-resolution-check.json"), "utf8"),
+  );
+  staleConflictReceipt.headSha = "deadbeef";
+  write(
+    path.join(output, "conflict-resolution-check.json"),
+    `${JSON.stringify(staleConflictReceipt, null, 2)}\n`,
+  );
+  const staleConflictRun = spawnSync(process.execPath, [
+    preflight,
+    "--workflow", workflowPath,
+    "--profile", "conflict",
+  ], { encoding: "utf8", env });
+  assert.equal(staleConflictRun.status, 1);
+  const staleConflictProfile = JSON.parse(fs.readFileSync(path.join(output, "preflight.json"), "utf8"));
+  assert.equal(staleConflictProfile.status, "failed");
+  assert.match(
+    staleConflictProfile.checks.find((check) => check.name === "conflict resolution receipt").details,
+    /HEAD mismatch/,
+  );
+  assert.equal(fs.readFileSync(path.join(counter, "check"), "utf8"), "1");
+  assert.equal(fs.readFileSync(path.join(counter, "test"), "utf8"), "1");
+
+  run(process.execPath, [
+    preflight,
+    "--workflow", workflowPath,
     "--profile", "focused",
   ], { env });
   const focused = JSON.parse(fs.readFileSync(path.join(output, "preflight.json"), "utf8"));
@@ -245,6 +306,7 @@ test("documents profiles through --help without requiring a workflow", () => {
     assert.match(result.stdout, /auto \(default\)/);
     assert.match(result.stdout, /targeted.*changed-file format\/lint/);
     assert.match(result.stdout, /focused.*focused changed tests/);
+    assert.match(result.stdout, /conflict.*conflict-resolution receipt/);
     assert.match(result.stdout, /documentation-only diffs/);
     assert.match(result.stdout, /can be slower than changed/);
   }

@@ -77,6 +77,74 @@ the remote PR head SHA after pushing, and must not update the PR body or post
 comments. Any failed invariant stops the operation instead of falling back to
 an automatic push.
 
+### Conflict-Resolution Fast Path
+
+Use this only for an existing PR rebase that actually stops on conflicts. It
+does not inherit the clean rebase-only authorization: publication still
+requires the Human Gate.
+
+Start the operation before rebasing so the original patch series is retained:
+
+```bash
+scripts/openclaw-conflict-rebase.sh \
+  --phase start \
+  --workflow <outputs>/workflow.json \
+  --target <pinned-rebase-target-sha>
+```
+
+Resolve only the files recorded in `conflict-rebase-state.json`. If a later
+`git rebase --continue` stops on another conflict, run `--phase record` before
+resolving that stop. Then create a bounded plan such as:
+
+```json
+{
+  "schemaVersion": 1,
+  "commands": [
+    {
+      "name": "rebuild generated browser runtime",
+      "kind": "generated-rebuild",
+      "command": "pnpm",
+      "args": ["canvas:a2ui:bundle"]
+    },
+    {
+      "name": "run affected browser tests",
+      "kind": "focused-test",
+      "command": "pnpm",
+      "args": ["exec", "vitest", "run", "extensions/browser/runtime.test.ts"]
+    }
+  ]
+}
+```
+
+Finish and validate:
+
+```bash
+scripts/openclaw-conflict-rebase.sh \
+  --phase finish \
+  --workflow <outputs>/workflow.json \
+  --plan <outputs>/conflict-validation-plan.json
+scripts/openclaw-preflight.sh \
+  --workflow <outputs>/workflow.json \
+  --profile conflict
+```
+
+The finish receipt is allowed only when all of these invariants hold:
+
+- the pinned target is an ancestor of the completed rebase
+- every conflict file was recorded, with at most five files on one surface
+- no package manifest, lockfile, tsconfig, GitHub workflow, or public plugin
+  SDK conflict is present
+- the ordered stable patch-id series outside the conflict files is unchanged
+- generated conflicts have a deterministic rebuild command
+- non-document conflicts have at least one focused affected-test command
+- every explicit command passes and leaves the worktree clean
+- `git diff --check` passes for the conflict files
+
+`--profile conflict` requires that current receipt and repeats no pnpm,
+dependency-fingerprint, lint, type, or test lane. It still checks current Git
+state, identity, PR body/proof, and merge compatibility. If any invariant
+fails, escalate to normal `auto`, `targeted`, or `changed` validation.
+
 ## Maintainer Edit and Secrets Gate
 
 - For existing fork PRs, run `gh pr view <number> --repo openclaw/openclaw --json maintainerCanModify,headRepositoryOwner,headRefName,url` before any push, PR-body update, comment, or re-review request.
