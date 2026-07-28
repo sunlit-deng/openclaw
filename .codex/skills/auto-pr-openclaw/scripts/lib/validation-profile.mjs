@@ -1,3 +1,5 @@
+import { targetedValidationDecision } from "./targeted-validation.mjs";
+
 const DOCUMENTATION_BASENAMES = /^(?:readme|changelog|license|notice|authors)(?:\..*)?$/i;
 
 export function isDocumentationOnly(files) {
@@ -10,5 +12,6 @@ export function isDocumentationOnly(files) {
 
 export function resolveValidationProfile(requestedProfile, changedFiles) {
   if (requestedProfile !== "auto") return requestedProfile;
-  return isDocumentationOnly(changedFiles) ? "quick" : "focused";
+  if (isDocumentationOnly(changedFiles)) return "quick";
+  return targetedValidationDecision(changedFiles).safe ? "targeted" : "changed";
 }

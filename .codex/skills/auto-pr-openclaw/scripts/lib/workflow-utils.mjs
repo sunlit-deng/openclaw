@@ -134,6 +134,8 @@ export function prBodyInfo(prBodyPath) {
   const body = fs.existsSync(prBodyPath) ? normalizeNewlines(fs.readFileSync(prBodyPath, "utf8")) : "";
   const evidence = body.match(/## Evidence([\s\S]*?)(?:\n## |\nAI-assisted:|$)/i)?.[1] ?? "";
   const lowerEvidence = evidence.toLowerCase();
+  const hasBeforeEvidence = /\bbefore(?:[- ]fix)?\b|\bbaseline\b|\bbase branch\b/i.test(evidence);
+  const hasAfterEvidence = /\bafter(?:[- ]fix)?\b|\bfixed head\b/i.test(evidence);
   return {
     body,
     sha256: sha256(body),
@@ -146,6 +148,10 @@ export function prBodyInfo(prBodyPath) {
     hasSyntheticEvidence: /(?:node\s+-e|simulate|synthetic|mock-only|mocked|fake server only|isolated helper)/i.test(evidence),
     hasRealCallChainEvidence: /(?:real (?:production )?(?:path|call chain|module|entrypoint|entry point)|loopback|localhost|127\.0\.0\.1|cli|subprocess|sandbox|exec-server|production module|changed production module|npx tsx|pnpm --filter|http:\/\/localhost)/i.test(evidence),
     hasBoundaryControls: /(?:before|after|negative-control|valid:|invalid:|oversized|rejected|accepted|baseline|base branch)/i.test(evidence),
+    hasBeforeAfterEvidence: hasBeforeEvidence && hasAfterEvidence,
+    hasExactHeadEvidence: /(?:exact[- ]head|current[- ]head|head sha|tested head|commit [` ]?[0-9a-f]{7,40})/i.test(evidence),
+    hasCanonicalPrecedent: /(?:existing|shared|canonical|established|already[- ]merged|merged PR|same[- ]shape|same pattern).{0,48}(?:helper|contract|pattern|facade|boundary|implementation|precedent)|reuse[sd]?\s+(?:the\s+)?(?:existing|shared|canonical)/i.test(body),
+    hasUnresolvedPolicyChoice: /(?:maintainer[- ]owned|maintainer (?:decision|acceptance|confirmation)|compatibility (?:decision|tradeoff)|product direction|new (?:default|policy|unconditional threshold)|arbitrary (?:cap|limit|threshold))/i.test(body),
     proofSignal: lowerEvidence.includes("node -e") || lowerEvidence.includes("simulate")
       ? "synthetic"
       : /(?:loopback|localhost|127\.0\.0\.1|real call chain|real production path|cli|subprocess|sandbox|exec-server)/i.test(evidence)

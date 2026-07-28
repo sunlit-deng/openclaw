@@ -31,6 +31,46 @@ function ownerLogin(value) {
   return typeof value === "string" ? value : value?.login;
 }
 
+function lines(value) {
+  return value.split("\n").map((line) => line.trim()).filter(Boolean);
+}
+
+function stablePatchSeries(repoPath, range) {
+  const mergeCommits = lines(run("git", ["rev-list", "--reverse", "--merges", range], {
+    cwd: repoPath,
+    allowFailure: true,
+  }).stdout);
+  if (mergeCommits.length > 0) {
+    return { patches: [], error: `merge commits are not supported by the clean rebase fast path: ${mergeCommits.join(", ")}` };
+  }
+
+  const commitsResult = run("git", ["rev-list", "--reverse", range], { cwd: repoPath, allowFailure: true });
+  if (commitsResult.exitCode !== 0) {
+    return { patches: [], error: commitsResult.output.trim() || commitsResult.error };
+  }
+
+  const patches = [];
+  for (const commit of lines(commitsResult.stdout)) {
+    const patch = run("git", [
+      "show", "--format=email", "--binary", "--no-ext-diff", "--no-renames", commit,
+    ], { cwd: repoPath, allowFailure: true });
+    if (patch.exitCode !== 0) {
+      return { patches: [], error: patch.output.trim() || patch.error };
+    }
+    const patchId = run("git", ["patch-id", "--stable"], {
+      cwd: repoPath,
+      input: patch.stdout,
+      allowFailure: true,
+    });
+    const id = patchId.stdout.trim().split(/\s+/)[0];
+    if (patchId.exitCode !== 0 || !id) {
+      return { patches: [], error: `commit ${commit} has no stable patch-id; use the normal validation path` };
+    }
+    patches.push({ commit, patchId: id });
+  }
+  return { patches, error: null };
+}
+
 let args;
 try {
   args = parseKeyArgs(process.argv.slice(2), {
@@ -66,6 +106,7 @@ const repoPath = context.repoPath;
 const headSha = currentHead(repoPath);
 const branch = currentBranch(repoPath);
 const targetRef = args.target || workflow.approvedRebaseTargetSha || workflow.rebaseTargetSha || "refs/remotes/origin/main";
+const originalHeadRef = workflow.headSha || workflow.initialHeadSha;
 
 function addCheck(name, passed, details, extra = {}) {
   const check = {
@@ -95,24 +136,61 @@ addCheck(
 );
 
 let changedFiles = [];
+let originalHeadSha = "";
+let originalBaseSha = "";
+let originalPatches = [];
+let rebasedPatches = [];
 if (targetSha) {
   const containsTarget = run("git", ["merge-base", "--is-ancestor", targetSha, "HEAD"], { cwd: repoPath, allowFailure: true });
   addCheck("branch contains rebase target", containsTarget.exitCode === 0, targetSha);
 
   changedFiles = gitChangedFiles(repoPath, targetSha);
+  const originalHeadResolve = originalHeadRef
+    ? run("git", ["rev-parse", `${originalHeadRef}^{commit}`], {
+        cwd: repoPath,
+        allowFailure: true,
+      })
+    : { exitCode: 1, stdout: "", output: "workflow has no recorded pre-rebase head", error: null };
+  originalHeadSha = originalHeadResolve.stdout.trim();
   addCheck(
-    "committed diff exists",
-    changedFiles.length > 0,
-    changedFiles.join("\n") || "no committed changes beyond the rebase target",
+    "original PR head resolves",
+    originalHeadResolve.exitCode === 0 && originalHeadSha.length > 0,
+    originalHeadResolve.exitCode === 0 ? originalHeadSha : originalHeadResolve.output.trim() || originalHeadResolve.error,
   );
 
-  const diffCheck = run("git", ["diff", "--check", `${targetSha}...HEAD`], { cwd: repoPath, allowFailure: true });
-  addCheck(
-    "git diff check",
-    diffCheck.exitCode === 0,
-    diffCheck.output.trim() || "ok",
-    { command: diffCheck.command, exitCode: diffCheck.exitCode },
-  );
+  if (originalHeadSha) {
+    const originalBase = run("git", ["merge-base", originalHeadSha, targetSha], {
+      cwd: repoPath,
+      allowFailure: true,
+    });
+    originalBaseSha = originalBase.stdout.trim();
+    addCheck(
+      "original patch base resolves",
+      originalBase.exitCode === 0 && originalBaseSha.length > 0,
+      originalBase.exitCode === 0 ? originalBaseSha : originalBase.output.trim() || originalBase.error,
+    );
+
+    if (originalBaseSha) {
+      const originalSeries = stablePatchSeries(repoPath, `${originalBaseSha}..${originalHeadSha}`);
+      const rebasedSeries = stablePatchSeries(repoPath, `${targetSha}..${headSha}`);
+      originalPatches = originalSeries.patches;
+      rebasedPatches = rebasedSeries.patches;
+      const originalIds = originalPatches.map(({ patchId }) => patchId);
+      const rebasedIds = rebasedPatches.map(({ patchId }) => patchId);
+      const patchError = originalSeries.error || rebasedSeries.error;
+      const equivalent = !patchError
+        && originalIds.length > 0
+        && JSON.stringify(originalIds) === JSON.stringify(rebasedIds);
+      addCheck(
+        "rebase preserves patch series",
+        equivalent,
+        patchError || (equivalent
+          ? `${originalIds.length} stable patch-id(s) unchanged`
+          : `before=${originalIds.join(",") || "none"} after=${rebasedIds.join(",") || "none"}`),
+        { originalPatches, rebasedPatches },
+      );
+    }
+  }
 
   const identities = gitCommitIdentities(repoPath, targetSha);
   const identityProblems = commitIdentityProblems(identities, account);
@@ -142,7 +220,7 @@ addCheck(
 if (workflow.pr) {
   const prResult = run("gh", [
     "pr", "view", String(workflow.pr), "--repo", repoSlug,
-    "--json", "maintainerCanModify,headRepositoryOwner,headRefName,url",
+    "--json", "maintainerCanModify,headRepositoryOwner,headRefName,headRefOid,url",
   ], { allowFailure: true, env: accountEnv });
   if (prResult.exitCode === 0) {
     try {
@@ -152,6 +230,7 @@ if (workflow.pr) {
         maintainerCanModify: parsed.maintainerCanModify === true,
         headOwner: ownerLogin(parsed.headRepositoryOwner),
         headRefName: parsed.headRefName,
+        headRefOid: parsed.headRefOid,
         url: parsed.url,
         error: null,
       };
@@ -175,9 +254,14 @@ addCheck(
     && maintainer.headRefName === workflow.headRef,
   `owner=${maintainer.headOwner ?? "unknown"} ref=${maintainer.headRefName ?? "unknown"} gh=${ghLogin || "unknown"} workflowHeadRef=${workflow.headRef ?? "unknown"}`,
 );
+addCheck(
+  "remote PR head matches original head",
+  Boolean(originalHeadSha) && maintainer.headRefOid === originalHeadSha,
+  `remote=${maintainer.headRefOid ?? "unknown"} original=${originalHeadSha || "unknown"}`,
+);
 
 const receipt = {
-  schemaVersion: 1,
+  schemaVersion: 2,
   status: blockers.length === 0 ? "passed" : "failed",
   workflowPath: context.workflowPath,
   repoPath,
@@ -187,6 +271,11 @@ const receipt = {
   branch,
   targetRef,
   targetSha,
+  originalHeadSha,
+  originalBaseSha,
+  patchEquivalent: checks.find(({ name }) => name === "rebase preserves patch series")?.status === "passed",
+  originalPatches,
+  rebasedPatches,
   changedFiles,
   githubAccount: publicAccount(account),
   maintainer,

@@ -89,6 +89,7 @@ const packet = {
       path: candidateScorePath,
       score: candidateScore.score,
       verdict: candidateScore.verdict,
+      clawsweeperAReadiness: candidateScore.clawsweeperAReadiness?.verdict ?? null,
       staleForExistingPr: candidateScoreStaleForExistingPr,
     } : null,
     gateSummary: gateSummary ? { path: gateSummaryPath, blockers: gateSummary.blockers?.length ?? null } : null,
@@ -103,6 +104,9 @@ const packet = {
     proofSignal: body.proofSignal,
     hasRealCallChainEvidence: body.hasRealCallChainEvidence,
     hasBoundaryControls: body.hasBoundaryControls,
+    hasBeforeAfterEvidence: body.hasBeforeAfterEvidence,
+    hasExactHeadEvidence: body.hasExactHeadEvidence,
+    hasCanonicalPrecedent: body.hasCanonicalPrecedent,
   },
   nextCommands: [
     ...(duplicateCheckApplicable
@@ -141,6 +145,7 @@ ${packet.changedFiles.length ? packet.changedFiles.map((file) => `- \`${file}\``
 - preflight: ${packet.receipts.preflight ? `${packet.receipts.preflight.status} at \`${packet.receipts.preflight.path}\`` : "missing"}
 - duplicate: ${packet.duplicateCheckApplicable ? (packet.receipts.duplicateCheck ? `${packet.receipts.duplicateCheck.summary?.likelyDuplicateCount ?? 0} likely duplicates` : "missing") : "not applicable (existing PR)"}
 - score: ${packet.receipts.candidateScore ? (packet.receipts.candidateScore.staleForExistingPr ? "stale pre-existing-PR receipt (ignored; rerun scoring)" : `${packet.receipts.candidateScore.score} (${packet.receipts.candidateScore.verdict})`) : "missing"}
+- ClawSweeper A-readiness: ${packet.receipts.candidateScore?.clawsweeperAReadiness ?? "missing"} (advisory)
 - gate: ${packet.receipts.gateSummary ? `${packet.receipts.gateSummary.blockers} blockers` : "missing"}
 
 ## PR Body
@@ -150,6 +155,8 @@ ${packet.changedFiles.length ? packet.changedFiles.map((file) => `- \`${file}\``
 - evidence: ${packet.prBody.hasEvidenceSection ? "yes" : "no"}
 - proof artifact: ${packet.prBody.hasTerminalFence || packet.prBody.hasDetailsProofSource ? "yes" : "no"}
 - proof signal: ${packet.prBody.proofSignal}
+- comparable base/head proof: ${packet.prBody.hasBeforeAfterEvidence && packet.prBody.hasExactHeadEvidence ? "yes" : "no"}
+- canonical precedent: ${packet.prBody.hasCanonicalPrecedent ? "yes" : "no"}
 - AI marker: ${packet.prBody.hasAiMarker ? "yes" : "no"}
 
 ## Next Commands

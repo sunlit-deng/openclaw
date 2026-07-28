@@ -8,7 +8,7 @@ import { commitIdentityProblems, ghEnv, publicAccount, resolveAccount } from "./
 function parseArgs(argv) {
   const result = {
     workflow: "",
-    approvedHead: "",
+    check: "",
     pushRemote: "",
     repo: "openclaw/openclaw",
     target: "",
@@ -17,7 +17,7 @@ function parseArgs(argv) {
     const arg = argv[index];
     const key = {
       "--workflow": "workflow",
-      "--approved-head": "approvedHead",
+      "--check": "check",
       "--push-remote": "pushRemote",
       "--repo": "repo",
       "--target": "target",
@@ -31,9 +31,10 @@ function parseArgs(argv) {
 
 function usage() {
   return [
-    "Usage: publish-openclaw-rebase-only.mjs --workflow PATH --approved-head SHA --push-remote NAME [--target SHA] [--repo OWNER/REPO]",
+    "Usage: publish-openclaw-rebase-only.mjs --workflow PATH --push-remote NAME [--check PATH] [--target SHA] [--repo OWNER/REPO]",
     "",
-    "Force-pushes an existing OpenClaw PR branch after a conflict-only rebase.",
+    "Automatically force-pushes an existing OpenClaw PR branch after a clean, patch-equivalent rebase.",
+    "The user's explicit rebase request authorizes this push; no second human gate is required.",
     "This fast path does not read preflight.json, update the PR body, post comments, or request review.",
   ].join("\n");
 }
@@ -51,21 +52,6 @@ function execute(command, args, { cwd, input, env } = {}) {
     throw new Error(`${command} ${args.join(" ")} failed: ${result.stderr || result.stdout || result.error?.message}`);
   }
   return result.stdout.trim();
-}
-
-function run(command, args, { cwd } = {}) {
-  const result = spawnSync(command, args, {
-    cwd,
-    encoding: "utf8",
-    maxBuffer: 16 * 1024 * 1024,
-    shell: false,
-  });
-  return {
-    command: [command, ...args].join(" "),
-    exitCode: result.status ?? 1,
-    output: `${result.stdout ?? ""}${result.stderr ?? ""}`.trim(),
-    error: result.error?.message ?? null,
-  };
 }
 
 function ownerLogin(value) {
@@ -136,7 +122,7 @@ if (args.help) {
   console.log(usage());
   process.exit(0);
 }
-for (const key of ["workflow", "approvedHead"]) {
+for (const key of ["workflow"]) {
   if (!args[key]) {
     console.error(`--${key.replace(/[A-Z]/g, (letter) => `-${letter.toLowerCase()}`)} is required`);
     console.error(usage());
@@ -146,6 +132,8 @@ for (const key of ["workflow", "approvedHead"]) {
 
 const workflowPath = path.resolve(args.workflow);
 const workflow = JSON.parse(fs.readFileSync(workflowPath, "utf8"));
+const checkPath = path.resolve(args.check || path.join(workflow.outputPath, "rebase-only-check.json"));
+const rebaseOnlyCheck = JSON.parse(fs.readFileSync(checkPath, "utf8"));
 const account = resolveAccount({ workflow });
 const accountEnv = ghEnv(account);
 args.pushRemote ||= account.pushRemote;
@@ -163,7 +151,6 @@ const currentBranch = execute("git", ["branch", "--show-current"], { cwd: repoPa
 if (!workflow.pr) failures.push("workflow does not describe an existing PR");
 if (!remoteHeadRef) failures.push("workflow does not record the PR head ref");
 if (workflow.branch !== currentBranch) failures.push(`current branch ${currentBranch} does not match workflow branch ${workflow.branch}`);
-if (args.approvedHead !== currentHead) failures.push("current HEAD does not match the human-approved HEAD");
 if (execute("git", ["status", "--porcelain"], { cwd: repoPath })) failures.push("working tree is not clean");
 
 let baseSha = "";
@@ -177,17 +164,20 @@ try {
     || "refs/remotes/origin/main";
   baseSha = execute("git", ["rev-parse", `${target}^{commit}`], { cwd: repoPath });
   mergeBase = execute("git", ["merge-base", currentHead, baseSha], { cwd: repoPath });
-  if (mergeBase !== baseSha) failures.push(`branch does not contain approved rebase target (${baseSha})`);
+  if (mergeBase !== baseSha) failures.push(`branch does not contain pinned rebase target (${baseSha})`);
   const changedFiles = execute("git", ["diff", "--name-only", `${baseSha}...${currentHead}`], { cwd: repoPath });
-  if (!changedFiles) failures.push("branch has no committed diff beyond the approved rebase target");
+  if (!changedFiles) failures.push("branch has no committed diff beyond the pinned rebase target");
   const identityProblems = checkAccountIdentity(repoPath, mergeBase, account);
   failures.push(...identityProblems);
 } catch (error) {
   failures.push(error.message);
 }
 
-const diffCheck = run("git", ["diff", "--check", `${baseSha}...HEAD`], { cwd: repoPath });
-if (diffCheck.exitCode !== 0) failures.push(`git diff --check failed: ${diffCheck.output || diffCheck.error}`);
+if (rebaseOnlyCheck.status !== "passed") failures.push(`rebase-only check is ${rebaseOnlyCheck.status ?? "unknown"}`);
+if (rebaseOnlyCheck.headSha !== currentHead) failures.push("rebase-only check does not match current HEAD");
+if (rebaseOnlyCheck.targetSha !== baseSha) failures.push("rebase-only check does not match the pinned rebase target");
+if (rebaseOnlyCheck.patchEquivalent !== true) failures.push("rebase-only check does not prove patch equivalence");
+if (!rebaseOnlyCheck.originalHeadSha) failures.push("rebase-only check does not record the original PR head");
 
 if (failures.length > 0) {
   console.error(failures.map((failure) => `- ${failure}`).join("\n"));
@@ -230,6 +220,9 @@ if (ownerLogin(before.headRepositoryOwner)?.toLowerCase() !== ghLogin.toLowerCas
 if (!before.headRefOid) {
   throw new Error("existing PR head SHA is unavailable; cannot use force-with-lease safely");
 }
+if (before.headRefOid !== rebaseOnlyCheck.originalHeadSha) {
+  throw new Error(`remote PR head moved since the clean-rebase check (expected=${rebaseOnlyCheck.originalHeadSha}, remote=${before.headRefOid})`);
+}
 
 execute("git", [
   "push",
@@ -271,5 +264,7 @@ console.log(JSON.stringify({
   baseSha,
   maintainerCanModify: true,
   mode: "rebase-only",
+  authorization: "initial-rebase-request",
+  checkPath,
   prBodyUpdated: false,
 }, null, 2));

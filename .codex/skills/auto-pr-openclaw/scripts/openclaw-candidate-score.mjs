@@ -53,6 +53,24 @@ const duplicateCheckPath = args.duplicateCheck || path.join(context.outputPath, 
 const duplicateCheck = duplicateCheckApplicable ? readJsonIfPresent(duplicateCheckPath) : null;
 const proofRecipe = classifyProofRecipe(files, body);
 const flags = riskFlags(files, stats, context.workflow, preflight, duplicateCheck, body);
+const changedLines = stats.insertions + stats.deletions;
+const aReadinessSignals = {
+  realCallChainProof: body.hasRealCallChainEvidence,
+  beforeAfterProof: body.hasBeforeAfterEvidence,
+  exactHeadProof: body.hasExactHeadEvidence,
+  canonicalPrecedent: body.hasCanonicalPrecedent,
+  deterministicValidationPassed: preflight?.status === "passed",
+  focusedSurface: files.length <= 5 && changedLines <= 300,
+  noUnresolvedPolicyChoice: !body.hasUnresolvedPolicyChoice,
+};
+const missingAReadinessSignals = Object.entries(aReadinessSignals)
+  .filter(([, present]) => !present)
+  .map(([signal]) => signal);
+const aReadinessVerdict = missingAReadinessSignals.length === 0
+  ? "high"
+  : missingAReadinessSignals.length <= 2
+    ? "possible"
+    : "ordinary";
 
 if (proofRecipe.needsLiveProof && !body.hasTerminalFence && !body.hasDetailsProofSource) {
   flags.push({
@@ -87,7 +105,18 @@ const receipt = {
     signal: body.proofSignal,
     hasRealCallChainEvidence: body.hasRealCallChainEvidence,
     hasBoundaryControls: body.hasBoundaryControls,
+    hasBeforeAfterEvidence: body.hasBeforeAfterEvidence,
+    hasExactHeadEvidence: body.hasExactHeadEvidence,
+    hasCanonicalPrecedent: body.hasCanonicalPrecedent,
+    hasUnresolvedPolicyChoice: body.hasUnresolvedPolicyChoice,
     hasSyntheticEvidence: body.hasSyntheticEvidence,
+  },
+  clawsweeperAReadiness: {
+    advisoryOnly: true,
+    verdict: aReadinessVerdict,
+    signals: aReadinessSignals,
+    missingSignals: missingAReadinessSignals,
+    note: "This estimates review-confidence signals associated with ClawSweeper A ratings; it is not a merge gate and never guarantees a rating.",
   },
   duplicateCheckApplicable,
   duplicateCheckPath: duplicateCheck ? duplicateCheckPath : null,
@@ -97,6 +126,18 @@ const receipt = {
     ...(preflight?.status === "passed" ? [] : ["Run openclaw-preflight and fix blockers before publishing."]),
     ...(proofRecipe.needsLiveProof && !body.hasTerminalFence && !body.hasDetailsProofSource
       ? ["Add live or proof-script evidence that exercises the real changed path."]
+      : []),
+    ...(!body.hasBeforeAfterEvidence
+      ? ["Capture before-fix and after-fix output through the same production entrypoint and input when feasible."]
+      : []),
+    ...(!body.hasExactHeadEvidence
+      ? ["Record the tested head SHA in Evidence so ClawSweeper can tie runtime proof to the reviewed patch."]
+      : []),
+    ...(!body.hasCanonicalPrecedent
+      ? ["Name the merged sibling, canonical helper, or established contract that makes the patch pattern-consistent; if none exists, explain the governing upstream limit or invariant."]
+      : []),
+    ...(body.hasUnresolvedPolicyChoice
+      ? ["Resolve or narrow new defaults, thresholds, and compatibility choices before publication when possible; otherwise expect ordinary maintainer-review calibration."]
       : []),
   ],
 };

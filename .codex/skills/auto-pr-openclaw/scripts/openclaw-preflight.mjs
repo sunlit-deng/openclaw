@@ -33,8 +33,8 @@ function parseArgs(argv) {
     else if (arg === "-h" || arg === "--help") result.help = true;
     else throw new Error(`Unknown argument: ${arg}`);
   }
-  if (!["auto", "focused", "iterate", "quick", "fast", "changed", "full"].includes(result.profile)) {
-    throw new Error("--profile must be auto, focused, iterate, quick, fast, changed, or full");
+  if (!["auto", "targeted", "focused", "iterate", "quick", "fast", "changed", "full"].includes(result.profile)) {
+    throw new Error("--profile must be auto, targeted, focused, iterate, quick, fast, changed, or full");
   }
   if (result.checkScript === "check" && result.profile !== "full") {
     throw new Error("pnpm check is a full-repository lane; use --profile full explicitly");
@@ -50,7 +50,12 @@ function parseArgs(argv) {
 function configureProfile(result, changedFiles) {
   const requestedProfile = result.profile;
   result.profile = resolveValidationProfile(requestedProfile, changedFiles);
-  if (result.profile === "focused" || result.profile === "iterate") {
+  if (result.profile === "targeted") {
+    if (result.checkScript || result.testScript !== "test:changed" || result.typeScript || result.extraScripts.length > 0) {
+      throw new Error("--profile targeted uses fixed changed-file lint/format, owning-project types, and focused tests");
+    }
+    result.checkScript = "";
+  } else if (result.profile === "focused" || result.profile === "iterate") {
     if (result.checkScript || result.testScript !== "test:changed" || result.typeScript || result.extraScripts.length > 0) {
       throw new Error(`--profile ${result.profile} uses the fixed focused changed-test lane; do not combine it with custom lanes`);
     }
@@ -91,7 +96,7 @@ function usage() {
     "",
     "Options:",
     "  --workflow PATH       Workflow JSON to validate (required).",
-    "  --profile PROFILE     auto (default), focused, quick, changed, fast, or full.",
+    "  --profile PROFILE     auto (default), targeted, focused, quick, changed, fast, or full.",
     "  --check-script NAME   Override the check lane for the changed profile.",
     "  --test-script NAME    Override the focused test lane (default: test:changed).",
     "  --type-script NAME    Add an optional type-check lane.",
@@ -99,8 +104,12 @@ function usage() {
     "  -h, --help            Show this help and exit.",
     "",
     "Profiles:",
-    "  auto     Select quick for documentation-only diffs; focused otherwise.",
-    "  focused  Run focused changed tests only. This is the default release profile for code diffs.",
+    "  auto     Select quick for documentation-only diffs, targeted for ordinary",
+    "           single-surface code diffs,",
+    "           and changed for high-risk, cross-surface, or unknown paths.",
+    "  targeted Run changed-file format/lint and owning-project types in parallel,",
+    "           then run focused affected tests.",
+    "  focused  Run focused changed tests only.",
     "  iterate  Alias for focused, kept for older edit-loop commands.",
     "  quick    Run Git, identity, PR-body/proof, and merge-risk gates only.",
     "  changed  Optional heavier lane: run pnpm check:changed and focused changed tests.",
@@ -110,6 +119,7 @@ function usage() {
     "",
     "Examples:",
     "  openclaw-preflight.sh --workflow outputs/issue-123/workflow.json",
+    "  openclaw-preflight.sh --workflow outputs/issue-123/workflow.json --profile targeted",
     "  openclaw-preflight.sh --workflow outputs/issue-123/workflow.json --profile focused",
     "  openclaw-preflight.sh --workflow outputs/issue-123/workflow.json --profile quick",
     "  openclaw-preflight.sh --workflow outputs/issue-123/workflow.json --profile changed",
@@ -308,6 +318,8 @@ let heavyChecks = [];
 let heavyFingerprint = "";
 let cacheHit = false;
 let freshness = null;
+const targetedCheckScript = path.join(path.dirname(path.resolve(process.argv[1])), "openclaw-targeted-check.mjs");
+const targetedPlanScript = path.join(path.dirname(targetedCheckScript), "lib", "targeted-validation.mjs");
 
 const expectedWorktreeRoot = `${path.join(root, "worktrees")}${path.sep}`;
 const expectedOutputRoot = `${path.join(root, "outputs")}${path.sep}`;
@@ -496,7 +508,11 @@ try {
     true,
     requestedProfile === args.profile
       ? args.profile
-      : `${requestedProfile} -> ${args.profile} (${args.profile === "quick" ? "documentation-only diff" : "code, test, config, dependency, or unknown diff"})`,
+      : `${requestedProfile} -> ${args.profile} (${args.profile === "quick"
+        ? "documentation-only diff"
+        : args.profile === "targeted"
+          ? "ordinary single-surface code diff"
+          : "high-risk, cross-surface, or unknown diff"})`,
   ));
 } catch (error) {
   checks.push(staticCheck("validation profile selection", false, error.message));
@@ -542,8 +558,8 @@ if (packageJson && args.profile === "quick") {
 } else if (packageJson) {
   checks.push(staticCheck(
     "selected check script exists",
-    ["focused", "iterate"].includes(args.profile) || Boolean(checkScript && typeof packageJson.scripts?.[checkScript] === "string"),
-    checkScript || "not selected for focused-test profile",
+    ["targeted", "focused", "iterate"].includes(args.profile) || Boolean(checkScript && typeof packageJson.scripts?.[checkScript] === "string"),
+    checkScript || `not selected for ${args.profile} profile`,
   ));
   checks.push(staticCheck(
     "focused test script exists",
@@ -590,6 +606,8 @@ if (packageJson && args.profile === "quick") {
         arch: process.arch,
         pnpm: pnpmVersion.stdout.trim(),
         preflightScriptSha256: fileSha256(path.resolve(process.argv[1])),
+        targetedCheckScriptSha256: args.profile === "targeted" ? fileSha256(targetedCheckScript) : null,
+        targetedPlanScriptSha256: args.profile === "targeted" ? fileSha256(targetedPlanScript) : null,
         environment: relevantEnvironment,
       }));
 
@@ -632,7 +650,16 @@ if (packageJson && args.profile === "quick") {
               },
             }
           : {};
-        if (checkScript) {
+        if (args.profile === "targeted") {
+          heavyChecks.push(commandCheck(
+            "targeted changed-file lint format and owning-project types",
+            run(process.execPath, [
+              targetedCheckScript,
+              "--base", validationBaseSha,
+              "--head", "HEAD",
+            ], repo),
+          ));
+        } else if (checkScript) {
           const checkArgs = checkScript === "check:changed"
             ? [checkScript, "--base", validationBaseSha, "--timed"]
             : [checkScript];
@@ -709,6 +736,8 @@ const receipt = {
   profile: args.profile,
   validationDepth: args.profile === "quick"
     ? "deterministic-no-pnpm"
+    : args.profile === "targeted"
+      ? "targeted-files-and-owning-projects"
     : ["focused", "iterate"].includes(args.profile)
       ? "focused-changed-tests"
       : args.profile === "full"

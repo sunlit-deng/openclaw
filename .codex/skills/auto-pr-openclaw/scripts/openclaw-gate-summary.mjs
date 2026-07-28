@@ -191,6 +191,7 @@ const summary = {
     path: candidateScorePath,
     score: candidateScore.score,
     verdict: candidateScore.verdict,
+    clawsweeperAReadiness: candidateScore.clawsweeperAReadiness?.verdict ?? null,
     staleForExistingPr: candidateScoreStaleForExistingPr,
   } : null,
   maintainer,
@@ -233,6 +234,7 @@ ${mdList(nameStatus.map((line) => `\`${line}\``))}
 - rebase-only receipt: \`${rebaseOnlyCheckPath}\`
 - duplicate check: ${duplicateCheckApplicable ? (duplicateCheck ? `${summary.duplicateCheck.likelyDuplicateCount} likely duplicates, ${summary.duplicateCheck.relatedOpenPrCount} related open PRs${summary.duplicateCheck.blocking ? "" : " (advisory)"}` : "missing") : "not applicable (existing PR)"}
 - candidate score: ${candidateScore ? (candidateScoreStaleForExistingPr ? "stale pre-existing-PR receipt (ignored; rerun scoring)" : `${candidateScore.score} (${candidateScore.verdict})`) : "missing"}
+- ClawSweeper A-readiness: ${candidateScore?.clawsweeperAReadiness?.verdict ?? "missing"} (advisory)
 - maintainer edit: ${maintainer.checked ? String(maintainer.maintainerCanModify) : maintainer.maintainerCanModify === null ? "not checked" : String(maintainer.maintainerCanModify)}
 
 ## Commit Identity

@@ -20,6 +20,7 @@ Use these gates before pushing or updating an OpenClaw PR.
 ## Candidate Score Gate
 
 - Run `scripts/openclaw-candidate-score.sh --workflow <outputs>/workflow.json` after the PR body draft and changed files exist. This writes `candidate-score.json`.
+- Inspect `clawsweeperAReadiness` when ranking candidates or intentionally preparing a high-confidence final review. `high` requires real-call-chain proof, comparable base/head output, exact-head attribution, canonical precedent, passing deterministic validation, a focused surface, and no detected unresolved policy choice. This is advisory and must not block an otherwise merge-ready PR.
 - Treat `strong` and `promising` as publishable only when the applicable gates pass: duplicate and validation for unpublished candidates, validation for existing PR maintenance.
 - Treat `needs-work` as a local fix signal: tighten scope, add matching proof, add focused tests, or, for an unpublished candidate, resolve duplicate risk before publication.
 - Treat `poor-fit` as a likely drop or redesign signal unless the user explicitly wants to pursue a high-risk PR.
@@ -28,10 +29,10 @@ Use these gates before pushing or updating an OpenClaw PR.
 ## Validation Gate
 
 - Run focused tests first for changed modules.
-- Run `scripts/openclaw-preflight.sh --workflow <path>` so validation is executed against the pinned `validationBaseSha` and recorded against the current HEAD. The default `auto` profile resolves to `quick` for documentation-only diffs and `focused` for every other diff. The `focused` profile runs the repository's focused changed-test selector and can satisfy the publication gate when the deterministic gates pass. The `changed` profile is optional and runs pinned-base equivalents of `pnpm check:changed` and `pnpm test:changed`; it does not run full repository `pnpm check` or broad `pnpm check:test-types`. Use an explicit `--profile quick` only for very small, low-risk PRs when the user prioritizes fast publication and focused proof/tests have already been collected; it skips pnpm heavy lanes and records `validationDepth: deterministic-no-pnpm`. Use `--profile fast` when timing matters but local lint and type confidence is still required; it runs `pnpm lint`, `pnpm tsgo:prod`, and `pnpm check:test-types`, skips changed tests, and records `validationDepth: fast-lint-prod-and-test-types`. Use `--profile full` only when a full-repository check is intentional, and `--type-script check:test-types` only when the touched surface or user request explicitly needs that broader test-type lane. Run `scripts/openclaw-preflight.sh --help` for the current profile rules and examples.
+- Run `scripts/openclaw-preflight.sh --workflow <path>` so validation is executed against the pinned `validationBaseSha` and recorded against the current HEAD. The default `auto` profile resolves to `quick` for documentation-only diffs, `targeted` for ordinary single-surface code diffs, and `changed` for high-risk, cross-surface, too-broad, or unknown diffs. `targeted` runs changed-file format/lint and owning-project TypeScript lanes concurrently, then focused affected tests; it skips unrelated repository-wide guards. `changed` remains the conservative escalation lane. `focused` is a test-only iteration lane, `fast` runs full lint plus broad production/test types, and `full` runs the full repository check graph. Run `scripts/openclaw-preflight.sh --help` for the current profile rules and examples.
 - Treat the main SHA fetched by preflight as one observation, not a moving validation base. Main advancement, behind count, and overlapping files are advisories. A merge conflict against that observed SHA is blocking. Do not restart the gate merely because main advances again after the observation.
 - For an explicit "rebase then publish" request, fetch once, record the exact rebase target SHA, rebase to that SHA, and keep that SHA as `validationBaseSha` through validation and publish. If main advances while checks are running, do not chase it. Publish the validated HEAD unless preflight reports a real merge conflict, the overlapping-file report changes the risk decision, or the user explicitly asks for another rebase after seeing the current gate state.
-- Reuse cached heavy checks only when the receipt fingerprint matches HEAD, `validationBaseSha`, package/lockfile content, lanes, toolchain, platform, and relevant execution environment. Focused changed-test results may also be reused across profile switches when their focused-test fingerprint matches. Always recompute latest-main merge risk even on a cache hit.
+- Reuse cached heavy checks only when the receipt fingerprint matches HEAD, `validationBaseSha`, package/lockfile content, lanes, targeted planner implementation, toolchain, platform, and relevant execution environment. Focused changed-test results may also be reused across profile switches when their focused-test fingerprint matches. Always recompute latest-main merge risk even on a cache hit.
 - Avoid the default `pnpm check:changed` remote delegation path. Preflight sets `OPENCLAW_CHECK_CHANGED_REMOTE_CHILD=1 OPENCLAW_CHANGED_LANES_RAW_SYNC=1 PNPM_CONFIG_VERIFY_DEPS_BEFORE_RUN=false` and intentionally omits `CI=1` so changed lanes run locally. When checking manually, use the same environment; Testbox/Blacksmith runs are optional supplemental proof, not the default local gate.
 - A passing `preflight.json` is required. Missing, skipped, stale, or failed checks do not pass based on an agent's prose summary.
 - A user may explicitly approve a temporary bypass for `preflight.status === "failed"` after seeing the human gate packet. This bypass is scoped to the same workflow task, approved HEAD, and approved PR body hash. It must be passed to `scripts/publish-openclaw-pr.mjs` as `--allow-failed-preflight --failed-preflight-bypass-reason "<user reason>"`. It does not apply to missing preflight, stale preflight, changed HEAD/body, dirty worktree, identity failures, maintainer edit failures, duplicate blockers on unpublished candidates, or proof/re-review blockers.
@@ -40,35 +41,41 @@ Use these gates before pushing or updating an OpenClaw PR.
 - Do not treat isolated helper calls, copied parser logic, `node -e` simulations, or test output as real-call-chain fallback proof.
 - If ClawSweeper asks for real behavior proof, update the PR body with copied terminal output from a live or loopback run before requesting re-review. Tests alone usually do not satisfy runtime/resource-safety proof.
 
-### Rebase-Only Fast Path
+### Clean Rebase-Only Fast Path
 
-Use this only for existing PR maintenance where the branch was rebased or merge
-conflicts were resolved and no PR body, proof, comment, or review request will
-be changed.
+Use this only when the user explicitly asks to rebase or catch up an existing
+PR, the rebase completes without conflicts, and no PR body, proof, comment, or
+review request will be changed. The initial request authorizes the resulting
+patch-equivalent force-push; there is no second human gate.
+
+Fetch once, pin the exact target SHA, and run `git rebase <target-sha>`. If Git
+reports a conflict, stop immediately. Do not resolve conflicts under this path;
+conflict resolution returns to normal validation and the Human Gate.
 
 Run the lightweight receipt first:
 
 ```bash
-scripts/openclaw-rebase-only-check.sh --workflow <outputs>/workflow.json --target <approved-rebase-target-sha>
+scripts/openclaw-rebase-only-check.sh --workflow <outputs>/workflow.json --target <pinned-rebase-target-sha>
 ```
 
-Required lightweight checks before the human gate:
+Required release invariants:
 
 - worktree is clean
-- branch contains the single approved rebase target SHA
-- branch still has a committed diff beyond the approved rebase target SHA
-- `git diff --check <approved-rebase-target-sha>...HEAD` passes
+- branch contains the single pinned rebase target SHA
+- the ordered stable patch-id series is identical before and after rebase
 - every workflow commit uses the selected account's configured author/committer identity, or, for legacy workflows without an account profile, every `sunlit-deng` author/committer email is `yang.jiajun1@xydigit.com`
 - existing PR head owner/ref matches the authenticated GitHub push identity
+- remote PR head still equals the workflow's pre-rebase head
 - `maintainerCanModify` is `true`
 
-Then run `scripts/openclaw-gate-summary.sh --workflow <outputs>/workflow.json`.
-The summary may use a passing `rebase-only-check.json` for the current HEAD
-instead of a passing `preflight.json`. After human approval, publish with
-`scripts/publish-openclaw-rebase-only.mjs --target <approved-rebase-target-sha>`.
-The approval is tied to the current HEAD SHA and approved rebase target. This fast path must use
-`--force-with-lease`, must verify the remote PR head SHA after pushing, and must
-not update the PR body or post comments.
+Do not run tests, lint, type checks, `git diff --check`, preflight, or gate
+summary. When the receipt passes, immediately publish with
+`scripts/publish-openclaw-rebase-only.mjs --target <pinned-rebase-target-sha>`.
+The publisher requires that receipt to match the current HEAD, pinned target,
+and unchanged remote pre-rebase head. It must use `--force-with-lease`, verify
+the remote PR head SHA after pushing, and must not update the PR body or post
+comments. Any failed invariant stops the operation instead of falling back to
+an automatic push.
 
 ## Maintainer Edit and Secrets Gate
 
@@ -88,6 +95,7 @@ Use this gate before requesting ClawSweeper re-review to prevent blind re-review
 - **Loop detection by SHA match:** Compare the current head SHA (`git rev-parse HEAD`) against the SHA in ClawSweeper's most recent review (look for `sha=<...>` in `clawsweeper-verdict`). If the SHAs match and the blocker class is unchanged, the re-review request would be a no-op cycle. Explain this to the user and require concrete proof to be added before any re-review.
 - **Check the review history:** ClawSweeper comments include a `Review history` section showing how many re-review cycles the PR has gone through. If the history shows multiple consecutive reviews with the same blocker, stop and surface the pattern before requesting another re-review.
 - Only proceed with `@clawsweeper re-review` when: (a) ClawSweeper's verdict is not blocking on proof, or (b) the requested proof has been genuinely added to the PR body and/or branch since the last review SHA.
+- Do not request re-review solely to chase B→A. For an intentional A-readiness attempt, require a material confidence change since the prior review: newly green exact-head CI, newly added comparable base/head real-path proof, a resolved prior finding or compatibility choice, or a newly merged canonical precedent. If none changed, keep the merge-ready rating and avoid another review cycle.
 
 When the pre-re-review gate passes, proceed to the Human Gate below before any GitHub write.
 
@@ -102,6 +110,11 @@ validation.
 
 ## Human Gate
 
+This gate does not apply to the clean rebase-only fast path. An explicit
+rebase/catch-up request plus a passing patch-equivalence receipt authorizes its
+branch-only force-push. Conflict-resolved rebases and every other GitHub write
+still use this gate.
+
 Before any GitHub write, show the user:
 
 - generated `gate-summary.md` from `scripts/openclaw-gate-summary.sh --workflow <outputs>/workflow.json`
@@ -112,7 +125,6 @@ Before any GitHub write, show the user:
 - PR body draft summary or path
 - live proof summary
 - preflight receipt path, HEAD SHA, and result
-- for rebase-only fast path, lightweight check results instead of a preflight receipt
 - maintainer edit status for existing PRs, or the post-create maintainer edit check plan for new PRs
 - unresolved risks or blocked checks
 

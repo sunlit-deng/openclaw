@@ -70,6 +70,9 @@ const plan = {
     hasDetailsProofSource: body.hasDetailsProofSource,
     hasRealCallChainEvidence: body.hasRealCallChainEvidence,
     hasBoundaryControls: body.hasBoundaryControls,
+    hasBeforeAfterEvidence: body.hasBeforeAfterEvidence,
+    hasExactHeadEvidence: body.hasExactHeadEvidence,
+    hasCanonicalPrecedent: body.hasCanonicalPrecedent,
     hasSyntheticEvidence: body.hasSyntheticEvidence,
     hasOnlyTestEvidence: body.hasOnlyTestEvidence,
   },
@@ -79,8 +82,9 @@ const plan = {
     "Pick the highest real boundary from candidateEntrypoints: CLI/server/provider/runtime caller before private helper.",
     "If external service credentials are unavailable, replace only the external boundary with localhost/loopback or fixture input.",
     "Run the production entrypoint or import the changed production boundary; do not copy helper logic into the proof.",
-    "Capture a short terminal transcript with command, trigger, status/result, and redactions.",
-    "Include a negative control or before/after line whenever feasible.",
+    "Run the same command, entrypoint, input, and dependency boundary on the pinned base and exact head whenever feasible.",
+    "Capture explicit before-fix, after-fix, and unchanged negative-control results plus the tested head SHA.",
+    "Name the merged sibling, canonical helper, established contract, or upstream limit that supports the patch shape.",
     "Paste the concise transcript into PR Evidence; put full proof source/output in live-proof.md or a details block.",
   ],
 };
@@ -118,11 +122,13 @@ ${plan.recommendedPlan.map((item) => `- ${item}`).join("\n")}
 ## Evidence
 
 - Real call-chain proof: \`<command>\` exercised <production entrypoint> with <loopback/fixture/live dependency>; valid case <accepted>; negative control <rejected/unchanged>.
+- Canonical precedent: <merged sibling PR, existing helper/contract, or governing upstream limit>.
 
 \`\`\`text
 $ <command>
 entrypoint: <real caller or production module>
-valid: <accepted/status>
+base: <validationBaseSha> => <before-fix result>
+head: <exact head SHA> => <after-fix result>
 negative-control: <rejected/status>
 \`\`\`
 

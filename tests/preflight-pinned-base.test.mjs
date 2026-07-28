@@ -8,6 +8,10 @@ import {
   isDocumentationOnly,
   resolveValidationProfile,
 } from "../.codex/skills/auto-pr-openclaw/scripts/lib/validation-profile.mjs";
+import {
+  targetedValidationDecision,
+  targetedValidationPlan,
+} from "../.codex/skills/auto-pr-openclaw/scripts/lib/targeted-validation.mjs";
 
 const repoRoot = path.resolve(import.meta.dirname, "..");
 const preflight = path.join(
@@ -239,18 +243,49 @@ test("documents profiles through --help without requiring a workflow", () => {
     assert.equal(result.status, 0, result.stderr);
     assert.match(result.stdout, /--profile PROFILE/);
     assert.match(result.stdout, /auto \(default\)/);
+    assert.match(result.stdout, /targeted.*changed-file format\/lint/);
     assert.match(result.stdout, /focused.*focused changed tests/);
     assert.match(result.stdout, /documentation-only diffs/);
     assert.match(result.stdout, /can be slower than changed/);
   }
 });
 
-test("auto profile is quick only for documentation-only diffs", () => {
+test("auto profile selects quick, targeted, or changed from diff risk", () => {
   assert.equal(isDocumentationOnly(["README.md", "docs/guide.md", "LICENSE"]), true);
   assert.equal(resolveValidationProfile("auto", ["README.md"]), "quick");
-  assert.equal(resolveValidationProfile("auto", ["README.md", "src/index.ts"]), "focused");
-  assert.equal(resolveValidationProfile("auto", []), "focused");
+  assert.equal(resolveValidationProfile("auto", ["README.md", "src/index.ts"]), "targeted");
+  assert.equal(resolveValidationProfile("auto", ["extensions/demo/src/index.ts", "extensions/demo/src/index.test.ts"]), "targeted");
+  assert.equal(resolveValidationProfile("auto", ["package.json"]), "changed");
+  assert.equal(resolveValidationProfile("auto", ["src/index.ts", "extensions/demo/src/index.ts"]), "changed");
+  assert.equal(resolveValidationProfile("auto", []), "changed");
   assert.equal(resolveValidationProfile("full", ["README.md"]), "full");
+});
+
+test("targeted plan checks changed files and owning TypeScript projects only", () => {
+  const files = [
+    "extensions/active-memory/doctor-contract-api.ts",
+    "extensions/active-memory/doctor-contract-api.test.ts",
+  ];
+  const decision = targetedValidationDecision(files);
+  assert.equal(decision.safe, true);
+  assert.deepEqual(decision.surfaces, ["extensions"]);
+
+  const plan = targetedValidationPlan(files);
+  assert.deepEqual(plan.commands.map(({ name }) => name), [
+    "format changed files",
+    "lint changed files",
+    "typecheck extensions",
+    "typecheck extension tests",
+  ]);
+  assert.ok(plan.commands.every(({ name }) => !/database|dependency|import cycle|API contract/i.test(name)));
+  assert.deepEqual(
+    plan.commands.find(({ name }) => name === "lint changed files").args.slice(-2),
+    files,
+  );
+
+  assert.equal(targetedValidationDecision(["package.json"]).safe, false);
+  assert.equal(targetedValidationDecision(["src/a.ts", "extensions/demo/src/a.ts"]).safe, false);
+  assert.equal(targetedValidationDecision(["unknown/file.ts"]).safe, false);
 });
 
 test("requires an explicit full profile for pnpm check", () => {
