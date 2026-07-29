@@ -38,7 +38,7 @@ function write(file, contents) {
   fs.writeFileSync(file, contents, "utf8");
 }
 
-function fixture(t) {
+function fixture(t, { mergeHistory = false } = {}) {
   const temp = fs.mkdtempSync(path.join(os.tmpdir(), "auto-pr-conflict-rebase-"));
   t.after(() => fs.rmSync(temp, { recursive: true, force: true }));
   const root = path.join(temp, "workspace/openclaw");
@@ -61,9 +61,17 @@ function fixture(t) {
   write(path.join(repo, "extensions/browser/chrome-extension/modules/runtime.js"), "feature\n");
   git(repo, "add", ".");
   git(repo, "commit", "-m", "fix: update feature");
-  const originalHead = git(repo, "rev-parse", "HEAD");
 
   git(repo, "switch", "main");
+  if (mergeHistory) {
+    write(path.join(repo, "docs/upstream.md"), "intermediate upstream\n");
+    git(repo, "add", "docs/upstream.md");
+    git(repo, "commit", "-m", "upstream: intermediate change");
+    git(repo, "switch", "sunlit/pr-123");
+    git(repo, "merge", "--no-ff", "main", "-m", "merge main into feature");
+    git(repo, "switch", "main");
+  }
+  const originalHead = git(repo, "rev-parse", "sunlit/pr-123");
   write(path.join(repo, "extensions/browser/chrome-extension/modules/runtime.js"), "upstream\n");
   git(repo, "add", ".");
   git(repo, "commit", "-m", "upstream: rebuild runtime");
@@ -160,8 +168,55 @@ test("conflict rebase rejects drift outside the recorded conflict files", (t) =>
     script, "--phase", "finish", "--workflow", workflowPath, "--plan", planPath,
   ]);
   assert.equal(finished.status, 1);
-  assert.match(finished.stderr, /Non-conflict patch series changed/);
+  assert.match(finished.stderr, /Patch series outside conflict\/maintenance files changed/);
   const receipt = JSON.parse(fs.readFileSync(path.join(output, "conflict-resolution-check.json"), "utf8"));
   assert.equal(receipt.status, "failed");
-  assert.match(receipt.blockers[0], /Non-conflict patch series changed/);
+  assert.match(receipt.blockers[0], /Patch series outside conflict\/maintenance files changed/);
+  assert.equal(receipt.requiresExplicitHeavyValidationApproval, true);
+});
+
+test("conflict rebase permits an explicit focused maintenance file across surfaces", (t) => {
+  const { repo, output, workflowPath, planPath, target } = fixture(t);
+  const started = execute(process.execPath, [
+    script, "--phase", "start", "--workflow", workflowPath, "--target", target,
+  ]);
+  assert.equal(started.status, 1);
+  write(path.join(repo, "extensions/browser/chrome-extension/modules/runtime.js"), "resolved\n");
+  git(repo, "add", "extensions/browser/chrome-extension/modules/runtime.js");
+  run("git", ["-c", "core.editor=true", "rebase", "--continue"], { cwd: repo });
+
+  write(path.join(repo, "src/feature.ts"), "export const value = 999;\n");
+  git(repo, "add", "src/feature.ts");
+  git(repo, "commit", "--amend", "--no-edit");
+  const plan = JSON.parse(fs.readFileSync(planPath, "utf8"));
+  plan.allowedFiles = ["src/feature.ts"];
+  write(planPath, `${JSON.stringify(plan, null, 2)}\n`);
+  run(process.execPath, [
+    script, "--phase", "finish", "--workflow", workflowPath, "--plan", planPath,
+  ]);
+  const receipt = JSON.parse(fs.readFileSync(path.join(output, "conflict-resolution-check.json"), "utf8"));
+  assert.equal(receipt.status, "passed");
+  assert.deepEqual(receipt.allowedMaintenanceFiles, ["src/feature.ts"]);
+  assert.deepEqual(receipt.conflictSurfaces.sort(), ["extensions/browser", "src"]);
+});
+
+test("conflict rebase accepts merge-containing PR history using net patch equivalence", (t) => {
+  const { repo, output, workflowPath, planPath, target } = fixture(t, { mergeHistory: true });
+  const started = execute(process.execPath, [
+    script, "--phase", "start", "--workflow", workflowPath, "--target", target,
+  ]);
+  assert.equal(started.status, 1, `${started.stdout}\n${started.stderr}`);
+  const state = JSON.parse(fs.readFileSync(path.join(output, "conflict-rebase-state.json"), "utf8"));
+  assert.equal(state.historyMode, "net-patch");
+  assert.equal(state.originalMergeCommits.length, 1);
+  write(path.join(repo, "extensions/browser/chrome-extension/modules/runtime.js"), "resolved\n");
+  git(repo, "add", "extensions/browser/chrome-extension/modules/runtime.js");
+  run("git", ["-c", "core.editor=true", "rebase", "--continue"], { cwd: repo });
+  run(process.execPath, [
+    script, "--phase", "finish", "--workflow", workflowPath, "--plan", planPath,
+  ]);
+  const receipt = JSON.parse(fs.readFileSync(path.join(output, "conflict-resolution-check.json"), "utf8"));
+  assert.equal(receipt.status, "passed");
+  assert.equal(receipt.nonConflictEquivalenceMode, "net-patch");
+  assert.equal(receipt.nonConflictNetPatchBefore, receipt.nonConflictNetPatchAfter);
 });

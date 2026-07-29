@@ -95,11 +95,15 @@ scripts/openclaw-conflict-rebase.sh \
 
 Resolve only the files recorded in `conflict-rebase-state.json`. If a later
 `git rebase --continue` stops on another conflict, run `--phase record` before
-resolving that stop. Then create a bounded plan such as:
+resolving that stop. Merge-containing PR history uses stable net-patch
+equivalence rather than rejecting the fast path. If the same maintenance task
+requires a small CI fix outside the conflict files, finish that edit first and
+list it in `allowedFiles`. Then create a bounded plan such as:
 
 ```json
 {
   "schemaVersion": 1,
+  "allowedFiles": ["src/tui/gateway-chat.scopes.test.ts"],
   "commands": [
     {
       "name": "rebuild generated browser runtime",
@@ -132,10 +136,12 @@ scripts/openclaw-preflight.sh \
 The finish receipt is allowed only when all of these invariants hold:
 
 - the pinned target is an ancestor of the completed rebase
-- every conflict file was recorded, with at most five files on one surface
+- every conflict file was recorded, with at most eight explicitly scoped
+  conflict and maintenance files across any surfaces
 - no package manifest, lockfile, tsconfig, GitHub workflow, or public plugin
   SDK conflict is present
-- the ordered stable patch-id series outside the conflict files is unchanged
+- the ordered stable patch-id series outside the scoped files is unchanged, or
+  a merge-containing original history has an equivalent stable net patch
 - generated conflicts have a deterministic rebuild command
 - non-document conflicts have at least one focused affected-test command
 - every explicit command passes and leaves the worktree clean
@@ -144,7 +150,9 @@ The finish receipt is allowed only when all of these invariants hold:
 `--profile conflict` requires that current receipt and repeats no pnpm,
 dependency-fingerprint, lint, type, or test lane. It still checks current Git
 state, identity, PR body/proof, and merge compatibility. If any invariant
-fails, escalate to normal `auto`, `targeted`, or `changed` validation.
+fails, stop and show the exact reason and expected heavier lanes. Never start
+`auto`, `targeted`, `changed`, broad types, or affected-test expansion until
+the user explicitly approves that time/cost escalation.
 
 ## Maintainer Edit and Secrets Gate
 

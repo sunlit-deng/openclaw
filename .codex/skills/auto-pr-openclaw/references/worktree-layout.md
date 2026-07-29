@@ -58,9 +58,27 @@ need only a file scan, while existing PR worktrees parse the files changed by
 that PR. The database is private even though its initial disk blocks may be
 shared by the filesystem.
 
+Refresh at maintenance-phase boundaries: once after fetching and pinning the
+target main SHA, and once after checkout/rebase updates the worktree. Do not
+fetch, update the baseline, or run `sync` before every command. Normal edits
+are handled by the watcher; run another sync only when CodeGraph reports stale
+or pending files.
+
 CodeGraph is an optional developer aid and does not block worktree creation.
-If the CLI is unavailable or setup fails, the helper prints a warning. Retry
-without recreating the worktree:
+A PR task never performs the first full initialization. If the reusable
+baseline database is absent, worktree setup skips CodeGraph so rebase or CI
+maintenance can continue. Build the baseline separately:
+
+```bash
+./.codex/skills/auto-pr-openclaw/scripts/ensure-openclaw-codegraph.sh \
+  --baseline-only \
+  --main-repo ./workspace/openclaw/repos/openclaw \
+  --root ./workspace/openclaw \
+  --base-sha "$(git -C ./workspace/openclaw/repos/openclaw rev-parse origin/main)"
+```
+
+If the CLI is unavailable or an incremental setup fails, the helper prints a
+warning. Retry without recreating the worktree:
 
 ```bash
 ./.codex/skills/auto-pr-openclaw/scripts/ensure-openclaw-codegraph.sh \

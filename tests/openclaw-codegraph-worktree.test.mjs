@@ -156,6 +156,49 @@ test("both OpenClaw intake paths invoke the CodeGraph seeding helper", () => {
   assert.match(existingPr, /Warning: CodeGraph setup failed; the worktree remains usable/);
 });
 
+test("a PR task never performs the first full CodeGraph initialization", (t) => {
+  const temp = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), "auto-pr-codegraph-skip-")));
+  t.after(() => fs.rmSync(temp, { recursive: true, force: true }));
+  const root = path.join(temp, "workspace/openclaw");
+  const mainRepo = path.join(root, "repos/openclaw");
+  const worktree = path.join(root, "worktrees/pr-1");
+  const fakeBin = path.join(temp, "fake-bin");
+  const fakeCodeGraph = path.join(fakeBin, "codegraph");
+  const logPath = path.join(temp, "codegraph.log");
+  fs.mkdirSync(mainRepo, { recursive: true });
+  fs.mkdirSync(path.dirname(worktree), { recursive: true });
+  git(mainRepo, "init", "-b", "main");
+  git(mainRepo, "config", "user.name", "Test User");
+  git(mainRepo, "config", "user.email", "test@example.com");
+  write(path.join(mainRepo, "src/index.ts"), "export const value = 1;\n");
+  git(mainRepo, "add", ".");
+  git(mainRepo, "commit", "-m", "base");
+  const base = git(mainRepo, "rev-parse", "HEAD");
+  git(mainRepo, "worktree", "add", "-b", "pr-1", worktree, base);
+  write(fakeCodeGraph, `#!/usr/bin/env bash
+printf '%s\n' "$*" >> "$OPENCLAW_CODEGRAPH_TEST_LOG"
+exit 99
+`);
+  fs.chmodSync(fakeCodeGraph, 0o755);
+  const result = spawnSync(ensureCodeGraph, [
+    "--repo-path", worktree,
+    "--main-repo", mainRepo,
+    "--root", root,
+    "--base-sha", base,
+  ], {
+    encoding: "utf8",
+    env: {
+      ...process.env,
+      PATH: `${fakeBin}${path.delimiter}${process.env.PATH}`,
+      OPENCLAW_CODEGRAPH_TEST_LOG: logPath,
+    },
+  });
+  assert.equal(result.status, 0, result.stderr);
+  assert.match(result.stderr, /reusable baseline is missing/);
+  assert.equal(fs.existsSync(logPath), false);
+  assert.equal(fs.existsSync(path.join(worktree, ".codegraph/codegraph.db")), false);
+});
+
 test("a missing CodeGraph CLI is advisory", () => {
   const result = spawnSync(ensureCodeGraph, [
     "--repo-path", "/missing/worktree",

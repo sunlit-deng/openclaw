@@ -171,7 +171,10 @@ if [[ "$baseline_head" != "$base_sha" ]]; then
   git -c core.hooksPath=/dev/null -C "$baseline_repo" checkout --detach "$base_sha"
 fi
 
-if [[ ! -f "$baseline_repo/.codegraph/codegraph.db" ]]; then
+if [[ ! -f "$baseline_repo/.codegraph/codegraph.db" && "$baseline_only" -eq 0 ]]; then
+  echo "CodeGraph skipped: reusable baseline is missing; run --baseline-only outside the PR task." >&2
+  exit 0
+elif [[ ! -f "$baseline_repo/.codegraph/codegraph.db" ]]; then
   (
     cd "$cache_root"
     CODEGRAPH_NO_WATCH= CODEGRAPH_FORCE_WATCH=1 "$codegraph_bin" init -i "$baseline_repo"

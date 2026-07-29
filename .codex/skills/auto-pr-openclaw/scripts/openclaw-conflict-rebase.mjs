@@ -108,6 +108,31 @@ function stablePatchSeries(repo, range, excludedFiles = []) {
   return series;
 }
 
+function mergeCommits(repo, range) {
+  return lines(run("git", ["rev-list", "--reverse", "--merges", range], {
+    cwd: repo,
+    allowFailure: true,
+  }).stdout);
+}
+
+function stableNetPatchId(repo, base, head, excludedFiles = []) {
+  const exclusions = excludedFiles.map((file) => `:(exclude)${file}`);
+  const diff = run("git", [
+    "diff", "--binary", "--no-ext-diff", "--no-renames", base, head,
+    "--", ".", ...exclusions,
+  ], { cwd: repo });
+  if (!diff.stdout.trim()) return "";
+  const patchId = run("git", ["patch-id", "--stable"], {
+    cwd: repo,
+    input: diff.stdout,
+    allowFailure: true,
+  });
+  if (patchId.exitCode !== 0) {
+    throw new Error(`git patch-id failed for net diff ${base}..${head}: ${patchId.stderr || patchId.stdout}`);
+  }
+  return patchId.stdout.trim().split(/\s+/)[0] ?? "";
+}
+
 function surfaceFor(file) {
   const [first, second] = file.split("/");
   if (first === "extensions") return `${first}/${second ?? ""}`;
@@ -150,6 +175,10 @@ function validatePlan(plan, conflictFiles) {
     throw new Error("Plan must have schemaVersion 1 and a non-empty commands array");
   }
   if (plan.commands.length > 8) throw new Error("Plan has more than 8 commands; use normal preflight");
+  if (plan.allowedFiles !== undefined && (!Array.isArray(plan.allowedFiles)
+    || plan.allowedFiles.some((file) => typeof file !== "string"))) {
+    throw new Error("Plan allowedFiles must be an array of repository-relative paths");
+  }
   const shellCommands = new Set(["sh", "bash", "zsh", "fish", "pwsh", "powershell"]);
   for (const item of plan.commands) {
     if (!item || typeof item.name !== "string" || !item.name.trim()) throw new Error("Every plan command needs a name");
@@ -233,10 +262,12 @@ try {
     const originalHeadSha = currentHead(context.repoPath);
     const targetSha = git(context.repoPath, "rev-parse", `${args.target}^{commit}`);
     const originalBaseSha = git(context.repoPath, "merge-base", originalHeadSha, targetSha);
-    const originalPatchSeries = stablePatchSeries(
-      context.repoPath,
-      `${originalBaseSha}..${originalHeadSha}`,
-    );
+    const originalRange = `${originalBaseSha}..${originalHeadSha}`;
+    const originalMergeCommits = mergeCommits(context.repoPath, originalRange);
+    const historyMode = originalMergeCommits.length > 0 ? "net-patch" : "patch-series";
+    const originalPatchSeries = historyMode === "patch-series"
+      ? stablePatchSeries(context.repoPath, originalRange)
+      : [];
     const state = {
       schemaVersion: 1,
       status: "started",
@@ -246,6 +277,8 @@ try {
       originalHeadSha,
       originalBaseSha,
       targetSha,
+      historyMode,
+      originalMergeCommits,
       originalPatchSeries,
       conflictFiles: [],
       startedAt: new Date().toISOString(),
@@ -313,29 +346,61 @@ try {
     if (targetAncestor.exitCode !== 0) throw new Error("Pinned rebase target is not an ancestor of HEAD");
     const conflictFiles = [...new Set(state.conflictFiles.map(normalizeRepoFile))].sort();
     if (conflictFiles.length === 0) throw new Error("No conflict files were recorded");
-    if (conflictFiles.length > 5) throw new Error("More than 5 conflict files requires normal preflight");
-    const risky = conflictFiles.filter((file) => HIGH_RISK.some((pattern) => pattern.test(file)));
-    if (risky.length) throw new Error(`High-risk conflict files require normal preflight: ${risky.join(", ")}`);
-    const surfaces = [...new Set(conflictFiles.map(surfaceFor))];
-    if (surfaces.length > 1) throw new Error(`Cross-surface conflicts require normal preflight: ${surfaces.join(", ")}`);
+    const plan = readJson(path.resolve(args.plan));
+    if (plan.allowedFiles !== undefined && (!Array.isArray(plan.allowedFiles)
+      || plan.allowedFiles.some((file) => typeof file !== "string"))) {
+      throw new Error("Plan allowedFiles must be an array of repository-relative paths");
+    }
+    const allowedFiles = [...new Set(
+      (plan.allowedFiles ?? []).map(normalizeRepoFile).filter((file) => !conflictFiles.includes(file)),
+    )].sort();
+    const resolutionFiles = [...new Set([...conflictFiles, ...allowedFiles])].sort();
+    validatePlan(plan, resolutionFiles);
+    if (resolutionFiles.length > 8) {
+      throw new Error("More than 8 conflict/maintenance files requires explicit user approval for heavier validation");
+    }
+    const risky = resolutionFiles.filter((file) => HIGH_RISK.some((pattern) => pattern.test(file)));
+    if (risky.length) {
+      throw new Error(`High-risk conflict/maintenance files require explicit user approval for heavier validation: ${risky.join(", ")}`);
+    }
+    const surfaces = [...new Set(resolutionFiles.map(surfaceFor))];
+    receipt.allowedMaintenanceFiles = allowedFiles;
+    receipt.resolutionFiles = resolutionFiles;
+    receipt.conflictSurfaces = surfaces;
 
-    const before = stablePatchSeries(
-      context.repoPath,
-      `${state.originalBaseSha}..${state.originalHeadSha}`,
-      conflictFiles,
-    );
-    const after = stablePatchSeries(context.repoPath, `${state.targetSha}..${headSha}`, conflictFiles);
-    const beforeIds = before.map((item) => item.patchId);
-    const afterIds = after.map((item) => item.patchId);
-    if (JSON.stringify(beforeIds) !== JSON.stringify(afterIds)) {
-      throw new Error("Non-conflict patch series changed; use normal validation");
+    let before = [];
+    let after = [];
+    if (state.historyMode === "net-patch") {
+      const beforeId = stableNetPatchId(
+        context.repoPath,
+        state.originalBaseSha,
+        state.originalHeadSha,
+        resolutionFiles,
+      );
+      const afterId = stableNetPatchId(context.repoPath, state.targetSha, headSha, resolutionFiles);
+      if (beforeId !== afterId) {
+        throw new Error("Patch outside conflict/maintenance files changed; stop before any heavier validation");
+      }
+      receipt.nonConflictNetPatchBefore = beforeId;
+      receipt.nonConflictNetPatchAfter = afterId;
+    } else {
+      before = stablePatchSeries(
+        context.repoPath,
+        `${state.originalBaseSha}..${state.originalHeadSha}`,
+        resolutionFiles,
+      );
+      after = stablePatchSeries(context.repoPath, `${state.targetSha}..${headSha}`, resolutionFiles);
+      const beforeIds = before.map((item) => item.patchId);
+      const afterIds = after.map((item) => item.patchId);
+      if (JSON.stringify(beforeIds) !== JSON.stringify(afterIds)) {
+        throw new Error("Patch series outside conflict/maintenance files changed; stop before any heavier validation");
+      }
     }
 
-    const plan = readJson(path.resolve(args.plan));
-    validatePlan(plan, conflictFiles);
     receipt.planPath = path.resolve(args.plan);
     receipt.planSha256 = sha256(JSON.stringify(plan));
     receipt.nonConflictPatchEquivalent = true;
+    receipt.nonConflictEquivalenceMode = state.historyMode ?? "patch-series";
     receipt.nonConflictPatchSeriesBefore = before;
     receipt.nonConflictPatchSeriesAfter = after;
     receipt.headSha = headSha;
@@ -347,7 +412,7 @@ try {
     if (git(context.repoPath, "status", "--porcelain")) {
       throw new Error("Focused validation changed the worktree; generated output is not current or deterministic");
     }
-    const diffCheck = run("git", ["diff", "--check", `${state.targetSha}...${headSha}`, "--", ...conflictFiles], {
+    const diffCheck = run("git", ["diff", "--check", `${state.targetSha}...${headSha}`, "--", ...resolutionFiles], {
       cwd: context.repoPath,
       allowFailure: true,
     });
@@ -375,11 +440,13 @@ try {
       receiptPath: receiptFile,
       headSha,
       conflictFiles,
+      allowedMaintenanceFiles: receipt.allowedMaintenanceFiles,
       commands: receipt.commandResults.map(({ name, status, durationMs }) => ({ name, status, durationMs })),
       next: `Run openclaw-preflight.sh --workflow ${context.workflowPath} --profile conflict`,
     }, null, 2));
   } catch (error) {
     receipt.blockers.push(error.message);
+    receipt.requiresExplicitHeavyValidationApproval = true;
     receipt.headSha = currentHead(context.repoPath);
     receipt.finishedAt = new Date().toISOString();
     writeJson(receiptFile, receipt);
