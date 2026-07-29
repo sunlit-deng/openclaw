@@ -5,7 +5,7 @@ judgment, not on repeatedly pasting logs, full JSON receipts, or large diffs.
 
 ## Default Behavior
 
-- Prefer local receipts over prose: `candidate-score.json`, `preflight.json`, `gate-summary.json`, and `context-pack.md`, plus `duplicate-check.json` for unpublished candidates only.
+- Prefer local receipts over prose: `candidate-scout.json`, `proof-receipt.json`, `candidate-score.json`, `preflight.json`, `gate-summary.json`, and `context-pack.md`, plus `duplicate-check.json` for unpublished candidates only.
 - Generate `context-pack.md` after intake and after each material validation state change:
 
 ```bash

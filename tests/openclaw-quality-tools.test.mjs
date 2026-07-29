@@ -8,10 +8,12 @@ import test from "node:test";
 const repoRoot = path.resolve(import.meta.dirname, "..");
 const scripts = path.join(repoRoot, ".codex/skills/auto-pr-openclaw/scripts");
 const duplicateCheck = path.join(scripts, "openclaw-duplicate-check.mjs");
+const candidateScout = path.join(scripts, "openclaw-candidate-scout.mjs");
 const candidateScore = path.join(scripts, "openclaw-candidate-score.mjs");
 const gateSummary = path.join(scripts, "openclaw-gate-summary.mjs");
 const contextPack = path.join(scripts, "openclaw-context-pack.mjs");
 const proofPlan = path.join(scripts, "openclaw-proof-plan.mjs");
+const proofReceiptScript = path.join(scripts, "openclaw-proof-receipt.mjs");
 const rebaseOnlyCheck = path.join(scripts, "openclaw-rebase-only-check.mjs");
 const rebaseOnlyPublish = path.join(scripts, "publish-openclaw-rebase-only.mjs");
 
@@ -120,6 +122,8 @@ AI-assisted: built with Codex
   write(path.join(output, "preflight.json"), JSON.stringify({
     schemaVersion: 2,
     status: "passed",
+    workflowPath: path.join(output, "workflow.json"),
+    repoPath: repo,
     headSha: head,
     validationBaseSha: base,
     heavyCacheHit: false,
@@ -135,6 +139,95 @@ AI-assisted: built with Codex
   const duplicateReceipt = JSON.parse(fs.readFileSync(path.join(output, "duplicate-check.json"), "utf8"));
   assert.equal(duplicateReceipt.offline, true);
   assert.ok(duplicateReceipt.queries.includes("src/provider/runtime.ts"));
+  run(process.execPath, [
+    gateSummary,
+    "--workflow", path.join(output, "workflow.json"),
+  ]);
+  const offlineGate = JSON.parse(fs.readFileSync(path.join(output, "gate-summary.json"), "utf8"));
+  assert.ok(offlineGate.blockers.includes("duplicate-check is offline planning only"));
+  duplicateReceipt.offline = false;
+  write(path.join(output, "duplicate-check.json"), `${JSON.stringify(duplicateReceipt, null, 2)}\n`);
+
+  write(path.join(output, "candidate-plan.json"), JSON.stringify({
+    schemaVersion: 1,
+    candidate: "reuse canonical provider cap",
+    mergeFit: "strong",
+    expectedFiles: ["src/provider/runtime.ts", "src/provider/runtime.test.ts"],
+    currentMainRepro: {
+      status: "passed",
+      command: "npx tsx proof-live.ts",
+      observation: "valid input is rejected on current main",
+    },
+    canonicalPrecedent: {
+      kind: "merged-sibling",
+      reference: "openclaw/openclaw#6",
+    },
+    comparableProof: {
+      status: "feasible",
+      entrypoint: "src/provider/runtime.ts",
+      command: "npx tsx proof-live.ts",
+      input: "valid provider payload",
+      boundary: "localhost fixture",
+      negativeControl: "oversized payload remains rejected",
+    },
+    policy: { introducesNewPolicy: false, unresolvedChoices: [] },
+    duplicateRisk: { status: "clear" },
+    mainOverlap: { status: "none" },
+    dependencyChurn: false,
+    broadRefactor: false,
+  }, null, 2));
+  run(process.execPath, [
+    candidateScout,
+    "--input", path.join(output, "candidate-plan.json"),
+    "--repo-path", repo,
+    "--output", path.join(output, "candidate-scout.json"),
+  ]);
+  const scoutReceipt = JSON.parse(fs.readFileSync(path.join(output, "candidate-scout.json"), "utf8"));
+  assert.equal(scoutReceipt.aLikelihood, "high");
+  assert.equal(scoutReceipt.score, 10);
+
+  const proofDescriptor = {
+    command: "npx tsx proof-live.ts",
+    entrypoint: "src/provider/runtime.ts",
+    input: "valid provider payload",
+    boundary: "localhost fixture",
+  };
+  write(path.join(output, "proof-evidence.json"), JSON.stringify({
+    schemaVersion: 1,
+    kind: "real-call-chain",
+    base: { sha: base, ...proofDescriptor, exitCode: 1, output: "valid input rejected" },
+    head: { sha: head, ...proofDescriptor, exitCode: 0, output: "valid input accepted" },
+    negativeControl: {
+      sha: head,
+      command: "npx tsx proof-live.ts --oversized",
+      input: "oversized provider payload",
+      exitCode: 1,
+      output: "oversized input rejected before buffering",
+    },
+    canonicalPrecedent: {
+      kind: "merged-sibling",
+      reference: "openclaw/openclaw#6",
+    },
+  }, null, 2));
+  run(process.execPath, [
+    proofReceiptScript,
+    "--workflow", path.join(output, "workflow.json"),
+    "--input", path.join(output, "proof-evidence.json"),
+  ]);
+  const structuredProof = JSON.parse(fs.readFileSync(path.join(output, "proof-receipt.json"), "utf8"));
+  assert.equal(structuredProof.status, "passed");
+  assert.equal(structuredProof.comparableBaseHead, true);
+  assert.equal(structuredProof.exactHeadNegativeControl, true);
+
+  run(process.execPath, [
+    candidateScore,
+    "--workflow", path.join(output, "workflow.json"),
+    "--proof-receipt", path.join(output, "missing-proof-receipt.json"),
+    "--output", path.join(output, "body-only-score.json"),
+  ]);
+  const bodyOnlyScore = JSON.parse(fs.readFileSync(path.join(output, "body-only-score.json"), "utf8"));
+  assert.notEqual(bodyOnlyScore.clawsweeperAReadiness.verdict, "high");
+  assert.ok(bodyOnlyScore.clawsweeperAReadiness.earlyStops.some((item) => /structured comparable proof/.test(item)));
 
   run(process.execPath, [
     candidateScore,
@@ -144,6 +237,7 @@ AI-assisted: built with Codex
   assert.equal(scoreReceipt.proofRecipe.kind, "resource-cap");
   assert.equal(scoreReceipt.currentEvidence.signal, "real-call-chain");
   assert.equal(scoreReceipt.clawsweeperAReadiness.verdict, "high");
+  assert.equal(scoreReceipt.clawsweeperAReadiness.score, 10);
   assert.deepEqual(scoreReceipt.clawsweeperAReadiness.missingSignals, []);
   assert.ok(scoreReceipt.score >= 70);
   assert.notEqual(scoreReceipt.verdict, "poor-fit");
@@ -186,12 +280,16 @@ AI-assisted: built with Codex
   assert.equal(contextJson.headSha, head);
   assert.equal(contextJson.receipts.candidateScore.verdict, scoreReceipt.verdict);
   assert.equal(contextJson.receipts.candidateScore.clawsweeperAReadiness, "high");
+  assert.equal(contextJson.receipts.candidateScout.aLikelihood, "high");
+  assert.equal(contextJson.receipts.proof.status, "passed");
+  assert.equal(contextJson.receipts.proof.valid, true);
   assert.equal(contextJson.prBody.proofSignal, "real-call-chain");
   assert.equal(contextJson.prBody.hasBeforeAfterEvidence, true);
   assert.equal(contextJson.prBody.hasExactHeadEvidence, true);
   assert.equal(contextJson.prBody.hasCanonicalPrecedent, true);
   assert.match(contextMd, /OpenClaw Context Pack/);
   assert.match(contextMd, /ClawSweeper A-readiness: high/);
+  assert.match(contextMd, /structured proof: passed\/real-call-chain/);
   assert.match(contextMd, /Next Commands/);
 
   const workflowPath = path.join(output, "workflow.json");

@@ -23,11 +23,12 @@ for file in "$skill"/scripts/*.mjs "$skill"/scripts/lib/*.mjs; do
   node --check "$file"
 done
 node --test "$repo_root"/tests/*.test.mjs
+node "$repo_root/scripts/validate-skill.mjs"
 
 if [[ -f "$validator" ]] && python3 -c 'import yaml' >/dev/null 2>&1; then
   python3 "$validator" "$skill"
 else
-  echo "Skill validator or its PyYAML dependency is unavailable; skipped optional validation."
+  echo "Supplemental skill-creator validator unavailable; deterministic local skill validation passed."
 fi
 
 git -C "$repo_root" diff --check

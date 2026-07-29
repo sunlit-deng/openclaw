@@ -6,6 +6,7 @@ import path from "node:path";
 import { spawnSync } from "node:child_process";
 import { ghEnv, publicAccount, resolveAccount } from "./lib/account-utils.mjs";
 import { validatePrBody } from "./lib/pr-body-validator.mjs";
+import { validateWorkflowReceipt } from "./lib/receipt-utils.mjs";
 
 function parseArgs(argv) {
   const result = {
@@ -120,11 +121,19 @@ const currentBranch = execute("git", ["branch", "--show-current"], { cwd: repoPa
 const remoteHeadRef = workflow.headRef || currentBranch;
 
 const failures = [];
+const preflightValidation = validateWorkflowReceipt(preflight, {
+  kind: "preflight",
+  schemaVersions: [2],
+  workflowPath,
+  repoPath,
+  headSha: currentHead,
+  validationBaseSha: workflow.validationBaseSha || workflow.baseSha,
+});
 const failedPreflightBypass = args.allowFailedPreflight && preflight.status === "failed";
 if (args.allowFailedPreflight && preflight.status !== "failed") failures.push("--allow-failed-preflight only applies when preflight status is failed");
 if (args.allowFailedPreflight && !args.failedPreflightBypassReason.trim()) failures.push("--failed-preflight-bypass-reason is required with --allow-failed-preflight");
 if (preflight.status !== "passed" && !failedPreflightBypass) failures.push("preflight status is not passed");
-if (preflight.headSha !== currentHead) failures.push("preflight is stale for the current HEAD");
+failures.push(...preflightValidation.problems);
 if (workflow.branch !== currentBranch) failures.push("current branch does not match workflow.json");
 if (args.approvedHead !== currentHead) failures.push("current HEAD does not match the human-approved HEAD");
 if (args.approvedBodySha !== bodySha) failures.push("current PR body does not match the human-approved SHA-256");

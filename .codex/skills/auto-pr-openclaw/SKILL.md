@@ -22,8 +22,10 @@ Use this skill for `openclaw/openclaw` contributor work. Keep the process conser
 - Keep CodeGraph databases worktree-local. The worktree helpers seed them from the exact-SHA baseline at `workspace/openclaw/.codegraph-cache/repo` using copy-on-write when available, then run an incremental branch sync. Never symlink a live `.codegraph` database across PR worktrees.
 - Keep the workspace pruned intentionally. The shared pnpm store belongs at `workspace/openclaw/.pnpm-store`, but each worktree still has a private `node_modules` for checkout-specific links. Use `scripts/openclaw-workspace-maintenance.sh` to report size, warm the store, prune old clean `node_modules`, or explicitly remove finished worktrees.
 - Direct local-candidate PRs found from code do not need a GitHub issue or visible issue link. Search for related issues/PRs and link a real one when it exists, but do not create or attach an unrelated issue only to satisfy tooling.
-- For candidate speed and quality, use `scripts/openclaw-duplicate-check.sh` only for unpublished candidates, then use `scripts/openclaw-candidate-score.sh` and `scripts/openclaw-gate-summary.sh` when a workflow exists. These are read-only/local-output diagnostics and never replace the human GitHub write gate.
+- For candidate speed and quality, run `scripts/openclaw-candidate-scout.sh` before implementation, use `scripts/openclaw-duplicate-check.sh` only for unpublished candidates, then use `scripts/openclaw-proof-receipt.sh`, `scripts/openclaw-candidate-score.sh`, and `scripts/openclaw-gate-summary.sh` when a workflow exists. These are read-only/local-output diagnostics and never replace the human GitHub write gate.
 - Treat `candidate-score.json.clawsweeperAReadiness` as an advisory candidate-ranking signal. Prefer candidates with a merged same-shape precedent or canonical contract, feasible base/head real-path proof, a focused surface, and no unresolved default, threshold, product, or compatibility decision. Do not turn this signal into a publication blocker or promise a ClawSweeper rating.
+- Periodically calibrate local predictions against reviewed outcomes with `scripts/openclaw-score-calibration.sh`. Do not change weights from anecdotes; require at least ten representative reviewed PRs and inspect false-positive `high` predictions first.
+- When the user prioritizes ClawSweeper A-rating likelihood during candidate mining, read `references/candidate-selection.md` and apply its early screen before creating a worktree or implementing code. Use post-implementation `clawsweeperAReadiness` only to confirm that the selected shape was executed well.
 - Use low-token mode by default. Prefer `scripts/openclaw-context-pack.sh` and local receipts over re-reading large diffs, logs, comment histories, or full JSON outputs. Read `references/token-budget.md` before broad candidate mining, PR maintenance, CI debugging, or any resumed task with an existing workflow.
 - Keep PR explanations durable in the PR body. If a bot or maintainer asks for evidence or context, update the PR body before posting a short pointer comment.
 - Keep PR bodies concise by default: required sections, short human paragraphs, compact evidence bullets, and no report-style filler.
@@ -55,6 +57,8 @@ When the user says local candidate issues, local candidates, or asks to find mod
 2. Pull local context: `git status -sb`, latest merged small PRs in the same area when relevant, root/scoped `AGENTS.md`, and current local code.
 3. Extract mergeable shapes from recent wins: narrow provider/runtime hardening, existing helper reuse, missing bounded reads/parsing, missing negative-control tests, durable terminal proof, and no broad config/migration/dependency churn.
 4. Scan local code for sibling gaps using structural tools for symbols and `rg` for literals. Prefer places where the repo already has a helper or pattern nearby and one path missed it.
+   - Before opening a workflow, write the structured candidate plan described in `references/evidence-receipts.md`, run `scripts/openclaw-candidate-scout.sh`, and score each concrete code point with `references/candidate-selection.md`. Prefer current-main repros that complete a merged same-shape pattern, permit comparable base/head production-path proof, and introduce no new policy or compatibility choice.
+   - Treat arbitrary caps, new defaults, fallback-policy changes, unsponsored configuration, after-only proof, and actively rewritten overlapping code as low A-likelihood unless a repository/provider/upstream contract removes the judgment call.
 5. Only after finding a concrete code point, search GitHub issues/PRs for duplicates, canonical work, or an issue that the code point can honestly fix. If no real issue exists, continue as a direct `local-candidate` PR without a visible issue link.
    - Do not rely on title/body keyword search alone. Search by touched file path, nearby helper or constant names, audit labels, and the exact risky API call or replacement helper (for example `extensions/huggingface/models.ts`, `response.json()`, `readProviderJsonResponse`, `huggingface-model-discovery`).
    - For repeated hardening shapes such as bounded reads, parsing caps, and `ws` `maxPayload`, inspect open and recent merged cluster PRs before claiming a slot is free. If a focused canonical PR already carries the same production change, drop the candidate instead of opening a same-shape PR.
@@ -63,10 +67,11 @@ When the user says local candidate issues, local candidates, or asks to find mod
    - Study successful narrow PRs from active community contributors, but do not copy their obvious issue lanes after they have opened a PR. Use their pattern to find sibling gaps on less crowded surfaces instead.
    - Prefer `gh search prs --repo openclaw/openclaw --state open --match title,body <query>` plus path/helper searches and `gh pr view` on likely matches. A "no duplicate" verdict needs at least title/body, target-file, and helper/API-call searches.
 6. Reject churn: style-only edits, speculative cleanup, tests without a product risk, broad ownership moves, config/default changes without a real bug, or anything that cannot be proven locally.
-7. For each candidate, report: code point, suspected user/operational impact, existing helper/pattern to reuse, related issue/PR status, smallest patch shape, proof command, and merge risk.
+7. For each candidate, report: code point, suspected user/operational impact, existing helper/pattern to reuse, related issue/PR status, smallest patch shape, proof command, merge risk, separate merge fit, and `A-likelihood` with its score, missing signals, and any early stop condition.
 8. When a workflow exists for the candidate, run duplicate and score receipts before investing in broad validation:
    - `scripts/openclaw-duplicate-check.sh --workflow <outputs>/workflow.json`
    - `scripts/openclaw-candidate-score.sh --workflow <outputs>/workflow.json`
+   - An offline duplicate receipt only plans searches and must not pass the gate. Run the live duplicate check before treating the candidate as clear.
    - Rank otherwise similar candidates by `clawsweeperAReadiness`: `high` before `possible` before `ordinary`. Drop or redesign candidates whose novelty is mainly a new arbitrary cap/default or an unresolved compatibility choice unless a repository convention, provider limit, or maintainer direction supplies the policy.
 9. When the user picks a candidate, switch to the normal PR workflow below.
 
@@ -78,9 +83,10 @@ When the user says remote candidate issues, remote candidates, or asks to screen
 2. Bucket candidates by likely patch shape: bounded read/parse hardening, missing validation, narrow provider/channel bug, small docs-proof mismatch, flaky focused test gap, or missing reuse of an existing helper.
 3. Read each promising issue enough to identify actual user impact, maintainer signals, stale context, and proof requirements. Drop vague support requests, design debates, broad refactors, and items needing secrets or paid services.
 4. For top candidates, inspect only the relevant local code path to confirm the issue is real and patchable. Do not implement yet.
-5. Report a ranked shortlist with issue URL, user impact, current status, likely touched files, smallest patch shape, proof plan, duplicate risk, and why it should be easy or hard to merge.
-6. After a workflow is created for a selected remote candidate, run `openclaw-duplicate-check.sh` and `openclaw-candidate-score.sh` before broad validation.
-7. When the user picks a candidate, switch to issue intake and normal PR workflow.
+5. Before ranking, apply `references/candidate-selection.md` and run `openclaw-candidate-scout.sh` for each confirmed code point. Prefer candidates whose behavior is reproducible on current `main`, whose implementation is fixed by canonical precedent, and whose proof can compare the same real path on base and head without leaving a maintainer policy decision.
+6. Report a ranked shortlist with issue URL, user impact, current status, likely touched files, smallest patch shape, proof plan, duplicate risk, merge fit, and `A-likelihood` with its score, missing signals, and any early stop condition.
+7. After a workflow is created for a selected remote candidate, run `openclaw-duplicate-check.sh` and `openclaw-candidate-score.sh` before broad validation.
+8. When the user picks a candidate, switch to issue intake and normal PR workflow.
 
 ## Workflow
 
@@ -112,6 +118,7 @@ When the user says remote candidate issues, remote candidates, or asks to screen
 3. **Executable local checks**
    - When an `extensions/**` test or test helper changes imports or creates temporary directories, run `pnpm run lint:plugins:no-extension-test-core-imports`, `pnpm run test:extensions:package-boundary:compile`, and `node scripts/report-test-temp-creations.mjs --base <validation-base> --head HEAD --fail-on-findings` before preflight. A passing focused Vitest run alone does not prove extension package-boundary compliance.
    - Run `scripts/openclaw-preflight.sh --workflow <outputs>/workflow.json` on macOS/Linux.
+   - Record comparable base/head real-path evidence with `scripts/openclaw-proof-receipt.sh --workflow <outputs>/workflow.json --input <proof-evidence.json>` before intentional A-readiness scoring. PR-body wording alone may support merge documentation but cannot produce `clawsweeperAReadiness: high`.
    - Preflight must execute validation against the pinned `validationBaseSha`, plus Git, identity, PR body/proof, focused changed tests for source diffs, and latest-main merge-risk checks. The default `auto` profile selects `quick` for documentation-only diffs, `targeted` for ordinary single-surface code diffs, and `changed` for package/lockfile/tsconfig/public-plugin-SDK, cross-surface, too-broad, or unknown diffs. The resolved profile and requested profile are recorded in `preflight.json`. Main advancement alone is advisory and must not invalidate successful checks. A real merge conflict against the single main snapshot fetched at preflight is blocking; overlapping files are reported for human judgment. Do not keep fetching or rebasing during the same gate. After one requested rebase succeeds, do not rebase again in the same publish attempt unless preflight reports an actual conflict or the user explicitly asks for another rebase. The `targeted` profile runs changed-file format and lint plus only the owning TypeScript project lanes concurrently, then runs focused affected tests. It deliberately skips repository-wide database, dependency, API-baseline, and import-cycle guards. The `focused` profile remains a test-only iteration lane and is not the default code release profile. The `conflict` profile is only for a current passing `conflict-resolution-check.json`; it reuses the recorded focused commands and runs no pnpm or dependency lanes, while retaining deterministic Git, identity, PR-body/proof, and merge-risk checks. The `changed` profile is the automatic escalation lane and runs the pinned-base equivalents of `pnpm check:changed` and `pnpm test:changed`; it does not run full repository `pnpm check` or broad `pnpm check:test-types`. Use an explicit `--profile quick` only when the user prioritizes fast publication for a very small, low-risk PR after focused proof/tests have already been collected; it skips pnpm heavy lanes and records `validationDepth: deterministic-no-pnpm`. Use `--profile fast` when full lint and broad production/test type confidence is required; it runs `pnpm lint`, `pnpm tsgo:prod`, and `pnpm check:test-types`, skips changed tests, and records `validationDepth: fast-lint-prod-and-test-types`. Use `--profile full` only for an intentional full-repository check. Run `openclaw-preflight.sh --help` to inspect profiles and examples. A prose claim that checks ran is not a substitute for a passing `preflight.json` tied to the current HEAD and validation base.
    - Preflight may reuse successful heavy checks only when its fingerprint matches the current HEAD, pinned validation base, package and lockfile content, selected lanes, targeted planner implementation, toolchain, platform, and relevant execution environment. Focused changed-test results may also be reused across `quick`, `targeted`, `focused`, and `changed` profile switches when their focused-test fingerprint matches. Latest observed main is deliberately excluded from those fingerprints; merge risk is recomputed separately on every run.
    - Do not use a naked `pnpm check:changed` as the release gate when it delegates to Blacksmith/Testbox. Use preflight, which sets `OPENCLAW_CHECK_CHANGED_REMOTE_CHILD=1 OPENCLAW_CHANGED_LANES_RAW_SYNC=1 PNPM_CONFIG_VERIFY_DEPS_BEFORE_RUN=false` and runs the changed lanes locally. If running the lane manually, use the same child environment without `CI=1`; remote Testbox is optional supplemental evidence only after the user explicitly asks for it.
@@ -147,6 +154,8 @@ When the user says remote candidate issues, remote candidates, or asks to screen
 
 - Read `references/worktree-layout.md` before creating or reusing worktrees.
 - Read `references/token-budget.md` before broad candidate mining, PR maintenance, CI debugging, or resuming an existing workflow.
+- Read `references/candidate-selection.md` before local or remote candidate ranking when the user prioritizes ClawSweeper A-rating likelihood.
+- Read `references/evidence-receipts.md` before writing candidate-scout or structured proof inputs.
 - Read `references/pr-body.md` before drafting or editing an OpenClaw PR body.
 - Read `references/review-gates.md` before running preflight or interpreting bot/CI gates.
 
@@ -239,6 +248,14 @@ Run read-only duplicate/canonical searches and candidate scoring:
   --workflow workspace/openclaw/outputs/issue-94432/workflow.json
 ```
 
+Run the pre-implementation candidate screen:
+
+```bash
+./.codex/skills/auto-pr-openclaw/scripts/openclaw-candidate-scout.sh \
+  --input candidate-plan.json \
+  --repo-path workspace/openclaw/repos/openclaw
+```
+
 Generate the human pre-push approval summary:
 
 ```bash
@@ -279,6 +296,21 @@ Generate a real-call-chain proof plan:
 ```bash
 ./.codex/skills/auto-pr-openclaw/scripts/openclaw-proof-plan.sh \
   --workflow workspace/openclaw/outputs/issue-94432/workflow.json
+```
+
+Validate captured comparable proof before A-readiness scoring:
+
+```bash
+./.codex/skills/auto-pr-openclaw/scripts/openclaw-proof-receipt.sh \
+  --workflow workspace/openclaw/outputs/issue-94432/workflow.json \
+  --input workspace/openclaw/outputs/issue-94432/proof-evidence.json
+```
+
+Measure local prediction precision against reviewed PR samples:
+
+```bash
+./.codex/skills/auto-pr-openclaw/scripts/openclaw-score-calibration.sh \
+  --input clawsweeper-samples.json
 ```
 
 Generate a compact low-token handoff packet:

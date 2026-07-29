@@ -14,6 +14,7 @@ import {
   run,
   writeJson,
 } from "./lib/workflow-utils.mjs";
+import { validateWorkflowReceipt } from "./lib/receipt-utils.mjs";
 
 function usage() {
   return `Usage: openclaw-context-pack.mjs --workflow PATH [--output-md PATH] [--output-json PATH]
@@ -56,12 +57,42 @@ const stats = gitDiffStats(context.repoPath, baseSha);
 const body = prBodyInfo(context.prBodyPath);
 const preflight = readJsonIfPresent(context.preflightPath);
 const duplicateCheckPath = path.join(context.outputPath, "duplicate-check.json");
+const candidateScoutPath = path.join(context.outputPath, "candidate-scout.json");
+const proofReceiptPath = path.join(context.outputPath, "proof-receipt.json");
 const candidateScorePath = path.join(context.outputPath, "candidate-score.json");
 const gateSummaryPath = path.join(context.outputPath, "gate-summary.json");
 const duplicateCheck = duplicateCheckApplicable ? readJsonIfPresent(duplicateCheckPath) : null;
+const candidateScout = readJsonIfPresent(candidateScoutPath);
+const proofReceipt = readJsonIfPresent(proofReceiptPath);
 const candidateScore = readJsonIfPresent(candidateScorePath);
+const headSha = currentHead(context.repoPath);
+const preflightValidation = validateWorkflowReceipt(preflight, {
+  kind: "preflight",
+  schemaVersions: [2],
+  workflowPath: context.workflowPath,
+  repoPath: context.repoPath,
+  headSha,
+  validationBaseSha: baseSha,
+});
+const candidateScoreValidation = validateWorkflowReceipt(candidateScore, {
+  kind: "candidate score",
+  schemaVersions: [1],
+  workflowPath: context.workflowPath,
+  repoPath: context.repoPath,
+  headSha,
+  validationBaseSha: baseSha,
+});
+const proofReceiptValidation = validateWorkflowReceipt(proofReceipt, {
+  kind: "proof receipt",
+  schemaVersions: [1],
+  workflowPath: context.workflowPath,
+  repoPath: context.repoPath,
+  headSha,
+  validationBaseSha: baseSha,
+});
 const candidateScoreStaleForExistingPr = Boolean(
-  context.workflow.pr && candidateScore && candidateScore.duplicateCheckApplicable !== false,
+  context.workflow.pr && candidateScore
+    && (candidateScore.duplicateCheckApplicable !== false || !candidateScoreValidation.valid),
 );
 const gateSummary = readJsonIfPresent(gateSummaryPath);
 const clean = run("git", ["status", "--porcelain"], { cwd: context.repoPath }).stdout.trim() === "";
@@ -76,21 +107,43 @@ const packet = {
   issue: context.workflow.issue ?? null,
   pr: context.workflow.pr ?? null,
   branch: currentBranch(context.repoPath),
-  headSha: currentHead(context.repoPath),
+  headSha,
   validationBaseSha: baseSha,
   duplicateCheckApplicable,
   clean,
   stats,
   changedFiles: files,
   receipts: {
-    preflight: preflight ? { path: context.preflightPath, status: preflight.status, headSha: preflight.headSha, cacheHit: preflight.heavyCacheHit ?? null } : null,
+    preflight: preflight ? {
+      path: context.preflightPath,
+      status: preflight.status,
+      headSha: preflight.headSha,
+      cacheHit: preflight.heavyCacheHit ?? null,
+      valid: preflightValidation.valid,
+      problems: preflightValidation.problems,
+    } : null,
     duplicateCheck: duplicateCheck ? { path: duplicateCheckPath, summary: duplicateCheck.summary } : null,
+    candidateScout: candidateScout ? {
+      path: candidateScoutPath,
+      score: candidateScout.score,
+      aLikelihood: candidateScout.aLikelihood,
+      earlyStops: candidateScout.earlyStops ?? [],
+    } : null,
+    proof: proofReceipt ? {
+      path: proofReceiptPath,
+      status: proofReceipt.status,
+      kind: proofReceipt.kind,
+      valid: proofReceiptValidation.valid,
+      problems: proofReceiptValidation.problems,
+    } : null,
     candidateScore: candidateScore ? {
       path: candidateScorePath,
       score: candidateScore.score,
       verdict: candidateScore.verdict,
       clawsweeperAReadiness: candidateScore.clawsweeperAReadiness?.verdict ?? null,
       staleForExistingPr: candidateScoreStaleForExistingPr,
+      valid: candidateScoreValidation.valid,
+      problems: candidateScoreValidation.problems,
     } : null,
     gateSummary: gateSummary ? { path: gateSummaryPath, blockers: gateSummary.blockers?.length ?? null } : null,
   },
@@ -144,6 +197,8 @@ ${packet.changedFiles.length ? packet.changedFiles.map((file) => `- \`${file}\``
 
 - preflight: ${packet.receipts.preflight ? `${packet.receipts.preflight.status} at \`${packet.receipts.preflight.path}\`` : "missing"}
 - duplicate: ${packet.duplicateCheckApplicable ? (packet.receipts.duplicateCheck ? `${packet.receipts.duplicateCheck.summary?.likelyDuplicateCount ?? 0} likely duplicates` : "missing") : "not applicable (existing PR)"}
+- candidate scout: ${packet.receipts.candidateScout ? `${packet.receipts.candidateScout.score}/10 (${packet.receipts.candidateScout.aLikelihood}), ${packet.receipts.candidateScout.earlyStops.length} early stops` : "missing"}
+- structured proof: ${packet.receipts.proof ? `${packet.receipts.proof.status}/${packet.receipts.proof.kind}${packet.receipts.proof.valid ? "" : " (stale or invalid)"}` : "missing"}
 - score: ${packet.receipts.candidateScore ? (packet.receipts.candidateScore.staleForExistingPr ? "stale pre-existing-PR receipt (ignored; rerun scoring)" : `${packet.receipts.candidateScore.score} (${packet.receipts.candidateScore.verdict})`) : "missing"}
 - ClawSweeper A-readiness: ${packet.receipts.candidateScore?.clawsweeperAReadiness ?? "missing"} (advisory)
 - gate: ${packet.receipts.gateSummary ? `${packet.receipts.gateSummary.blockers} blockers` : "missing"}

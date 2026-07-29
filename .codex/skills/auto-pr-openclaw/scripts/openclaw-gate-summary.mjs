@@ -16,6 +16,7 @@ import {
   run,
   writeJson,
 } from "./lib/workflow-utils.mjs";
+import { validateWorkflowReceipt } from "./lib/receipt-utils.mjs";
 import {
   commitIdentityProblems,
   ghEnv,
@@ -77,12 +78,37 @@ const candidateScorePath = args.candidateScore || path.join(context.outputPath, 
 const rebaseOnlyCheckPath = args.rebaseOnlyCheck || path.join(context.outputPath, "rebase-only-check.json");
 const duplicateCheck = duplicateCheckApplicable ? readJsonIfPresent(duplicateCheckPath) : null;
 const candidateScore = readJsonIfPresent(candidateScorePath);
+const preflightValidation = validateWorkflowReceipt(preflight, {
+  kind: "preflight",
+  schemaVersions: [2],
+  workflowPath: context.workflowPath,
+  repoPath: context.repoPath,
+  headSha,
+  validationBaseSha: baseSha,
+});
+const duplicateCheckValidation = duplicateCheckApplicable
+  ? validateWorkflowReceipt(duplicateCheck, {
+      kind: "duplicate check",
+      schemaVersions: [1],
+      workflowPath: context.workflowPath,
+      validationBaseSha: baseSha,
+    })
+  : { valid: true, problems: [] };
+const candidateScoreValidation = validateWorkflowReceipt(candidateScore, {
+  kind: "candidate score",
+  schemaVersions: [1],
+  workflowPath: context.workflowPath,
+  repoPath: context.repoPath,
+  headSha,
+  validationBaseSha: baseSha,
+});
 const candidateScoreStaleForExistingPr = Boolean(
-  context.workflow.pr && candidateScore && candidateScore.duplicateCheckApplicable !== false,
+  context.workflow.pr && candidateScore
+    && (candidateScore.duplicateCheckApplicable !== false || !candidateScoreValidation.valid),
 );
 const rebaseOnlyCheck = readJsonIfPresent(rebaseOnlyCheckPath);
 const rebaseOnlyPassedForHead = rebaseOnlyCheck?.status === "passed" && rebaseOnlyCheck.headSha === headSha;
-const preflightPassed = checkStatus(preflight) === "passed";
+const preflightPassed = checkStatus(preflight) === "passed" && preflightValidation.valid;
 const rebaseOnlyGateRequired = !preflightPassed || Boolean(args.rebaseOnlyCheck);
 const effectiveBaseSha = rebaseOnlyPassedForHead && rebaseOnlyCheck.targetSha ? rebaseOnlyCheck.targetSha : baseSha;
 const files = gitChangedFiles(context.repoPath, effectiveBaseSha);
@@ -93,7 +119,12 @@ const clean = run("git", ["status", "--porcelain"], { cwd: context.repoPath }).s
 const diffCheck = run("git", ["diff", "--check", `${effectiveBaseSha}...HEAD`], { cwd: context.repoPath, allowFailure: true });
 const likelyDuplicateCount = duplicateCheck?.summary?.likelyDuplicateCount ?? 0;
 const relatedOpenPrCount = duplicateCheck?.summary?.relatedOpenPrCount ?? 0;
-const duplicateCheckBlocks = duplicateCheckApplicable && likelyDuplicateCount > 0;
+const duplicateCheckBlocks = duplicateCheckApplicable && (
+  !duplicateCheck
+  || duplicateCheck.offline === true
+  || (duplicateCheck.summary?.errors?.length ?? 0) > 0
+  || likelyDuplicateCount > 0
+);
 
 let maintainer = { checked: false, maintainerCanModify: context.workflow.maintainerCanModify ?? null, error: null };
 if (context.workflow.pr) {
@@ -123,14 +154,21 @@ if (context.workflow.pr) {
 const blockers = [];
 if (!clean) blockers.push("worktree is not clean");
 if (diffCheck.exitCode !== 0) blockers.push("git diff --check failed");
-if (!preflightPassed && !rebaseOnlyPassedForHead) blockers.push(`preflight is ${checkStatus(preflight)}`);
-if (preflight?.headSha && preflight.headSha !== headSha) blockers.push("preflight head does not match current HEAD");
+if (!preflightPassed && !rebaseOnlyPassedForHead) {
+  blockers.push(preflight?.status === "passed" ? "preflight receipt is invalid" : `preflight is ${checkStatus(preflight)}`);
+}
+if (!rebaseOnlyPassedForHead) blockers.push(...preflightValidation.problems);
 if (rebaseOnlyGateRequired && rebaseOnlyCheck && rebaseOnlyCheck.status !== "passed") blockers.push(`rebase-only check is ${rebaseOnlyCheck.status}`);
 if (rebaseOnlyGateRequired && rebaseOnlyCheck?.headSha && rebaseOnlyCheck.headSha !== headSha) blockers.push("rebase-only check head does not match current HEAD");
 if (context.workflow.pr && maintainer.maintainerCanModify !== true) blockers.push("maintainerCanModify is not confirmed true");
 if (body.sha256 !== context.workflow.prBodySha256 && context.workflow.prBodySha256) blockers.push("PR body changed since workflow validation");
 for (const problem of commitIdentityProblems(identities, account)) blockers.push(problem);
-if (duplicateCheckBlocks) blockers.push("duplicate-check found likely duplicates");
+if (duplicateCheckApplicable && !duplicateCheck) blockers.push("duplicate-check receipt is missing");
+else if (duplicateCheck?.offline === true) blockers.push("duplicate-check is offline planning only");
+else if ((duplicateCheck?.summary?.errors?.length ?? 0) > 0) blockers.push("duplicate-check has unresolved GitHub lookup errors");
+else if (duplicateCheckBlocks) blockers.push("duplicate-check found likely duplicates");
+if (duplicateCheckApplicable) blockers.push(...duplicateCheckValidation.problems);
+if (candidateScore && !candidateScoreStaleForExistingPr) blockers.push(...candidateScoreValidation.problems);
 if (!candidateScoreStaleForExistingPr && candidateScore?.verdict && ["needs-work", "poor-fit"].includes(candidateScore.verdict)) {
   blockers.push(`candidate score verdict is ${candidateScore.verdict}`);
 }
@@ -171,6 +209,8 @@ const summary = {
     heavyCacheHit: preflight.heavyCacheHit ?? null,
     freshness: preflight.freshness ?? null,
     failedBypassEligible: preflight.status === "failed" && preflight.headSha === headSha,
+    receiptValid: preflightValidation.valid,
+    receiptProblems: preflightValidation.problems,
   } : null,
   rebaseOnlyCheck: rebaseOnlyCheck ? {
     path: rebaseOnlyCheckPath,
@@ -186,6 +226,8 @@ const summary = {
     likelyDuplicateCount,
     relatedOpenPrCount,
     blocking: duplicateCheckBlocks,
+    receiptValid: duplicateCheckValidation.valid,
+    receiptProblems: duplicateCheckValidation.problems,
   } : null,
   candidateScore: candidateScore ? {
     path: candidateScorePath,
@@ -193,6 +235,8 @@ const summary = {
     verdict: candidateScore.verdict,
     clawsweeperAReadiness: candidateScore.clawsweeperAReadiness?.verdict ?? null,
     staleForExistingPr: candidateScoreStaleForExistingPr,
+    receiptValid: candidateScoreValidation.valid,
+    receiptProblems: candidateScoreValidation.problems,
   } : null,
   maintainer,
   blockers,

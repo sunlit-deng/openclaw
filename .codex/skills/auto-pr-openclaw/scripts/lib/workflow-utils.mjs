@@ -268,6 +268,9 @@ export function riskFlags(files, stats, workflow, preflight, duplicateCheck, bod
   if (preflight && preflight.status !== "passed") flags.push({ level: "blocker", reason: `preflight is ${preflight.status}` });
   if (!preflight) flags.push({ level: "advisory", reason: "preflight receipt is missing" });
   if (workflow.dependencies?.status !== "installed") flags.push({ level: "blocker", reason: "dependencies are not recorded as installed" });
+  if (!workflow.pr && !duplicateCheck) flags.push({ level: "blocker", reason: "duplicate check receipt is missing" });
+  if (!workflow.pr && duplicateCheck?.offline === true) flags.push({ level: "blocker", reason: "duplicate check is offline planning only" });
+  if (!workflow.pr && (duplicateCheck?.summary?.errors?.length ?? 0) > 0) flags.push({ level: "blocker", reason: "duplicate check has unresolved GitHub lookup errors" });
   if (!workflow.pr && duplicateCheck?.summary?.likelyDuplicateCount > 0) flags.push({ level: "blocker", reason: "duplicate check found likely duplicate PRs" });
   if (!workflow.pr && duplicateCheck?.summary?.relatedOpenPrCount > 2) flags.push({ level: "risk", reason: "many related open PRs; lane may be crowded" });
   if (bodyInfo && !bodyInfo.hasEvidenceSection) flags.push({ level: "blocker", reason: "PR body has no Evidence section" });

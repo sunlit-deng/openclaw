@@ -3,6 +3,7 @@
 import path from "node:path";
 import {
   classifyProofRecipe,
+  currentHead,
   gitChangedFiles,
   gitDiffStats,
   loadWorkflow,
@@ -13,9 +14,10 @@ import {
   scoreFromFlags,
   writeJson,
 } from "./lib/workflow-utils.mjs";
+import { validateWorkflowReceipt } from "./lib/receipt-utils.mjs";
 
 function usage() {
-  return `Usage: openclaw-candidate-score.mjs --workflow PATH [--duplicate-check PATH] [--output PATH]
+  return `Usage: openclaw-candidate-score.mjs --workflow PATH [--duplicate-check PATH] [--candidate-scout PATH] [--proof-receipt PATH] [--output PATH]
 
 Scores an OpenClaw candidate for mergeability and review readiness. This is a
 local diagnostic only; it does not contact GitHub or publish anything.`;
@@ -26,6 +28,8 @@ try {
   args = parseKeyArgs(process.argv.slice(2), {
     "--workflow": { name: "workflow" },
     "--duplicate-check": { name: "duplicateCheck" },
+    "--candidate-scout": { name: "candidateScout" },
+    "--proof-receipt": { name: "proofReceipt" },
     "--output": { name: "output" },
   });
 } catch (error) {
@@ -45,30 +49,93 @@ if (!args.workflow) {
 const context = loadWorkflow(args.workflow);
 const duplicateCheckApplicable = !context.workflow.pr;
 const baseSha = context.workflow.validationBaseSha || context.workflow.baseSha;
+const headSha = currentHead(context.repoPath);
 const files = gitChangedFiles(context.repoPath, baseSha);
 const stats = gitDiffStats(context.repoPath, baseSha);
 const body = prBodyInfo(context.prBodyPath);
 const preflight = readJsonIfPresent(context.preflightPath);
 const duplicateCheckPath = args.duplicateCheck || path.join(context.outputPath, "duplicate-check.json");
+const candidateScoutPath = args.candidateScout || path.join(context.outputPath, "candidate-scout.json");
+const proofReceiptPath = args.proofReceipt || path.join(context.outputPath, "proof-receipt.json");
 const duplicateCheck = duplicateCheckApplicable ? readJsonIfPresent(duplicateCheckPath) : null;
+const candidateScout = readJsonIfPresent(candidateScoutPath);
+const proofReceipt = readJsonIfPresent(proofReceiptPath);
+const preflightValidation = validateWorkflowReceipt(preflight, {
+  kind: "preflight",
+  schemaVersions: [2],
+  workflowPath: context.workflowPath,
+  repoPath: context.repoPath,
+  headSha,
+  validationBaseSha: baseSha,
+});
+const proofValidation = validateWorkflowReceipt(proofReceipt, {
+  kind: "proof receipt",
+  schemaVersions: [1],
+  workflowPath: context.workflowPath,
+  repoPath: context.repoPath,
+  headSha,
+  validationBaseSha: baseSha,
+});
+const duplicateCheckValidation = duplicateCheckApplicable
+  ? validateWorkflowReceipt(duplicateCheck, {
+      kind: "duplicate check",
+      schemaVersions: [1],
+      workflowPath: context.workflowPath,
+      validationBaseSha: baseSha,
+    })
+  : { valid: true, problems: [] };
 const proofRecipe = classifyProofRecipe(files, body);
 const flags = riskFlags(files, stats, context.workflow, preflight, duplicateCheck, body);
-const changedLines = stats.insertions + stats.deletions;
+if (preflight && !preflightValidation.valid) {
+  flags.push(...preflightValidation.problems.map((reason) => ({ level: "blocker", reason })));
+}
+const productionFiles = files.filter((file) =>
+  /\.(?:ts|tsx|js|mjs|cjs|go|rs|py)$/.test(file) &&
+  !/(?:^|\/)(?:tests?|__tests__|fixtures?)(?:\/|$)|\.(?:test|spec)\./.test(file));
+const structuredProofPassed = proofReceipt?.status === "passed" && proofValidation.valid;
+const candidateScoutPatchMatch = Boolean(candidateScout)
+  && files.every((file) => candidateScout.expectedFiles?.includes(file));
+const structuredScoutUsable = candidateScout?.schemaVersion === 1
+  && candidateScoutPatchMatch
+  && ["high", "possible", "ordinary", "low"].includes(candidateScout.aLikelihood);
+const stableIntegration = context.workflow.pr
+  ? true
+  : duplicateCheckValidation.valid
+    && duplicateCheck?.offline !== true
+    && duplicateCheck?.summary?.likelyDuplicateCount === 0
+    && (duplicateCheck?.summary?.errors?.length ?? 0) === 0;
 const aReadinessSignals = {
-  realCallChainProof: body.hasRealCallChainEvidence,
-  beforeAfterProof: body.hasBeforeAfterEvidence,
-  exactHeadProof: body.hasExactHeadEvidence,
-  canonicalPrecedent: body.hasCanonicalPrecedent,
-  deterministicValidationPassed: preflight?.status === "passed",
-  focusedSurface: files.length <= 5 && changedLines <= 300,
-  noUnresolvedPolicyChoice: !body.hasUnresolvedPolicyChoice,
+  currentMainRepro: structuredProofPassed || candidateScout?.signals?.currentMainRepro === true,
+  canonicalPrecedent: structuredProofPassed || candidateScout?.signals?.canonicalPrecedent === true,
+  comparableProof: structuredProofPassed && proofReceipt.comparableBaseHead === true,
+  realCallChainProof: structuredProofPassed && proofReceipt.kind === "real-call-chain",
+  exactHeadNegativeControl: structuredProofPassed && proofReceipt.exactHeadNegativeControl === true,
+  deterministicValidationPassed: preflight?.status === "passed" && preflightValidation.valid,
+  focusedSurface: productionFiles.length > 0 && productionFiles.length <= 3 && files.length <= 5,
+  noUnresolvedPolicyChoice: candidateScout?.signals?.policyNeutral === true
+    || (!structuredScoutUsable && !body.hasUnresolvedPolicyChoice),
+  stableIntegration: candidateScout?.signals?.stableIntegration === true || stableIntegration,
 };
 const missingAReadinessSignals = Object.entries(aReadinessSignals)
   .filter(([, present]) => !present)
   .map(([signal]) => signal);
-const aReadinessVerdict = missingAReadinessSignals.length === 0
+const aReadinessScore = (aReadinessSignals.currentMainRepro ? 2 : 0)
+  + (aReadinessSignals.canonicalPrecedent ? 2 : 0)
+  + (aReadinessSignals.comparableProof ? 2 : 0)
+  + (aReadinessSignals.noUnresolvedPolicyChoice ? 2 : 0)
+  + (aReadinessSignals.focusedSurface ? 1 : 0)
+  + (aReadinessSignals.stableIntegration ? 1 : 0);
+const aReadinessEarlyStops = [
+  ...(structuredScoutUsable ? candidateScout.earlyStops ?? [] : []),
+  ...(!structuredScoutUsable ? ["candidate scout receipt is missing, unsupported, or does not match the implemented patch"] : []),
+  ...(!structuredProofPassed ? ["structured comparable proof receipt is missing, failed, or stale"] : []),
+  ...(structuredProofPassed && proofReceipt.kind !== "real-call-chain"
+    ? ["proof stops at a production module boundary rather than a real call chain"]
+    : []),
+];
+const aReadinessVerdict = aReadinessEarlyStops.length === 0 && aReadinessScore >= 9
   ? "high"
-  : missingAReadinessSignals.length <= 2
+  : aReadinessScore >= 7
     ? "possible"
     : "ordinary";
 
@@ -95,7 +162,7 @@ const receipt = {
   repoPath: context.repoPath,
   outputPath: context.outputPath,
   validationBaseSha: baseSha,
-  headSha: preflight?.headSha ?? null,
+  headSha,
   score,
   verdict,
   stats,
@@ -114,8 +181,15 @@ const receipt = {
   clawsweeperAReadiness: {
     advisoryOnly: true,
     verdict: aReadinessVerdict,
+    score: aReadinessScore,
     signals: aReadinessSignals,
     missingSignals: missingAReadinessSignals,
+    earlyStops: aReadinessEarlyStops,
+    candidateScoutPath: candidateScout ? candidateScoutPath : null,
+    proofReceiptPath: proofReceipt ? proofReceiptPath : null,
+    proofReceiptProblems: proofValidation.problems,
+    duplicateCheckReceiptProblems: duplicateCheckValidation.problems,
+    preflightReceiptProblems: preflightValidation.problems,
     note: "This estimates review-confidence signals associated with ClawSweeper A ratings; it is not a merge gate and never guarantees a rating.",
   },
   duplicateCheckApplicable,
@@ -124,6 +198,12 @@ const receipt = {
   recommendations: [
     ...(duplicateCheckApplicable && !duplicateCheck ? ["Run openclaw-duplicate-check before the human gate."] : []),
     ...(preflight?.status === "passed" ? [] : ["Run openclaw-preflight and fix blockers before publishing."]),
+    ...(!candidateScout
+      ? ["Run openclaw-candidate-scout before implementation for future candidates; this candidate has no structured early-screen receipt."]
+      : []),
+    ...(!structuredProofPassed
+      ? ["Generate a passing proof-receipt.json from comparable base/head real-path evidence; PR-body wording alone cannot earn high A-readiness."]
+      : []),
     ...(proofRecipe.needsLiveProof && !body.hasTerminalFence && !body.hasDetailsProofSource
       ? ["Add live or proof-script evidence that exercises the real changed path."]
       : []),

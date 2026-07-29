@@ -41,7 +41,7 @@ function deriveQueries(files, body, manualQueries) {
   }
   const titleWords = shellWords(body.match(/## What Problem This Solves([\s\S]*?)(?:\n## |$)/i)?.[1] ?? "").slice(0, 8);
   if (titleWords.length >= 2) queries.push(titleWords.slice(0, 5).join(" "));
-  return unique(queries).slice(0, 24);
+  return unique(queries).slice(0, 16);
 }
 
 function ghSearch(kind, repo, query, env) {
@@ -56,6 +56,25 @@ function ghSearch(kind, repo, query, env) {
     return { query, error: null, items: JSON.parse(result.stdout || "[]") };
   } catch (error) {
     return { query, error: error.message, items: [] };
+  }
+}
+
+function ghPrFiles(repo, number, env) {
+  const result = run("gh", [
+    "pr", "view", String(number), "--repo", repo,
+    "--json", "number,title,state,url,files",
+  ], { allowFailure: true, env });
+  if (result.exitCode !== 0) {
+    return { error: result.stderr || result.stdout || result.error, files: [] };
+  }
+  try {
+    const parsed = JSON.parse(result.stdout);
+    return {
+      error: null,
+      files: (parsed.files ?? []).map((file) => typeof file === "string" ? file : file.path).filter(Boolean),
+    };
+  } catch (error) {
+    return { error: error.message, files: [] };
   }
 }
 
@@ -90,6 +109,7 @@ if (context.workflow.pr) {
     schemaVersion: 1,
     generatedAt: new Date().toISOString(),
     workflowPath: context.workflowPath,
+    repoPath: context.repoPath,
     applicable: false,
     skipped: true,
     skippedReason: `existing PR #${context.workflow.pr} does not need duplicate screening`,
@@ -121,6 +141,7 @@ const files = unique([...(args.files ?? []), ...gitChangedFiles(context.repoPath
 const repo = args.repo || "openclaw/openclaw";
 const queries = deriveQueries(files, body.body, args.queries ?? []);
 const searches = [];
+const detailErrors = [];
 
 if (!args.offline) {
   run("gh", ["auth", "status"], { allowFailure: true, env: accountEnv });
@@ -135,17 +156,39 @@ const allPrs = searches.filter((search) => search.kind === "prs").flatMap((searc
   query: search.query,
 })));
 const currentPr = context.workflow.pr ? Number(context.workflow.pr) : null;
-const relatedOpenPrs = allPrs.filter((item) => item.state === "open" && item.number !== currentPr);
+const dedupedOpenPrs = [...new Map(
+  allPrs
+    .filter((item) => String(item.state).toLowerCase() === "open" && item.number !== currentPr)
+    .map((item) => [item.number, { ...item, matchedQueries: [] }]),
+).values()];
+for (const item of allPrs) {
+  const candidate = dedupedOpenPrs.find((entry) => entry.number === item.number);
+  if (candidate && !candidate.matchedQueries.includes(item.query)) candidate.matchedQueries.push(item.query);
+}
+if (!args.offline) {
+  for (const item of dedupedOpenPrs.slice(0, 20)) {
+    const details = ghPrFiles(repo, item.number, accountEnv);
+    item.changedFiles = details.files;
+    if (details.error) detailErrors.push({ pr: item.number, error: details.error });
+  }
+}
+const relatedOpenPrs = dedupedOpenPrs.map((item) => ({
+  ...item,
+  changedFiles: item.changedFiles ?? [],
+  overlappingFiles: (item.changedFiles ?? []).filter((file) => files.includes(file)),
+}));
 const likelyDuplicates = relatedOpenPrs.filter((item) => {
   const title = item.title.toLowerCase();
-  return files.some((file) => title.includes(path.basename(file).replace(/\.[^.]+$/, "").toLowerCase()))
-    || queries.some((query) => query.startsWith("#") && item.title.includes(query.slice(1)));
+  return item.overlappingFiles.length > 0
+    || files.some((file) => title.includes(path.basename(file).replace(/\.[^.]+$/, "").toLowerCase()))
+    || item.matchedQueries.some((query) => /^#\d+$/.test(query));
 });
 
 const receipt = {
   schemaVersion: 1,
   generatedAt: new Date().toISOString(),
   workflowPath: context.workflowPath,
+  repoPath: context.repoPath,
   repo,
   githubAccount: publicAccount(account),
   offline: Boolean(args.offline),
@@ -157,7 +200,10 @@ const receipt = {
     queryCount: queries.length,
     relatedOpenPrCount: relatedOpenPrs.length,
     likelyDuplicateCount: likelyDuplicates.length,
-    errors: searches.filter((search) => search.error).map((search) => ({ kind: search.kind, query: search.query, error: search.error })),
+    errors: [
+      ...searches.filter((search) => search.error).map((search) => ({ kind: search.kind, query: search.query, error: search.error })),
+      ...detailErrors.map((detail) => ({ kind: "pr-files", ...detail })),
+    ],
   },
   likelyDuplicates,
   relatedOpenPrs: relatedOpenPrs.slice(0, 30),
