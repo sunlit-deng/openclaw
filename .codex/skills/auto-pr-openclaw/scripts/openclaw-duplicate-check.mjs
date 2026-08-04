@@ -10,6 +10,7 @@ import {
   writeJson,
 } from "./lib/workflow-utils.mjs";
 import { ghEnv, publicAccount, resolveAccount } from "./lib/account-utils.mjs";
+import { isLikelyDuplicate } from "./lib/duplicate-utils.mjs";
 
 function usage() {
   return `Usage: openclaw-duplicate-check.mjs --workflow PATH [--query TEXT ...] [--file PATH ...] [--repo OWNER/REPO] [--output PATH] [--offline]
@@ -177,12 +178,7 @@ const relatedOpenPrs = dedupedOpenPrs.map((item) => ({
   changedFiles: item.changedFiles ?? [],
   overlappingFiles: (item.changedFiles ?? []).filter((file) => files.includes(file)),
 }));
-const likelyDuplicates = relatedOpenPrs.filter((item) => {
-  const title = item.title.toLowerCase();
-  return item.overlappingFiles.length > 0
-    || files.some((file) => title.includes(path.basename(file).replace(/\.[^.]+$/, "").toLowerCase()))
-    || item.matchedQueries.some((query) => /^#\d+$/.test(query));
-});
+const likelyDuplicates = relatedOpenPrs.filter((item) => isLikelyDuplicate(item, files));
 
 const receipt = {
   schemaVersion: 1,

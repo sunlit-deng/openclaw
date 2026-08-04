@@ -303,7 +303,7 @@ ${mdList(blockers)}
 - approved HEAD: \`${headSha}\`
 - approved body SHA-256: \`${body.sha256}\`
 
-Do not push, update the PR body, comment, or request review until the user explicitly approves this HEAD and body hash.
+Do not push, update the PR body, comment, or request review until the user explicitly approves this HEAD and body hash. This approval covers only the branch push and PR create/update; it does not authorize \`@clawsweeper re-review\`.
 `;
 
 fs.writeFileSync(outputMd, md, "utf8");

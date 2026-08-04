@@ -16,20 +16,22 @@ Use these gates before pushing or updating an OpenClaw PR.
 - Search linked issues, related PRs, latest comments, and ClawSweeper comments for canonical work.
 - Before claiming a PR is not duplicate, verify current head SHA, actual changed files, and whether sibling PRs solve the same remaining problem.
 - When an unpublished-candidate workflow exists, run `scripts/openclaw-duplicate-check.sh --workflow <outputs>/workflow.json`. Keep `duplicate-check.json` with the output artifacts. A likely duplicate count above zero is a stop-and-triage signal, not something to wave away in prose.
+- Classify duplicate hits before deciding publication mode. Exact same behavior, issue, or regression-test ownership is blocking. Broad same-file overlap without the same behavior is a disclosed rebase/coordination risk after merge compatibility is checked; it does not by itself require draft publication.
 
 ## Candidate Score Gate
 
 - Run `scripts/openclaw-candidate-score.sh --workflow <outputs>/workflow.json` after the PR body draft and changed files exist. This writes `candidate-score.json`.
 - Inspect `clawsweeperAReadiness` when ranking candidates or intentionally preparing a high-confidence final review. `high` requires a passing structured `proof-receipt.json`, real-call-chain proof, comparable base/head output, an exact-head negative control, canonical precedent, passing deterministic validation, a focused surface, stable integration, and no detected unresolved policy choice. PR-body keywords alone cannot yield `high`. This is advisory and must not block an otherwise merge-ready PR.
 - Treat `strong` and `promising` as publishable only when the applicable gates pass: duplicate and validation for unpublished candidates, validation for existing PR maintenance.
-- Treat `needs-work` as a local fix signal: tighten scope, add matching proof, add focused tests, or, for an unpublished candidate, resolve duplicate risk before publication.
+- Treat `needs-work` as a local fix signal: tighten scope, add matching proof, add focused tests, or, for an unpublished candidate, resolve exact duplicate risk before publication. If the only remaining score issue is broad same-file overlap that has been manually classified as non-duplicate, disclose it in the human gate instead of downgrading the PR to draft.
 - Treat `poor-fit` as a likely drop or redesign signal unless the user explicitly wants to pursue a high-risk PR.
 - The score is advisory; deterministic blockers from preflight, applicable unpublished-candidate duplicate checks, identity, maintainer edit access, and proof requirements still win.
 
 ## Validation Gate
 
-- Run focused tests first for changed modules.
+- Run focused tests during implementation for changed modules. Before publication, avoid rerunning the same focused tests when the current preflight profile will run or reuse them against the same HEAD. After rebase, rerun only the receipt made stale by the rebase; if preflight will execute focused tests, do not run them separately first.
 - Run `scripts/openclaw-preflight.sh --workflow <path>` so validation is executed against the pinned `validationBaseSha` and recorded against the current HEAD. The default `auto` profile resolves to `quick` for documentation-only diffs, `targeted` for ordinary single-surface code diffs, and `changed` for high-risk, cross-surface, too-broad, or unknown diffs. `targeted` runs changed-file format/lint and owning-project TypeScript lanes concurrently, then focused affected tests; it skips unrelated repository-wide guards. `changed` remains the conservative escalation lane. `focused` is a test-only iteration lane, `fast` runs full lint plus broad production/test types, and `full` runs the full repository check graph. Run `scripts/openclaw-preflight.sh --help` for the current profile rules and examples.
+- Tell the user before starting preflight that `targeted` can take minutes; it is a release gate with lint/format, owning TypeScript lanes, and focused tests, not only a single focused test command.
 - Treat the main SHA fetched by preflight as one observation, not a moving validation base. Main advancement, behind count, and overlapping files are advisories. A merge conflict against that observed SHA is blocking. Do not restart the gate merely because main advances again after the observation.
 - For an explicit "rebase then publish" request, fetch once, record the exact rebase target SHA, rebase to that SHA, and keep that SHA as `validationBaseSha` through validation and publish. If main advances while checks are running, do not chase it. Publish the validated HEAD unless preflight reports a real merge conflict, the overlapping-file report changes the risk decision, or the user explicitly asks for another rebase after seeing the current gate state.
 - Reuse cached heavy checks only when the receipt fingerprint matches HEAD, `validationBaseSha`, package/lockfile content, lanes, targeted planner implementation, toolchain, platform, and relevant execution environment. Focused changed-test results may also be reused across profile switches when their focused-test fingerprint matches. Always recompute latest-main merge risk even on a cache hit.
@@ -164,7 +166,7 @@ the user explicitly approves that time/cost escalation.
 
 ## Pre-Re-Review Gate
 
-Use this gate before requesting ClawSweeper re-review to prevent blind re-review loops. The most common anti-pattern is requesting `@clawsweeper re-review` without first adding the proof ClawSweeper already asked for, which wastes review cycles (e.g., 6+ identical re-review rounds in PR 101343).
+Use this gate only when the user explicitly asks for a ClawSweeper re-review. Never request re-review automatically after a push, PR update, or publish. The most common anti-pattern is requesting `@clawsweeper re-review` without first adding the proof ClawSweeper already asked for, which wastes review cycles (e.g., 6+ identical re-review rounds in PR 101343).
 
 - Fetch ClawSweeper's current review on the PR. Use `gh pr view <number> --repo openclaw/openclaw --json comments` or `gh api repos/openclaw/openclaw/issues/<number>/comments` and identify the most recent ClawSweeper-authored comment that contains a review verdict.
 - Parse the verdict: look for `clawsweeper-verdict:needs-human`, the overall rating (`🦪 silver shellfish`, `🧂 unranked krab`), and the block reason. Common proof blockers include `"needs real behavior proof"`, `"status: 📣 needs proof"`, `"Contributor proof is still test-run output only"`.
@@ -205,8 +207,9 @@ Before any GitHub write, show the user:
 - maintainer edit status for existing PRs, or the post-create maintainer edit check plan for new PRs
 - unresolved risks or blocked checks
 
-Do not push, update PR body, comment, or request re-review until the user explicitly confirms.
-After confirmation, use `gh` for PR body updates, comments, review requests, and other GitHub writes unless `gh` cannot perform the operation.
+Do not push, update PR body, comment, or request re-review until the user explicitly confirms. Confirmation covers only the branch push and PR create/update; it does not authorize `@clawsweeper re-review`. Post re-review only when the user separately and explicitly asks for it.
+After confirmation, use `scripts/publish-openclaw-pr.mjs` for branch push and PR create/update unless the script is unavailable or fails for a concrete reason you report. It verifies the approved body and maintainer edit access after the write. Use direct `gh` only for comments, review requests, reads, or fallback operations that the publisher cannot perform. After publish, report the result and wait for an explicit re-review request; do not post `@clawsweeper re-review` automatically.
+Create new PRs as ready for review by default. Use draft only when the user explicitly requests draft, the PR is intentionally incomplete, or the user approved a failed-preflight bypass and review should not be requested yet.
 If the user explicitly says to bypass the failed-preflight blocker, include the
 failed preflight result in the approval record and use the publish script's
 failed-preflight bypass flags. Treat the override as consumed after that publish

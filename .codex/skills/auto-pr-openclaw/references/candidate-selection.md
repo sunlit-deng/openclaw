@@ -19,9 +19,34 @@ high-confidence patch shapes, not rating language.
   publishing?
 - **A-likelihood:** Does the candidate already have the evidence and policy
   shape associated with unusually high reviewer confidence?
+- **Priority likelihood:** Is the underlying problem important enough for P1/P2
+  treatment, independent of how cleanly the patch is proven?
 
-A candidate may be strong merge fit but ordinary A-likelihood. Keep those
-judgments separate.
+A candidate may be strong merge fit but ordinary A-likelihood. A candidate may
+also have high proof confidence but still be P3 because the user impact is
+small. Keep merge fit, A-likelihood, and priority likelihood separate.
+
+## Priority and Rank Reality Check
+
+Do not equate `A-likelihood` with expected priority or final ClawSweeper rank.
+`A-likelihood` is a proof/policy-shape screen; it cannot turn a small
+operator-facing wording or consistency fix into P1/P2. Before promising
+"P1", "diamond", or similar, require both:
+
+- high-confidence proof shape; and
+- high-impact problem shape, such as data loss, security exposure, broken CI or
+  release flow, crash/hang in a common path, provider/runtime failure affecting
+  real users, or maintainer-signaled priority.
+
+Default small CLI wording, diagnostic consistency, docs-proof mismatch,
+non-blocking formatting, and low-blast-radius ergonomics fixes to P3 unless
+there is explicit maintainer signal or current-main operational evidence that
+the issue blocks real workflows.
+
+Overall review rank commonly follows the weaker of proof confidence and patch
+quality/impact. Strong base/head proof can raise proof confidence while the
+overall score remains ordinary if the patch is low-impact or the reviewer
+cannot independently complete current-main/history/policy inspection.
 
 ## Early Stop Conditions
 
@@ -96,6 +121,13 @@ run `scripts/openclaw-score-calibration.sh --input clawsweeper-samples.json`.
 Inspect false-positive `high` predictions and per-signal A-rate lift. Do not
 change weights until at least ten representative reviews exist.
 
+When recording a false positive, capture why the prediction failed. For example:
+PR 116127 looked `high` by proof/policy signals but reviewed as P3 / gold shrimp
+because the fix was a small CLI diagnostic consistency improvement and the
+reviewer could not independently complete current-main/history inspection. Use
+that class of outcome to downgrade future low-impact diagnostic candidates even
+when proof is strong.
+
 ## Preferred Candidate Shapes
 
 - complete an already-merged sibling pattern on one missed provider/channel;
@@ -117,6 +149,9 @@ value and behavior come from an existing convention or external contract.
 For every reported candidate, include:
 
 - `A-likelihood`: high, possible, ordinary, or low;
+- expected priority: P1/P2/P3 with concrete user-impact reason;
+- expected overall rank risk: why proof, patch quality, or independent
+  verification could cap the result;
 - score and each satisfied primary/secondary signal;
 - early stop condition, if any;
 - canonical precedent or governing invariant;
