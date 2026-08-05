@@ -248,6 +248,10 @@ maintainer edit access.
 
 `workspace/` is local working state and is ignored by git.
 
+For the current creation/maintenance call graph, measured amplification points,
+implemented reductions, and remaining performance work, see
+[`docs/performance.md`](docs/performance.md).
+
 ## Use
 
 Validate the skill and bundled scripts on macOS or Linux with:

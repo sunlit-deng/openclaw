@@ -115,6 +115,9 @@ const name = process.env.FAKE_COUNTER_NAME || process.argv[2] || "test";
 const file = path.join(process.env.FAKE_COUNTER_DIR, name);
 const count = fs.existsSync(file) ? Number(fs.readFileSync(file, "utf8")) : 0;
 fs.writeFileSync(file, String(count + 1));
+process.stdout.write("x".repeat(20000));
+process.stderr.write("y".repeat(20000));
+if (name === "test" && process.env.FAKE_FAIL_TEST_ONCE === "1" && count === 0) process.exit(1);
 `;
   write(path.join(worktree, "scripts/fake-check.mjs"), counterScript);
   write(
@@ -159,13 +162,31 @@ fs.writeFileSync(file, String(count + 1));
     "--workflow", path.join(output, "workflow.json"),
     "--profile", "changed",
   ];
+  const failedOnce = spawnSync(process.execPath, changedArgs, {
+    encoding: "utf8",
+    env: { ...env, FAKE_FAIL_TEST_ONCE: "1" },
+  });
+  assert.equal(failedOnce.status, 1);
+  const failedReceipt = JSON.parse(fs.readFileSync(path.join(output, "preflight.json"), "utf8"));
+  assert.equal(failedReceipt.status, "failed");
+  assert.equal(fs.readFileSync(path.join(counter, "check"), "utf8"), "1");
+  assert.equal(fs.readFileSync(path.join(counter, "test"), "utf8"), "1");
+
   run(process.execPath, changedArgs, { env });
   const first = JSON.parse(fs.readFileSync(path.join(output, "preflight.json"), "utf8"));
   assert.equal(first.status, "passed");
   assert.equal(first.validationBaseSha, validationBase);
   assert.equal(first.heavyCacheHit, false);
+  assert.ok(first.heavyChecks.every((check) => !("stdout" in check) && !("stderr" in check)));
+  assert.ok(first.heavyChecks.every((check) => check.output.length <= 4000));
+  const heavyNames = new Set(first.heavyChecks.map((check) => check.name));
+  assert.ok(first.checks.filter((check) => heavyNames.has(check.name)).every((check) => !("output" in check)));
+  const firstCache = JSON.parse(fs.readFileSync(path.join(output, "preflight-cache.json"), "utf8"));
+  const cachedHeavy = Object.values(firstCache.heavyChecksByFingerprint).flat();
+  assert.ok(cachedHeavy.every((check) => !("stdout" in check) && !("stderr" in check)));
+  assert.ok(cachedHeavy.every((check) => check.output.length <= 4000));
   assert.equal(fs.readFileSync(path.join(counter, "check"), "utf8"), "1");
-  assert.equal(fs.readFileSync(path.join(counter, "test"), "utf8"), "1");
+  assert.equal(fs.readFileSync(path.join(counter, "test"), "utf8"), "2");
 
   const updater = path.join(temp, "updater");
   git(temp, "clone", remote, updater);
@@ -190,7 +211,7 @@ fs.writeFileSync(file, String(count + 1));
   assert.equal(workflow.validationBaseSha, validationBase);
   assert.equal(workflow.latestObservedMainSha, latestMain);
   assert.equal(fs.readFileSync(path.join(counter, "check"), "utf8"), "1");
-  assert.equal(fs.readFileSync(path.join(counter, "test"), "utf8"), "1");
+  assert.equal(fs.readFileSync(path.join(counter, "test"), "utf8"), "2");
 
   run(process.execPath, [preflight, "--workflow", path.join(output, "workflow.json")], { env });
   const automatic = JSON.parse(fs.readFileSync(path.join(output, "preflight.json"), "utf8"));
@@ -200,7 +221,7 @@ fs.writeFileSync(file, String(count + 1));
   assert.equal(automatic.validationDepth, "deterministic-no-pnpm");
   assert.equal(automatic.heavyChecks.length, 0);
   assert.equal(fs.readFileSync(path.join(counter, "check"), "utf8"), "1");
-  assert.equal(fs.readFileSync(path.join(counter, "test"), "utf8"), "1");
+  assert.equal(fs.readFileSync(path.join(counter, "test"), "utf8"), "2");
 
   const workflowPath = path.join(output, "workflow.json");
   const existingPrWorkflow = JSON.parse(fs.readFileSync(workflowPath, "utf8"));
@@ -238,7 +259,7 @@ fs.writeFileSync(file, String(count + 1));
   assert.equal(conflictProfile.heavyChecks.length, 0);
   assert.equal(conflictProfile.conflictResolutionReceipt.status, "passed");
   assert.equal(fs.readFileSync(path.join(counter, "check"), "utf8"), "1");
-  assert.equal(fs.readFileSync(path.join(counter, "test"), "utf8"), "1");
+  assert.equal(fs.readFileSync(path.join(counter, "test"), "utf8"), "2");
 
   const staleConflictReceipt = JSON.parse(
     fs.readFileSync(path.join(output, "conflict-resolution-check.json"), "utf8"),
@@ -261,7 +282,7 @@ fs.writeFileSync(file, String(count + 1));
     /HEAD mismatch/,
   );
   assert.equal(fs.readFileSync(path.join(counter, "check"), "utf8"), "1");
-  assert.equal(fs.readFileSync(path.join(counter, "test"), "utf8"), "1");
+  assert.equal(fs.readFileSync(path.join(counter, "test"), "utf8"), "2");
 
   run(process.execPath, [
     preflight,
@@ -275,7 +296,7 @@ fs.writeFileSync(file, String(count + 1));
   assert.deepEqual(focused.heavyChecks.map((check) => check.name), ["focused tests"]);
   assert.equal(focused.heavyChecks[0].cached, true);
   assert.equal(fs.readFileSync(path.join(counter, "check"), "utf8"), "1");
-  assert.equal(fs.readFileSync(path.join(counter, "test"), "utf8"), "1");
+  assert.equal(fs.readFileSync(path.join(counter, "test"), "utf8"), "2");
 
   write(path.join(updater, "docs/example.md"), "conflicting upstream edit\n");
   git(updater, "add", "docs/example.md");
@@ -292,7 +313,7 @@ fs.writeFileSync(file, String(count + 1));
   assert.deepEqual(conflicted.freshness.overlappingFiles, ["docs/example.md"]);
   assert.equal(conflicted.heavyChecks.length, 0);
   assert.equal(fs.readFileSync(path.join(counter, "check"), "utf8"), "1");
-  assert.equal(fs.readFileSync(path.join(counter, "test"), "utf8"), "1");
+  assert.equal(fs.readFileSync(path.join(counter, "test"), "utf8"), "2");
 });
 
 test("documents profiles through --help without requiring a workflow", () => {

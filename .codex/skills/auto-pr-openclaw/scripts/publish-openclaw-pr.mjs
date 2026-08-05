@@ -6,6 +6,7 @@ import path from "node:path";
 import { spawnSync } from "node:child_process";
 import { ghEnv, publicAccount, resolveAccount } from "./lib/account-utils.mjs";
 import { validatePrBody } from "./lib/pr-body-validator.mjs";
+import { prUpdateRequired } from "./lib/publish-utils.mjs";
 import { validateWorkflowReceipt } from "./lib/receipt-utils.mjs";
 
 function parseArgs(argv) {
@@ -54,7 +55,8 @@ function execute(command, args, { cwd, input, env } = {}) {
     shell: false,
   });
   if (result.status !== 0) {
-    throw new Error(`${command} ${args.join(" ")} failed: ${result.stderr || result.stdout || result.error?.message}`);
+    const details = String(result.stderr || result.stdout || result.error?.message || "unknown error").slice(-4000);
+    throw new Error(`${command} ${args.join(" ")} failed: ${details}`);
   }
   return result.stdout.trim();
 }
@@ -70,7 +72,7 @@ function normalizeNewlines(value) {
 function viewPr(selector, repo, env = process.env) {
   return JSON.parse(execute("gh", [
     "pr", "view", String(selector), "--repo", repo,
-    "--json", "number,url,body,maintainerCanModify,headRefName,headRepositoryOwner",
+    "--json", "number,url,title,body,maintainerCanModify,headRefName,headRepositoryOwner",
   ], { env }));
 }
 
@@ -159,7 +161,6 @@ if (failures.length > 0) {
   process.exit(1);
 }
 
-execute("gh", ["auth", "status"], { env: accountEnv });
 execute("gh", ["auth", "setup-git"], { env: accountEnv });
 const ghLogin = JSON.parse(execute("gh", ["api", "user"], { env: accountEnv })).login;
 let remoteUrl;
@@ -179,8 +180,9 @@ if (account.token && remoteUrl.startsWith("git@github.com:")) {
 }
 
 let prNumber = workflow.pr;
+let existing = null;
 if (prNumber) {
-  const existing = viewPr(prNumber, args.repo, accountEnv);
+  existing = viewPr(prNumber, args.repo, accountEnv);
   if (existing.maintainerCanModify !== true) {
     throw new Error("maintainer_can_modify is not true; restore maintainer edit access before push");
   }
@@ -200,14 +202,25 @@ if (prNumber) {
 execute("git", ["push", "--set-upstream", args.pushRemote, `${currentBranch}:${remoteHeadRef}`], { cwd: repoPath, env: accountEnv });
 
 let response;
+let prWriteSkipped = false;
 if (prNumber) {
   const payload = { body };
   if (args.title) payload.title = args.title;
-  response = JSON.parse(execute(
-    "gh",
-    ["api", "--method", "PATCH", `repos/${args.repo}/pulls/${prNumber}`, "--input", "-"],
-    { input: JSON.stringify(payload), env: accountEnv },
-  ));
+  if (!prUpdateRequired({
+    currentBody: existing?.body,
+    currentTitle: existing?.title,
+    nextBody: body,
+    nextTitle: args.title,
+  })) {
+    response = existing;
+    prWriteSkipped = true;
+  } else {
+    response = JSON.parse(execute(
+      "gh",
+      ["api", "--method", "PATCH", `repos/${args.repo}/pulls/${prNumber}`, "--input", "-"],
+      { input: JSON.stringify(payload), env: accountEnv },
+    ));
+  }
 } else {
   const payload = {
     title: args.title,
@@ -237,6 +250,7 @@ workflow.pr = prNumber;
 workflow.prUrl = remote.url ?? response.url ?? null;
 workflow.publishedHeadSha = currentHead;
 workflow.remoteBodySha256 = sha256(remoteBody);
+workflow.lastPrWriteSkipped = prWriteSkipped;
 workflow.githubAccount = publicAccount(account);
 if (failedPreflightBypass) {
   workflow.failedPreflightBypass = {
@@ -257,5 +271,6 @@ console.log(JSON.stringify({
   headSha: currentHead,
   bodySha256: workflow.remoteBodySha256,
   maintainerCanModify: true,
+  prWriteSkipped,
   failedPreflightBypass: failedPreflightBypass ? workflow.failedPreflightBypass : null,
 }, null, 2));

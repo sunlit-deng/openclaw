@@ -9,6 +9,7 @@ import {
   receiptSummary,
   validateWorkflowReceipt,
 } from "../.codex/skills/auto-pr-openclaw/scripts/lib/receipt-utils.mjs";
+import { prUpdateRequired } from "../.codex/skills/auto-pr-openclaw/scripts/lib/publish-utils.mjs";
 
 const publisher = path.resolve(
   import.meta.dirname,
@@ -63,6 +64,25 @@ test("workflow receipts require matching schema, workflow, repository, head, and
     valid: false,
     problems: ["missing"],
   });
+});
+
+test("existing PR writes are skipped only when body and requested title are unchanged", () => {
+  assert.equal(prUpdateRequired({
+    currentBody: "same\r\nbody\r\n",
+    currentTitle: "Existing title",
+    nextBody: "same\nbody\n",
+  }), false);
+  assert.equal(prUpdateRequired({
+    currentBody: "old body\n",
+    currentTitle: "Existing title",
+    nextBody: "new body\n",
+  }), true);
+  assert.equal(prUpdateRequired({
+    currentBody: "same body\n",
+    currentTitle: "Existing title",
+    nextBody: "same body\n",
+    nextTitle: "New title",
+  }), true);
 });
 
 test("normal publisher rejects a preflight validated against another base before GitHub writes", (t) => {

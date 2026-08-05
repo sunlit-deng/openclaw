@@ -4,9 +4,10 @@ import path from "node:path";
 import {
   gitChangedFiles,
   loadWorkflow,
+  mapConcurrent,
   parseKeyArgs,
   prBodyInfo,
-  run,
+  runAsync,
   writeJson,
 } from "./lib/workflow-utils.mjs";
 import { ghEnv, publicAccount, resolveAccount } from "./lib/account-utils.mjs";
@@ -45,11 +46,11 @@ function deriveQueries(files, body, manualQueries) {
   return unique(queries).slice(0, 16);
 }
 
-function ghSearch(kind, repo, query, env) {
+async function ghSearch(kind, repo, query, env) {
   const args = ["search", kind, "--repo", repo, "--limit", "10", "--json", "number,title,state,url,updatedAt"];
   if (kind === "prs") args.push("--match", "title,body");
   args.push(query);
-  const result = run("gh", args, { allowFailure: true, env });
+  const result = await runAsync("gh", args, { allowFailure: true, env });
   if (result.exitCode !== 0) {
     return { query, error: result.stderr || result.stdout || result.error, items: [] };
   }
@@ -60,8 +61,8 @@ function ghSearch(kind, repo, query, env) {
   }
 }
 
-function ghPrFiles(repo, number, env) {
-  const result = run("gh", [
+async function ghPrFiles(repo, number, env) {
+  const result = await runAsync("gh", [
     "pr", "view", String(number), "--repo", repo,
     "--json", "number,title,state,url,files",
   ], { allowFailure: true, env });
@@ -77,6 +78,15 @@ function ghPrFiles(repo, number, env) {
   } catch (error) {
     return { error: error.message, files: [] };
   }
+}
+
+function githubReadConcurrency(value = process.env.OPENCLAW_GH_READ_CONCURRENCY) {
+  if (!value) return 4;
+  const parsed = Number(value);
+  if (!Number.isSafeInteger(parsed) || parsed < 1) {
+    throw new Error("OPENCLAW_GH_READ_CONCURRENCY must be a positive integer");
+  }
+  return Math.min(parsed, 8);
 }
 
 let args;
@@ -107,7 +117,7 @@ const context = loadWorkflow(args.workflow);
 const output = path.resolve(args.output || path.join(context.outputPath, "duplicate-check.json"));
 if (context.workflow.pr) {
   const receipt = {
-    schemaVersion: 1,
+    schemaVersion: 2,
     generatedAt: new Date().toISOString(),
     workflowPath: context.workflowPath,
     repoPath: context.repoPath,
@@ -141,15 +151,20 @@ const body = prBodyInfo(context.prBodyPath);
 const files = unique([...(args.files ?? []), ...gitChangedFiles(context.repoPath, baseSha)]);
 const repo = args.repo || "openclaw/openclaw";
 const queries = deriveQueries(files, body.body, args.queries ?? []);
-const searches = [];
+const concurrency = githubReadConcurrency();
+let searches = [];
 const detailErrors = [];
 
 if (!args.offline) {
-  run("gh", ["auth", "status"], { allowFailure: true, env: accountEnv });
+  const searchPlans = [];
   for (const query of queries) {
-    searches.push({ kind: "prs", ...ghSearch("prs", repo, query, accountEnv) });
-    if (/^#\d+$/.test(query) || query.length > 8) searches.push({ kind: "issues", ...ghSearch("issues", repo, query, accountEnv) });
+    searchPlans.push({ kind: "prs", query });
+    if (/^#\d+$/.test(query) || query.length > 8) searchPlans.push({ kind: "issues", query });
   }
+  searches = await mapConcurrent(searchPlans, concurrency, async ({ kind, query }) => ({
+    kind,
+    ...await ghSearch(kind, repo, query, accountEnv),
+  }));
 }
 
 const allPrs = searches.filter((search) => search.kind === "prs").flatMap((search) => search.items.map((item) => ({
@@ -157,31 +172,67 @@ const allPrs = searches.filter((search) => search.kind === "prs").flatMap((searc
   query: search.query,
 })));
 const currentPr = context.workflow.pr ? Number(context.workflow.pr) : null;
-const dedupedOpenPrs = [...new Map(
-  allPrs
-    .filter((item) => String(item.state).toLowerCase() === "open" && item.number !== currentPr)
-    .map((item) => [item.number, { ...item, matchedQueries: [] }]),
-).values()];
+const openPrsByNumber = new Map();
 for (const item of allPrs) {
-  const candidate = dedupedOpenPrs.find((entry) => entry.number === item.number);
+  if (String(item.state).toLowerCase() !== "open" || item.number === currentPr) continue;
+  let candidate = openPrsByNumber.get(item.number);
+  if (!candidate) {
+    candidate = { ...item, matchedQueries: [] };
+    delete candidate.query;
+    openPrsByNumber.set(item.number, candidate);
+  }
   if (candidate && !candidate.matchedQueries.includes(item.query)) candidate.matchedQueries.push(item.query);
 }
+const dedupedOpenPrs = [...openPrsByNumber.values()];
 if (!args.offline) {
-  for (const item of dedupedOpenPrs.slice(0, 20)) {
-    const details = ghPrFiles(repo, item.number, accountEnv);
+  const detailResults = await mapConcurrent(dedupedOpenPrs.slice(0, 20), concurrency, async (item) => ({
+    item,
+    details: await ghPrFiles(repo, item.number, accountEnv),
+  }));
+  for (const { item, details } of detailResults) {
     item.changedFiles = details.files;
     if (details.error) detailErrors.push({ pr: item.number, error: details.error });
   }
 }
 const relatedOpenPrs = dedupedOpenPrs.map((item) => ({
-  ...item,
-  changedFiles: item.changedFiles ?? [],
+  number: item.number,
+  title: item.title,
+  state: item.state,
+  url: item.url,
+  updatedAt: item.updatedAt,
+  matchedQueries: item.matchedQueries,
+  changedFileCount: item.changedFiles?.length ?? 0,
   overlappingFiles: (item.changedFiles ?? []).filter((file) => files.includes(file)),
 }));
 const likelyDuplicates = relatedOpenPrs.filter((item) => isLikelyDuplicate(item, files));
+const relatedIssuesByNumber = new Map();
+for (const search of searches.filter((entry) => entry.kind === "issues")) {
+  for (const item of search.items) {
+    let related = relatedIssuesByNumber.get(item.number);
+    if (!related) {
+      related = {
+        number: item.number,
+        title: item.title,
+        state: item.state,
+        url: item.url,
+        updatedAt: item.updatedAt,
+        matchedQueries: [],
+      };
+      relatedIssuesByNumber.set(item.number, related);
+    }
+    if (!related.matchedQueries.includes(search.query)) related.matchedQueries.push(search.query);
+  }
+}
+const compactSearches = searches.map((search) => ({
+  kind: search.kind,
+  query: search.query,
+  error: search.error,
+  resultCount: search.items.length,
+  itemNumbers: search.items.map((item) => item.number),
+}));
 
 const receipt = {
-  schemaVersion: 1,
+  schemaVersion: 2,
   generatedAt: new Date().toISOString(),
   workflowPath: context.workflowPath,
   repoPath: context.repoPath,
@@ -191,10 +242,14 @@ const receipt = {
   validationBaseSha: baseSha,
   changedFiles: files,
   queries,
-  searches,
+  searches: compactSearches,
   summary: {
     queryCount: queries.length,
+    searchRequestCount: searches.length,
+    detailRequestCount: args.offline ? 0 : Math.min(dedupedOpenPrs.length, 20),
+    githubReadConcurrency: concurrency,
     relatedOpenPrCount: relatedOpenPrs.length,
+    relatedIssueCount: relatedIssuesByNumber.size,
     likelyDuplicateCount: likelyDuplicates.length,
     errors: [
       ...searches.filter((search) => search.error).map((search) => ({ kind: search.kind, query: search.query, error: search.error })),
@@ -203,6 +258,7 @@ const receipt = {
   },
   likelyDuplicates,
   relatedOpenPrs: relatedOpenPrs.slice(0, 30),
+  relatedIssues: [...relatedIssuesByNumber.values()].slice(0, 30),
 };
 
 writeJson(output, receipt);

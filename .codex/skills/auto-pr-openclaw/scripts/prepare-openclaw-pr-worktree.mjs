@@ -23,7 +23,8 @@ function parseArgs(argv) {
 function execute(command, args, { cwd, env } = {}) {
   const result = spawnSync(command, args, { cwd, env, encoding: "utf8", shell: false, maxBuffer: 16 * 1024 * 1024 });
   if (result.status !== 0) {
-    throw new Error(`${command} ${args.join(" ")} failed: ${result.stderr || result.stdout || result.error?.message}`);
+    const details = String(result.stderr || result.stdout || result.error?.message || "unknown error").slice(-4000);
+    throw new Error(`${command} ${args.join(" ")} failed: ${details}`);
   }
   return result.stdout.trim();
 }
@@ -31,7 +32,7 @@ function execute(command, args, { cwd, env } = {}) {
 function executeOptional(command, args, { cwd, env } = {}) {
   const result = spawnSync(command, args, { cwd, env, encoding: "utf8", shell: false, maxBuffer: 16 * 1024 * 1024 });
   if (result.status !== 0) {
-    process.stderr.write(result.stderr || result.stdout || result.error?.message || `${command} failed\n`);
+    process.stderr.write(String(result.stderr || result.stdout || result.error?.message || `${command} failed\n`).slice(-4000));
     process.stderr.write("Warning: CodeGraph setup failed; the worktree remains usable.\n");
     return false;
   }
@@ -56,9 +57,6 @@ const worktreePath = path.join(root, "worktrees", name);
 const outputPath = path.join(root, "outputs", name);
 const storePath = path.join(root, ".pnpm-store");
 const localBranch = `sunlit/pr-${args.pr}`;
-
-execute("gh", ["auth", "status"], { env: accountEnv });
-execute("gh", ["auth", "setup-git"], { env: accountEnv });
 
 const pr = JSON.parse(execute("gh", [
   "pr", "view", String(args.pr), "--repo", "openclaw/openclaw",

@@ -89,7 +89,7 @@ const preflightValidation = validateWorkflowReceipt(preflight, {
 const duplicateCheckValidation = duplicateCheckApplicable
   ? validateWorkflowReceipt(duplicateCheck, {
       kind: "duplicate check",
-      schemaVersions: [1],
+      schemaVersions: [1, 2],
       workflowPath: context.workflowPath,
       validationBaseSha: baseSha,
     })

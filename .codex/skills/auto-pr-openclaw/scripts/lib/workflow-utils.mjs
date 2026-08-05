@@ -1,7 +1,7 @@
 import crypto from "node:crypto";
 import fs from "node:fs";
 import path from "node:path";
-import { spawnSync } from "node:child_process";
+import { execFile, spawnSync } from "node:child_process";
 
 export function parseKeyArgs(argv, spec = {}) {
   const result = {};
@@ -34,17 +34,67 @@ export function run(command, args, { cwd, input, allowFailure = false, env } = {
     maxBuffer: 32 * 1024 * 1024,
     shell: false,
   });
-  if (!allowFailure && result.status !== 0) {
-    throw new Error(`${command} ${args.join(" ")} failed: ${result.stderr || result.stdout || result.error?.message}`);
+  const failed = result.status !== 0;
+  const stdout = failed ? (result.stdout ?? "").slice(-4000) : result.stdout ?? "";
+  const stderr = failed ? (result.stderr ?? "").slice(-4000) : result.stderr ?? "";
+  if (!allowFailure && failed) {
+    throw new Error(`${command} ${args.join(" ")} failed: ${stderr || stdout || result.error?.message}`);
   }
   return {
     command: [command, ...args].join(" "),
     exitCode: result.status ?? 1,
-    stdout: result.stdout ?? "",
-    stderr: result.stderr ?? "",
-    output: `${result.stdout ?? ""}${result.stderr ?? ""}`,
+    stdout,
+    stderr,
+    output: `${stdout}${stderr}`,
     error: result.error?.message ?? null,
   };
+}
+
+export function runAsync(command, args, { cwd, allowFailure = false, env } = {}) {
+  return new Promise((resolve, reject) => {
+    execFile(command, args, {
+      cwd,
+      env,
+      encoding: "utf8",
+      maxBuffer: 32 * 1024 * 1024,
+      shell: false,
+    }, (error, stdout = "", stderr = "") => {
+      const exitCode = typeof error?.code === "number" ? error.code : error ? 1 : 0;
+      const failed = exitCode !== 0;
+      const boundedStdout = failed ? stdout.slice(-4000) : stdout;
+      const boundedStderr = failed ? stderr.slice(-4000) : stderr;
+      const result = {
+        command: [command, ...args].join(" "),
+        exitCode,
+        stdout: boundedStdout,
+        stderr: boundedStderr,
+        output: `${boundedStdout}${boundedStderr}`,
+        error: error?.message ?? null,
+      };
+      if (!allowFailure && exitCode !== 0) {
+        reject(new Error(`${command} ${args.join(" ")} failed: ${boundedStderr || boundedStdout || error?.message}`));
+        return;
+      }
+      resolve(result);
+    });
+  });
+}
+
+export async function mapConcurrent(items, concurrency, mapper) {
+  if (!Number.isSafeInteger(concurrency) || concurrency < 1) {
+    throw new Error("concurrency must be a positive integer");
+  }
+  const results = new Array(items.length);
+  let nextIndex = 0;
+  async function worker() {
+    while (nextIndex < items.length) {
+      const index = nextIndex;
+      nextIndex += 1;
+      results[index] = await mapper(items[index], index);
+    }
+  }
+  await Promise.all(Array.from({ length: Math.min(concurrency, items.length) }, () => worker()));
+  return results;
 }
 
 export function readJson(file) {
