@@ -4,11 +4,15 @@ import fs from "node:fs";
 import path from "node:path";
 
 const repoRoot = path.resolve(import.meta.dirname, "..");
-const skillRoot = path.join(repoRoot, ".codex/skills/auto-pr-openclaw");
+const skillRoot = path.resolve(process.argv[2] || path.join(repoRoot, ".codex/skills/auto-pr-openclaw"));
+const skillName = path.basename(skillRoot);
 const skillPath = path.join(skillRoot, "SKILL.md");
 const contents = fs.readFileSync(skillPath, "utf8");
 const problems = [];
-const repositoryOwnedScripts = new Set(["scripts/report-test-temp-creations.mjs"]);
+const repositoryOwnedScripts = new Set([
+  "scripts/report-test-temp-creations.mjs",
+  "scripts/run-node.mjs",
+]);
 const frontmatter = contents.match(/^---\n([\s\S]*?)\n---\n/);
 
 if (!frontmatter) {
@@ -16,12 +20,13 @@ if (!frontmatter) {
 } else {
   const name = frontmatter[1].match(/^name:\s*(.+)$/m)?.[1]?.trim();
   const description = frontmatter[1].match(/^description:\s*(.+)$/m)?.[1]?.trim();
-  if (name !== "auto-pr-openclaw") problems.push(`unexpected skill name: ${name ?? "missing"}`);
+  if (name !== skillName) problems.push(`unexpected skill name: ${name ?? "missing"}`);
   if (!description) problems.push("skill description is missing");
 }
 
 const references = [...contents.matchAll(/`(references\/[^`\s]+)`/g)].map((match) => match[1]);
-const scripts = [...contents.matchAll(/(?:\.\/)?(?:\.codex\/skills\/auto-pr-openclaw\/)?(scripts\/[A-Za-z0-9._/-]+)/g)]
+const skillPrefix = skillName.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+const scripts = [...contents.matchAll(new RegExp(`(?:\\./)?(?:\\.codex/skills/${skillPrefix}/)?(scripts/[A-Za-z0-9._/-]+)`, "g"))]
   .map((match) => match[1])
   .filter((file) => /\.(?:mjs|sh)$/.test(file));
 for (const relative of [...new Set([...references, ...scripts])]) {

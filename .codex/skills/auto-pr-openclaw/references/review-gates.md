@@ -49,7 +49,12 @@ Use these gates before pushing or updating an OpenClaw PR.
 Use this only when the user explicitly asks to rebase or catch up an existing
 PR, the rebase completes without conflicts, and no PR body, proof, comment, or
 review request will be changed. The initial request authorizes the resulting
-patch-equivalent force-push; there is no second human gate.
+patch-equivalent force-push; there is no second human gate. A body whose
+Evidence pins the pre-rebase head SHA is a stop condition, not a rebase-only
+case: the force-push would leave exact-head proof stale and ClawSweeper would
+flag it. Refresh the SHA with `scripts/refresh-pr-body-sha.sh`, rerun
+`scripts/validate-pr-body.mjs` (body-only edit), then use the normal Human Gate
+and `scripts/publish-openclaw-pr.mjs`.
 
 Fetch once, pin the exact target SHA, and run `git rebase <target-sha>`. If Git
 reports a conflict, stop immediately. Do not resolve conflicts under this path;
@@ -70,6 +75,8 @@ Required release invariants:
 - existing PR head owner/ref matches the authenticated GitHub push identity
 - remote PR head still equals the workflow's pre-rebase head
 - `maintainerCanModify` is `true`
+- the canonical PR body does not embed the pre-rebase head SHA (full or short
+  form) and does not label a different 40-hex head SHA in Evidence
 
 Do not run tests, lint, type checks, `git diff --check`, preflight, or gate
 summary. When the receipt passes, immediately publish with

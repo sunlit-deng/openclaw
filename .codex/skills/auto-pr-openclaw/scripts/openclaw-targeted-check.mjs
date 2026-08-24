@@ -5,11 +5,12 @@ import { spawnSync } from "node:child_process";
 import { targetedValidationPlan } from "./lib/targeted-validation.mjs";
 
 function parseArgs(argv) {
-  const args = { base: "", head: "HEAD", dryRun: false, concurrency: 3 };
+  const args = { base: "", head: "HEAD", project: "openclaw", dryRun: false, concurrency: 3 };
   for (let index = 0; index < argv.length; index += 1) {
     const arg = argv[index];
     if (arg === "--base") args.base = argv[++index] ?? "";
     else if (arg === "--head") args.head = argv[++index] ?? "";
+    else if (arg === "--project") args.project = argv[++index] ?? "openclaw";
     else if (arg === "--concurrency") args.concurrency = Number(argv[++index]);
     else if (arg === "--dry-run") args.dryRun = true;
     else if (arg === "-h" || arg === "--help") args.help = true;
@@ -19,7 +20,7 @@ function parseArgs(argv) {
 }
 
 function usage() {
-  return `Usage: openclaw-targeted-check.mjs --base SHA [--head SHA] [--concurrency N] [--dry-run]
+  return `Usage: openclaw-targeted-check.mjs --base SHA [--head SHA] [--project ID] [--concurrency N] [--dry-run]
 
 Runs only changed-file format/lint and owning-project type lanes. Independent
 commands run concurrently. Unknown, cross-surface, or high-risk diffs fail and
@@ -112,7 +113,7 @@ if (!args.base || !args.head || !Number.isSafeInteger(args.concurrency) || args.
 }
 
 const files = gitChangedFiles(args.base, args.head);
-const plan = targetedValidationPlan(files);
+const plan = targetedValidationPlan(files, args.project);
 console.error(`[targeted] files=${files.length} surfaces=${plan.surfaces.join(",") || "none"}`);
 if (!plan.safe) {
   console.error(`[targeted] escalate to changed: ${plan.reasons.join("; ")}`);

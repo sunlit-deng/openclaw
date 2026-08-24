@@ -12,11 +12,14 @@ import {
 } from "./lib/workflow-utils.mjs";
 import { ghEnv, publicAccount, resolveAccount } from "./lib/account-utils.mjs";
 import { isLikelyDuplicate } from "./lib/duplicate-utils.mjs";
+import { projectForWorkflow } from "../../../auto-pr-core/project-profile.mjs";
 
 function usage() {
-  return `Usage: openclaw-duplicate-check.mjs --workflow PATH [--query TEXT ...] [--file PATH ...] [--repo OWNER/REPO] [--output PATH] [--offline]
+  return `Usage: openclaw-duplicate-check.mjs --workflow PATH [--query TEXT ...] [--file PATH ...] [--reviewed-pr NUMBER ...] [--repo OWNER/REPO] [--output PATH] [--offline]
 
 Runs read-only GitHub duplicate/canonical searches and writes duplicate-check.json.
+Use --reviewed-pr only for candidates whose file/title match was manually reviewed
+and found not to duplicate the unpublished change; the receipt preserves both lists.
 Use --offline to emit the planned queries without calling gh.`;
 }
 
@@ -95,6 +98,7 @@ try {
     "--workflow": { name: "workflow" },
     "--query": { name: "queries", repeat: true },
     "--file": { name: "files", repeat: true },
+    "--reviewed-pr": { name: "reviewedPrs", repeat: true },
     "--repo": { name: "repo" },
     "--output": { name: "output" },
     "--offline": { name: "offline", boolean: true },
@@ -104,6 +108,11 @@ try {
   console.error(usage());
   process.exit(2);
 }
+const reviewedPrs = unique((args.reviewedPrs ?? []).map((value) => {
+  const number = Number(value);
+  if (!Number.isSafeInteger(number) || number <= 0) throw new Error(`--reviewed-pr must be a positive integer: ${value}`);
+  return String(number);
+})).map(Number);
 if (args.help) {
   console.log(usage());
   process.exit(0);
@@ -114,6 +123,7 @@ if (!args.workflow) {
 }
 
 const context = loadWorkflow(args.workflow);
+const project = projectForWorkflow(context.workflow);
 const output = path.resolve(args.output || path.join(context.outputPath, "duplicate-check.json"));
 if (context.workflow.pr) {
   const receipt = {
@@ -147,9 +157,9 @@ if (context.workflow.pr) {
 const account = resolveAccount({ workflow: context.workflow });
 const accountEnv = ghEnv(account);
 const baseSha = context.workflow.validationBaseSha || context.workflow.baseSha;
-const body = prBodyInfo(context.prBodyPath);
+const body = prBodyInfo(context.prBodyPath, project.prPolicy);
 const files = unique([...(args.files ?? []), ...gitChangedFiles(context.repoPath, baseSha)]);
-const repo = args.repo || "openclaw/openclaw";
+const repo = args.repo || project.github.repo;
 const queries = deriveQueries(files, body.body, args.queries ?? []);
 const concurrency = githubReadConcurrency();
 let searches = [];
@@ -205,6 +215,7 @@ const relatedOpenPrs = dedupedOpenPrs.map((item) => ({
   overlappingFiles: (item.changedFiles ?? []).filter((file) => files.includes(file)),
 }));
 const likelyDuplicates = relatedOpenPrs.filter((item) => isLikelyDuplicate(item, files));
+const unreviewedLikelyDuplicates = likelyDuplicates.filter((item) => !reviewedPrs.includes(item.number));
 const relatedIssuesByNumber = new Map();
 for (const search of searches.filter((entry) => entry.kind === "issues")) {
   for (const item of search.items) {
@@ -239,6 +250,7 @@ const receipt = {
   repo,
   githubAccount: publicAccount(account),
   offline: Boolean(args.offline),
+  reviewedPrs,
   validationBaseSha: baseSha,
   changedFiles: files,
   queries,
@@ -250,13 +262,16 @@ const receipt = {
     githubReadConcurrency: concurrency,
     relatedOpenPrCount: relatedOpenPrs.length,
     relatedIssueCount: relatedIssuesByNumber.size,
-    likelyDuplicateCount: likelyDuplicates.length,
+    likelyDuplicateCount: unreviewedLikelyDuplicates.length,
+    rawLikelyDuplicateCount: likelyDuplicates.length,
+    reviewedLikelyDuplicateCount: likelyDuplicates.length - unreviewedLikelyDuplicates.length,
     errors: [
       ...searches.filter((search) => search.error).map((search) => ({ kind: search.kind, query: search.query, error: search.error })),
       ...detailErrors.map((detail) => ({ kind: "pr-files", ...detail })),
     ],
   },
   likelyDuplicates,
+  unreviewedLikelyDuplicates,
   relatedOpenPrs: relatedOpenPrs.slice(0, 30),
   relatedIssues: [...relatedIssuesByNumber.values()].slice(0, 30),
 };
@@ -266,6 +281,7 @@ console.log(JSON.stringify({
   output,
   queries: queries.length,
   relatedOpenPrs: relatedOpenPrs.length,
-  likelyDuplicates: likelyDuplicates.length,
+  likelyDuplicates: unreviewedLikelyDuplicates.length,
+  reviewedLikelyDuplicates: likelyDuplicates.length - unreviewedLikelyDuplicates.length,
   offline: receipt.offline,
 }, null, 2));

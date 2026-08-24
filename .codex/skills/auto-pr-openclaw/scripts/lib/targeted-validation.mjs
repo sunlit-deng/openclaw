@@ -1,16 +1,15 @@
-const DOCUMENTATION_BASENAMES = /^(?:readme|changelog|license|notice|authors)(?:\..*)?$/i;
+import { loadProjectProfile, projectSurfaceRules, projectValidationCommands } from "../../../../auto-pr-core/project-profile.mjs";
+import { isDocumentationFile, normalizeRepoPath } from "./path-policy.mjs";
 const LINTABLE_RE = /\.[cm]?[jt]sx?$/u;
 const TEST_FILE_RE = /(?:^|\/)(?:test\/|tests\/)|\.(?:test|spec)\.[cm]?[jt]sx?$/u;
 const HIGH_RISK_RE = /^(?:\.github\/|config\/|package\.json$|pnpm-lock\.yaml$|pnpm-workspace\.yaml$|tsconfig(?:\.[^/]+)?\.json$|src\/plugin-sdk\/|packages\/plugin-sdk\/)|(?:^|\/)(?:package\.json|tsconfig(?:\.[^/]+)?\.json)$/u;
 
 function normalize(file) {
-  return file.replaceAll("\\", "/").replace(/^\.\/+/u, "");
+  return normalizeRepoPath(file);
 }
 
 function isDocumentation(file) {
-  const normalized = normalize(file);
-  const basename = normalized.split("/").at(-1) ?? "";
-  return normalized.endsWith(".md") || DOCUMENTATION_BASENAMES.test(basename);
+  return isDocumentationFile(file);
 }
 
 function surfaceFor(file) {
@@ -23,9 +22,36 @@ function surfaceFor(file) {
   return "";
 }
 
-export function targetedValidationDecision(files) {
+export function targetedValidationDecision(files, projectInput = "openclaw") {
+  const project = typeof projectInput === "string" || !projectInput
+    ? loadProjectProfile(projectInput || "openclaw")
+    : projectInput;
   const normalized = files.map(normalize);
   const codeFiles = normalized.filter((file) => !isDocumentation(file));
+  if (project.id !== "openclaw") {
+    const reasons = [];
+    const surfaceRules = projectSurfaceRules(project, normalized);
+    if (codeFiles.length === 0) reasons.push("no non-documentation files");
+    if (codeFiles.length > 12) reasons.push(`too many changed files (${codeFiles.length} > 12)`);
+    if (codeFiles.some((file) => /^(?:\.github\/|Cargo\.toml$|Cargo\.lock$|\.cargo\/|dev\/ci\/)/u.test(file))) {
+      reasons.push("repository or CI policy path");
+    }
+    for (const rule of surfaceRules.filter((item) => item.escalate)) {
+      reasons.push(`surface requires escalated validation: ${rule.name}`);
+    }
+    return {
+      safe: reasons.length === 0,
+      reasons,
+      files: normalized,
+      codeFiles,
+      surfaces: [...new Set([
+        ...(codeFiles.length === 0 ? [] : [project.id]),
+        ...surfaceRules.map((rule) => rule.name),
+      ])],
+      surfaceRules,
+      project,
+    };
+  }
   const reasons = [];
   if (codeFiles.length === 0) reasons.push("no non-documentation files");
   if (codeFiles.length > 12) reasons.push(`too many changed files (${codeFiles.length} > 12)`);
@@ -41,6 +67,7 @@ export function targetedValidationDecision(files) {
     files: normalized,
     codeFiles,
     surfaces,
+    project,
   };
 }
 
@@ -48,9 +75,20 @@ function command(name, bin, args) {
   return { name, bin, args };
 }
 
-export function targetedValidationPlan(files) {
-  const decision = targetedValidationDecision(files);
+export function targetedValidationPlan(files, projectInput = "openclaw") {
+  const project = typeof projectInput === "string" || !projectInput
+    ? loadProjectProfile(projectInput || "openclaw")
+    : projectInput;
+  const decision = targetedValidationDecision(files, project);
   if (!decision.safe) return { ...decision, commands: [] };
+
+  if (project.id !== "openclaw") {
+    const lane = decision.codeFiles.length === 0 ? "docs" : "targeted";
+    return {
+      ...decision,
+      commands: projectValidationCommands(project, lane, decision.files),
+    };
+  }
 
   const commands = [];
   const lintable = decision.codeFiles.filter((file) => LINTABLE_RE.test(file));

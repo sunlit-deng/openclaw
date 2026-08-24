@@ -1,6 +1,6 @@
 # auto-pr
 
-Personal Codex and Claude Code workflows for preparing OpenClaw pull requests with repeatable local gates on macOS and Linux.
+Personal Codex and Claude Code workflows for preparing OpenClaw and ZeroClaw pull requests with repeatable local gates on macOS and Linux. Project-specific policy and validation live in `.codex/auto-pr-core/projects/*.json`; the guarded workflow remains shared.
 
 ## Layout
 
@@ -8,12 +8,40 @@ Personal Codex and Claude Code workflows for preparing OpenClaw pull requests wi
 .codex/
   skills/
     auto-pr-openclaw/       # canonical project-local skill
+    auto-pr-zeroclaw/       # canonical ZeroClaw skill
 .claude/
   skills/
     auto-pr-openclaw        # symlink to the canonical .codex skill
+    auto-pr-zeroclaw         # symlink to the canonical .codex skill
 scripts/
   validate.sh               # validate scripts, tests, and skill consistency
 ```
+
+## ZeroClaw
+
+ZeroClaw uses its own skill and workspace, but not a second automation project:
+
+```text
+<auto-pr>/workspace/zeroclaw/
+  repos/zeroclaw/          # main clone used for fetch/base
+  worktrees/issue-<N>/     # one issue -> one worktree
+  outputs/issue-<N>/       # PR body and receipts
+```
+
+The intake target is `origin/master`, dependencies use `cargo fetch --locked`,
+and the default Rust validation profile records formatting, Clippy, and locked
+tests. Start a workflow with:
+
+```bash
+./.codex/skills/auto-pr-zeroclaw/scripts/new-zeroclaw-worktree.sh --issue <N> --topic <slug>
+```
+
+For an existing PR, use `prepare-zeroclaw-pr-worktree.mjs`. Draft the body from
+`.codex/skills/auto-pr-zeroclaw/references/pr-body.md`, then run the ZeroClaw
+body validator, preflight, and gate summary. The publisher uses `master` from
+the project profile and remains behind the same explicit human approval gate.
+See `.codex/skills/auto-pr-zeroclaw/references/contribution-policy.md` for the
+upstream contribution, PR-format, privacy, and validation requirements.
 
 Recommended OpenClaw working directory layout:
 

@@ -1,0 +1,30 @@
+{
+  "id": "openclaw",
+  "displayName": "OpenClaw",
+  "github": {
+    "repo": "openclaw/openclaw",
+    "defaultBranch": "main"
+  },
+  "workspace": {
+    "name": "openclaw",
+    "repoDir": "openclaw",
+    "storeDir": ".pnpm-store"
+  },
+  "dependencies": {
+    "kind": "pnpm"
+  },
+  "branch": {
+    "prefix": "sunlit/fix"
+  },
+  "prPolicy": {
+    "requiredSections": [
+      "What Problem This Solves",
+      "Why This Change Was Made",
+      "User Impact",
+      "Evidence"
+    ],
+    "evidenceSection": "Evidence",
+    "aiDisclosure": "marker",
+    "aiMarker": "AI-assisted: built with Codex"
+  }
+}

@@ -12,6 +12,14 @@ import {
   resolveAccount,
 } from "./lib/account-utils.mjs";
 import { resolveValidationProfile } from "./lib/validation-profile.mjs";
+import { isDocumentationOnly } from "./lib/path-policy.mjs";
+import {
+  loadProjectProfile,
+  projectDefaultBranch,
+  projectValidationCommands,
+  projectUsesCargo,
+  projectUsesPnpm,
+} from "../../../auto-pr-core/project-profile.mjs";
 
 function parseArgs(argv) {
   const result = {
@@ -47,9 +55,9 @@ function parseArgs(argv) {
   return result;
 }
 
-function configureProfile(result, changedFiles) {
+function configureProfile(result, changedFiles, project) {
   const requestedProfile = result.profile;
-  result.profile = resolveValidationProfile(requestedProfile, changedFiles);
+  result.profile = resolveValidationProfile(requestedProfile, changedFiles, project);
   if (result.profile === "targeted") {
     if (result.checkScript || result.testScript !== "test:changed" || result.typeScript || result.extraScripts.length > 0) {
       throw new Error("--profile targeted uses fixed changed-file lint/format, owning-project types, and focused tests");
@@ -195,6 +203,10 @@ function lines(value) {
   return value.split("\n").map((line) => line.trim()).filter(Boolean);
 }
 
+function filesUnderPrefixes(files, prefixes) {
+  return files.filter((file) => prefixes.some((prefix) => file === prefix || file.startsWith(prefix)));
+}
+
 function sha256(value) {
   return crypto.createHash("sha256").update(value).digest("hex");
 }
@@ -325,6 +337,12 @@ if (args.help) {
   console.log(usage());
   process.exit(0);
 }
+
+// Default the upstream heavy-check lock to worktree scope so parallel PR
+// worktrees do not serialize their tsgo/oxlint lanes on one shared .git lock.
+// Set OPENCLAW_HEAVY_CHECK_LOCK_SCOPE=shared explicitly to restore the
+// upstream single-lock behavior when heavy lanes must stay serialized.
+process.env.OPENCLAW_HEAVY_CHECK_LOCK_SCOPE ??= "worktree";
 if (!args.workflow) {
   console.error("--workflow is required");
   process.exit(2);
@@ -332,6 +350,7 @@ if (!args.workflow) {
 
 const workflowPath = path.resolve(args.workflow);
 const workflow = JSON.parse(fs.readFileSync(workflowPath, "utf8"));
+const project = loadProjectProfile(workflow.projectConfigPath || workflow.projectId || "openclaw");
 const account = resolveAccount({ workflow });
 const repo = path.resolve(workflow.repoPath);
 const root = path.resolve(workflow.root);
@@ -371,7 +390,7 @@ if (args.profile === "conflict") {
     "dependency environment",
     "validated by the focused conflict-resolution receipt; preflight will not repeat dependency checks",
   ));
-} else {
+} else if (projectUsesPnpm(project)) {
   checks.push(staticCheck(
     "dependencies installed",
     workflow.dependencies?.status === "installed" && fs.existsSync(path.join(repo, "node_modules", ".modules.yaml")),
@@ -424,10 +443,25 @@ if (args.profile === "conflict") {
       "legacy node_modules has no dependency fingerprint; run ensure-openclaw-deps.sh once to enable lockfile-aware reuse",
     ));
   }
+} else if (projectUsesCargo(project)) {
+  const cargoResult = run("cargo", ["metadata", "--no-deps", "--format-version", "1"], repo);
+  checks.push(staticCheck(
+    "Cargo workspace available",
+    cargoResult.exitCode === 0,
+    cargoResult.exitCode === 0 ? "cargo metadata succeeded" : cargoResult.error || cargoResult.output,
+  ));
+  checks.push(staticCheck(
+    "dependency setup recorded",
+    workflow.dependencies?.status === "installed" || workflow.dependencies?.status === "skipped",
+    workflow.dependencies?.status === "installed"
+      ? "cargo dependencies fetched"
+      : `skipped: ${workflow.dependencies?.skipReason ?? "no reason recorded"}`,
+  ));
 }
 
-const fetchResult = run("git", ["fetch", "origin", "main"], repo);
-checks.push(commandCheck("fetch latest origin/main snapshot", fetchResult));
+const defaultBranch = projectDefaultBranch(project);
+const fetchResult = run("git", ["fetch", "origin", defaultBranch], repo);
+checks.push(commandCheck(`fetch latest origin/${defaultBranch} snapshot`, fetchResult));
 
 let headSha = "";
 let validationBaseSha = workflow.validationBaseSha || workflow.baseSha || "";
@@ -442,8 +476,8 @@ try {
   headSha = git(repo, "rev-parse", "HEAD");
   if (!validationBaseSha) throw new Error("workflow has no pinned validation base SHA");
   validationBaseSha = git(repo, "rev-parse", `${validationBaseSha}^{commit}`);
-  if (fetchResult.exitCode !== 0) throw new Error("latest origin/main snapshot is unavailable");
-  latestMainSha = git(repo, "rev-parse", "refs/remotes/origin/main^{commit}");
+  if (fetchResult.exitCode !== 0) throw new Error(`latest origin/${defaultBranch} snapshot is unavailable`);
+  latestMainSha = git(repo, "rev-parse", `refs/remotes/origin/${defaultBranch}^{commit}`);
   branch = git(repo, "branch", "--show-current");
   status = git(repo, "status", "--porcelain");
   checks.push(staticCheck("workflow branch matches", branch === workflow.branch, `${branch} vs ${workflow.branch}`));
@@ -490,17 +524,17 @@ try {
   const mergeTree = run("git", ["merge-tree", "--write-tree", headSha, latestMainSha], repo);
   const mergeConflict = mergeTree.exitCode === 1;
   checks.push(staticCheck(
-    "merge compatibility with observed origin/main",
+    `merge compatibility with observed origin/${defaultBranch}`,
     mergeTree.exitCode === 0,
     mergeConflict
-      ? `conflict against observed origin/main ${latestMainSha}: ${mergeTree.output || "merge-tree reported a conflict"}`
+      ? `conflict against observed origin/${defaultBranch} ${latestMainSha}: ${mergeTree.output || "merge-tree reported a conflict"}`
       : mergeTree.exitCode === 0
-        ? `clean against observed origin/main ${latestMainSha}`
+        ? `clean against observed origin/${defaultBranch} ${latestMainSha}`
         : `unable to evaluate merge compatibility: ${mergeTree.output || mergeTree.error}`,
   ));
 
   if (validationBaseSha === latestMainSha) {
-    checks.push(staticCheck("upstream drift since validation base", true, "origin/main has not advanced"));
+    checks.push(staticCheck("upstream drift since validation base", true, `origin/${defaultBranch} has not advanced`));
   } else {
     checks.push(advisoryCheck(
       "upstream drift since validation base",
@@ -509,17 +543,17 @@ try {
         `latestObservedMain=${latestMainSha}`,
         `behindBy=${behindBy}`,
         `overlap=${overlappingFiles.length ? overlappingFiles.join(",") : "none"}`,
-        "main advancement alone does not invalidate validation or require a rebase",
+        `${defaultBranch} advancement alone does not invalidate validation or require a rebase`,
       ].join(" "),
     ));
   }
   if (!containsLatestMain) {
     checks.push(advisoryCheck(
       "branch freshness",
-      `branch does not contain observed origin/main ${latestMainSha}; rebase only for conflicts, risky overlap, or an explicit up-to-date requirement`,
+      `branch does not contain observed origin/${defaultBranch} ${latestMainSha}; rebase only for conflicts, risky overlap, or an explicit up-to-date requirement`,
     ));
   } else {
-    checks.push(staticCheck("branch freshness", true, `branch contains observed origin/main ${latestMainSha}`));
+    checks.push(staticCheck("branch freshness", true, `branch contains observed origin/${defaultBranch} ${latestMainSha}`));
   }
   freshness = {
     validationBaseSha,
@@ -537,7 +571,7 @@ try {
 }
 
 try {
-  requestedProfile = configureProfile(args, changedFiles);
+  requestedProfile = configureProfile(args, changedFiles, project);
   checks.push(staticCheck(
     "validation profile selection",
     true,
@@ -594,6 +628,7 @@ try {
     repoPath: repo,
     baseRef: validationBaseSha || workflow.baseRef,
     changedFiles,
+    project,
   });
   workflow.prBodySha256 = bodyResult.sha256;
   checks.push(staticCheck(
@@ -605,11 +640,72 @@ try {
   checks.push(staticCheck("PR body and proof", false, error.message));
 }
 
+if (project.id === "zeroclaw" && workflow.mode === "new-issue") {
+  const intakePath = path.resolve(workflow.intakePath || path.join(outputPath, "intake.json"));
+  const intake = readJsonIfPresent(intakePath);
+  const intakeProblems = [];
+  if (!intake) intakeProblems.push(`missing intake receipt: ${intakePath}`);
+  else {
+    if (intake.kind !== "zeroclaw-intake") intakeProblems.push("intake receipt kind is invalid");
+    if (intake.issue?.number !== workflow.issue) intakeProblems.push("intake issue does not match workflow issue");
+    if (intake.targetBranch !== defaultBranch) intakeProblems.push(`intake target branch is not ${defaultBranch}`);
+    if (intake.untrustedGithubInput !== true) intakeProblems.push("intake receipt does not record untrusted GitHub input handling");
+    if ((intake.blockers ?? []).length > 0) intakeProblems.push(...intake.blockers);
+  }
+  checks.push(staticCheck("ZeroClaw issue intake", intakeProblems.length === 0, intakeProblems.join("; ") || intakePath));
+  workflow.intakePath = intakePath;
+}
+
+if (project.id === "zeroclaw" && workflow.mode === "existing-pr") {
+  const reviewIntakePath = path.resolve(workflow.reviewIntakePath || path.join(outputPath, "review-intake.json"));
+  const reviewIntake = readJsonIfPresent(reviewIntakePath);
+  const reviewProblems = [];
+  if (!reviewIntake) reviewProblems.push(`missing review intake receipt: ${reviewIntakePath}`);
+  else {
+    if (reviewIntake.kind !== "zeroclaw-review-intake") reviewProblems.push("review intake receipt kind is invalid");
+    if (reviewIntake.pr?.number !== workflow.pr) reviewProblems.push("review intake PR does not match workflow PR");
+    if (reviewIntake.pr?.state !== "OPEN") reviewProblems.push("review intake was not captured while the PR was open");
+    if (reviewIntake.pr?.headRefOid !== headSha) reviewProblems.push("review intake head does not match current HEAD");
+    if (reviewIntake.pr?.baseRefName !== defaultBranch) reviewProblems.push(`review intake base is not ${defaultBranch}`);
+    if (reviewIntake.untrustedGithubInput !== true) reviewProblems.push("review intake does not record untrusted GitHub input handling");
+    if ((reviewIntake.lookupErrors ?? []).length > 0) reviewProblems.push(...reviewIntake.lookupErrors);
+  }
+  checks.push(staticCheck("ZeroClaw review and CI intake", reviewProblems.length === 0, reviewProblems.join("; ") || reviewIntakePath));
+  workflow.reviewIntakePath = reviewIntakePath;
+}
+
+if (project.id === "zeroclaw" && project.reviewPolicy) {
+  const architectureFiles = filesUnderPrefixes(changedFiles, project.reviewPolicy.architecturePaths ?? []);
+  const rfcFiles = filesUnderPrefixes(changedFiles, project.reviewPolicy.rfcPaths ?? []);
+  const requiredPolicyFiles = new Set();
+  if (architectureFiles.length > 0 || rfcFiles.length > 0) {
+    requiredPolicyFiles.add(project.reviewPolicy.agents);
+    requiredPolicyFiles.add(project.reviewPolicy.architectureMap);
+    if (rfcFiles.length > 0) requiredPolicyFiles.add(project.reviewPolicy.rfcProcess);
+  }
+  const missingPolicyFiles = [...requiredPolicyFiles]
+    .filter(Boolean)
+    .filter((file) => !fs.existsSync(path.join(repo, file)));
+  if (requiredPolicyFiles.size === 0) {
+    checks.push(skippedCheck("ZeroClaw contribution map/RFC prerequisites", "no architecture or RFC-sensitive path changed"));
+  } else {
+    checks.push(staticCheck(
+      "ZeroClaw contribution map/RFC prerequisites",
+      missingPolicyFiles.length === 0,
+      missingPolicyFiles.length === 0
+        ? `architecture files: ${architectureFiles.length}; RFC-sensitive files: ${rfcFiles.length}; read ${[...requiredPolicyFiles].join(", ")}`
+        : `missing: ${missingPolicyFiles.join(", ")}`,
+    ));
+  }
+}
+
 let packageJson;
-try {
-  packageJson = JSON.parse(fs.readFileSync(path.join(repo, "package.json"), "utf8"));
-} catch (error) {
-  checks.push(staticCheck("package manifest", false, error.message));
+if (projectUsesPnpm(project)) {
+  try {
+    packageJson = JSON.parse(fs.readFileSync(path.join(repo, "package.json"), "utf8"));
+  } catch (error) {
+    checks.push(staticCheck("package manifest", false, error.message));
+  }
 }
 
 if (packageJson && ["quick", "conflict"].includes(args.profile)) {
@@ -652,6 +748,9 @@ if (packageJson && ["quick", "conflict"].includes(args.profile)) {
       const relevantEnvironment = Object.fromEntries(
         Object.entries(process.env)
           .filter(([key]) => key.startsWith("OPENCLAW_") || ["CI", "GITHUB_ACTIONS"].includes(key))
+          // Lock scope changes where heavy lanes serialize, never what they
+          // validate; keep it out of the reuse fingerprint.
+          .filter(([key]) => key !== "OPENCLAW_HEAVY_CHECK_LOCK_SCOPE")
           .toSorted(([left], [right]) => left.localeCompare(right)),
       );
       heavyFingerprint = sha256(JSON.stringify({
@@ -675,6 +774,9 @@ if (packageJson && ["quick", "conflict"].includes(args.profile)) {
         environment: relevantEnvironment,
       }));
 
+      const focusedTestScriptPath = ["scripts/test-projects.mts", "scripts/test-projects.mjs"]
+        .find((relative) => fs.existsSync(path.join(repo, relative))) || "scripts/test-projects.mts";
+
       focusedTestFingerprint = args.testScript
         ? sha256(JSON.stringify({
             schemaVersion: 1,
@@ -687,7 +789,7 @@ if (packageJson && ["quick", "conflict"].includes(args.profile)) {
             platform: process.platform,
             arch: process.arch,
             pnpm: pnpmVersion.stdout.trim(),
-            testProjectsScriptSha256: fileSha256(path.join(repo, "scripts/test-projects.mjs")),
+            testProjectsScriptSha256: fileSha256(path.join(repo, focusedTestScriptPath)),
             preflightScriptSha256: fileSha256(path.resolve(process.argv[1])),
             environment: relevantEnvironment,
           }))
@@ -747,7 +849,13 @@ if (packageJson && ["quick", "conflict"].includes(args.profile)) {
             heavyChecks.push(cachedFocusedTest);
           } else {
             const testResult = args.testScript === "test:changed"
-              ? run(process.execPath, ["scripts/test-projects.mjs", "--changed", validationBaseSha], repo)
+              ? run(
+                  process.execPath,
+                  focusedTestScriptPath.endsWith(".mts")
+                    ? ["--import", "tsx", focusedTestScriptPath, "--changed", validationBaseSha]
+                    : [focusedTestScriptPath, "--changed", validationBaseSha],
+                  repo,
+                )
               : run("pnpm", [args.testScript], repo);
             heavyChecks.push(commandCheck("focused tests", testResult));
           }
@@ -780,10 +888,84 @@ if (packageJson && ["quick", "conflict"].includes(args.profile)) {
   }
 }
 
+if (projectUsesCargo(project)) {
+  const documentationOnly = isDocumentationOnly(changedFiles);
+  if (args.profile === "quick" && documentationOnly && project.validation?.docs?.length) {
+    const commands = projectValidationCommands(project, "docs", changedFiles);
+    for (const command of commands) {
+      const commandResult = run(command.bin, command.args, repo, {
+        env: {
+          ...process.env,
+          ZEROCLAW_STRICT_LINT: process.env.ZEROCLAW_STRICT_LINT || "1",
+          ZEROCLAW_DOCS_LINT: process.env.ZEROCLAW_DOCS_LINT || "1",
+          ZEROCLAW_DOCS_LINKS: process.env.ZEROCLAW_DOCS_LINKS || "1",
+        },
+      });
+      const check = commandCheck(command.name, commandResult);
+      heavyChecks.push(check);
+      if (check.status === "failed") break;
+    }
+    checks.push(...heavyChecks);
+  } else if (["quick", "conflict"].includes(args.profile)) {
+    checks.push(skippedCheck(
+      "heavy checks",
+      args.profile === "conflict"
+        ? "focused checks are recorded in conflict-resolution-check.json; no Cargo lanes were repeated"
+        : "skipped by --profile quick; no Cargo validation lanes were run",
+    ));
+  } else {
+    const lane = args.profile === "full" ? "full" : args.profile === "targeted" ? "targeted" : "changed";
+    const commands = projectValidationCommands(project, lane, changedFiles);
+    const cargoLockPath = path.join(repo, "Cargo.lock");
+    heavyFingerprint = sha256(JSON.stringify({
+      schemaVersion: 1,
+      project: project.id,
+      headSha,
+      validationBaseSha,
+      profile: args.profile,
+      commands,
+      cargoTomlSha256: fileSha256(path.join(repo, "Cargo.toml")),
+      lockfileSha256: fileSha256(cargoLockPath),
+      rustc: run("rustc", ["--version"], repo).stdout.trim(),
+      cargo: run("cargo", ["--version"], repo).stdout.trim(),
+      node: process.version,
+      platform: process.platform,
+      arch: process.arch,
+      preflightScriptSha256: fileSha256(path.resolve(process.argv[1])),
+    }));
+    const cachedHeavyChecks = readCachedHeavyChecks(previousReceipt, preflightCache, heavyFingerprint);
+    cacheHit = Boolean(cachedHeavyChecks);
+    if (cacheHit) {
+      heavyChecks = cachedHeavyChecks;
+      checks.push(staticCheck("heavy check cache", true, `reused successful checks for fingerprint ${heavyFingerprint}`));
+    } else {
+      for (const command of commands) {
+        const commandResult = run(command.bin, command.args, repo, {
+          env: {
+            ...process.env,
+            BASE_SHA: validationBaseSha,
+          },
+        });
+        const check = commandCheck(command.name, commandResult);
+        heavyChecks.push(check);
+        if (check.status === "failed") break;
+      }
+      if (heavyChecks.some((check) => check.status === "failed")) {
+        for (const command of commands.slice(heavyChecks.length)) {
+          heavyChecks.push(skippedCheck(command.name, "skipped because an earlier Cargo lane failed"));
+        }
+      }
+      checks.push(staticCheck("heavy check cache", true, `cache miss for fingerprint ${heavyFingerprint}`));
+    }
+    primaryValidationCheck = heavyChecks.find((check) => check.status !== "skipped") ?? null;
+    checks.push(...heavyChecks);
+  }
+}
+
 const failed = checks.filter((check) => check.status === "failed");
 workflow.schemaVersion = Math.max(Number(workflow.schemaVersion) || 1, 2);
 workflow.validationBaseSha = validationBaseSha || workflow.validationBaseSha || workflow.baseSha;
-workflow.validationBaseRef ||= workflow.baseRef || "origin/main";
+workflow.validationBaseRef ||= workflow.baseRef || `origin/${defaultBranch}`;
 workflow.baseSha ||= workflow.validationBaseSha;
 workflow.latestObservedMainSha = latestMainSha || workflow.latestObservedMainSha || null;
 workflow.latestObservedAt = freshness?.observedAt || workflow.latestObservedAt || null;

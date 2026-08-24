@@ -9,6 +9,11 @@ Usage: new-openclaw-worktree.sh --issue N [--topic TEXT] [--root PATH]
                                [--store-path PATH]
                                [--skip-install --skip-install-reason TEXT]
 
+       new-openclaw-worktree.sh --mode local-candidate --topic TEXT [same options]
+
+Local candidates need no GitHub issue: --mode local-candidate requires
+--topic and derives worktree local-<topic> with branch <prefix>/<topic>.
+
 Dependencies are installed by default with a shared pnpm store. Skipping the
 install requires an explicit reason and is recorded in workflow.json.
 EOF
@@ -25,6 +30,7 @@ auto_pr_root="$(cd "$script_dir/../../../.." && pwd -P)"
 
 issue=""
 topic=""
+mode="new-issue"
 root="$auto_pr_root/workspace/openclaw"
 branch_prefix="sunlit/fix"
 store_path=""
@@ -36,6 +42,7 @@ while [[ $# -gt 0 ]]; do
   case "$1" in
     --issue) issue="${2:-}"; shift 2 ;;
     --topic) topic="${2:-}"; shift 2 ;;
+    --mode) mode="${2:-}"; shift 2 ;;
     --root) root="${2:-}"; shift 2 ;;
     --branch-prefix) branch_prefix="${2:-}"; shift 2 ;;
     --account) account_profile="${2:-}"; shift 2 ;;
@@ -48,10 +55,34 @@ while [[ $# -gt 0 ]]; do
   esac
 done
 
-if [[ ! "$issue" =~ ^[1-9][0-9]*$ ]]; then
-  echo "--issue must be a positive integer" >&2
-  exit 2
+topic_slug=""
+if [[ -n "${topic// }" ]]; then
+  topic_slug="$(slugify "$topic")"
+  [[ -n "$topic_slug" ]] || { echo "--topic must contain a letter or number" >&2; exit 2; }
 fi
+
+case "$mode" in
+  new-issue)
+    if [[ ! "$issue" =~ ^[1-9][0-9]*$ ]]; then
+      echo "--issue must be a positive integer for --mode new-issue" >&2
+      exit 2
+    fi
+    ;;
+  local-candidate)
+    if [[ -n "$issue" ]]; then
+      echo "--issue must be omitted for --mode local-candidate" >&2
+      exit 2
+    fi
+    if [[ -z "$topic_slug" ]]; then
+      echo "--mode local-candidate requires --topic" >&2
+      exit 2
+    fi
+    ;;
+  *)
+    echo "Unknown --mode: $mode (expected new-issue or local-candidate)" >&2
+    exit 2
+    ;;
+esac
 if [[ "$skip_install" -eq 1 && -z "${skip_install_reason// }" ]]; then
   echo "--skip-install requires --skip-install-reason" >&2
   exit 2
@@ -82,13 +113,16 @@ eval "$(node "$script_dir/openclaw-account.mjs" "${account_args[@]}")"
 gh auth status >/dev/null
 gh auth setup-git
 
-name="issue-$issue"
-branch="$branch_prefix/issue-$issue"
-if [[ -n "${topic// }" ]]; then
-  topic_slug="$(slugify "$topic")"
-  [[ -n "$topic_slug" ]] || { echo "--topic must contain a letter or number" >&2; exit 2; }
-  name="$name-$topic_slug"
-  branch="$branch-$topic_slug"
+if [[ "$mode" == "local-candidate" ]]; then
+  name="local-$topic_slug"
+  branch="$branch_prefix/$topic_slug"
+else
+  name="issue-$issue"
+  branch="$branch_prefix/issue-$issue"
+  if [[ -n "$topic_slug" ]]; then
+    name="$name-$topic_slug"
+    branch="$branch-$topic_slug"
+  fi
 fi
 
 repo_root="$root/repos"
@@ -150,9 +184,12 @@ else
 fi
 
 head_sha="$(git -C "$worktree_path" rev-parse HEAD)"
+state_args=(--mode "$mode")
+if [[ "$mode" == "new-issue" ]]; then
+  state_args+=(--issue "$issue")
+fi
 node "$script_dir/write-workflow-state.mjs" \
-  --mode new-issue \
-  --issue "$issue" \
+  "${state_args[@]}" \
   --root "$root" \
   --repo-path "$worktree_path" \
   --output-path "$output_path" \

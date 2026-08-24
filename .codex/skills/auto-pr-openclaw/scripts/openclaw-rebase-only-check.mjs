@@ -1,5 +1,6 @@
 #!/usr/bin/env node
 
+import crypto from "node:crypto";
 import fs from "node:fs";
 import path from "node:path";
 import {
@@ -12,6 +13,7 @@ import {
   run,
   writeJson,
 } from "./lib/workflow-utils.mjs";
+import { findStaleHeadShaRefs } from "./lib/body-sha-utils.mjs";
 import {
   commitIdentityProblems,
   ghEnv,
@@ -19,6 +21,7 @@ import {
   publicAccount,
   resolveAccount,
 } from "./lib/account-utils.mjs";
+import { projectForWorkflow } from "../../../auto-pr-core/project-profile.mjs";
 
 function usage() {
   return `Usage: openclaw-rebase-only-check.mjs --workflow PATH [--target SHA] [--repo OWNER/REPO] [--output PATH]
@@ -95,7 +98,8 @@ if (!args.workflow) {
 }
 
 const context = loadWorkflow(args.workflow);
-const repoSlug = args.repo || "openclaw/openclaw";
+const project = projectForWorkflow(context.workflow);
+const repoSlug = args.repo || project.github.repo;
 const outputPath = path.resolve(args.output || path.join(context.outputPath, "rebase-only-check.json"));
 const checks = [];
 const blockers = [];
@@ -105,8 +109,10 @@ const accountEnv = ghEnv(account);
 const repoPath = context.repoPath;
 const headSha = currentHead(repoPath);
 const branch = currentBranch(repoPath);
-const targetRef = args.target || workflow.approvedRebaseTargetSha || workflow.rebaseTargetSha || "refs/remotes/origin/main";
+const targetRef = args.target || workflow.approvedRebaseTargetSha || workflow.rebaseTargetSha
+  || `refs/remotes/origin/${project.github.defaultBranch}`;
 const originalHeadRef = workflow.headSha || workflow.initialHeadSha;
+let bodyInfo = { path: null, sha256: null, staleHeadShaRefs: [] };
 
 function addCheck(name, passed, details, extra = {}) {
   const check = {
@@ -191,6 +197,33 @@ if (targetSha) {
       );
     }
   }
+
+  if (fs.existsSync(context.prBodyPath)) {
+    const bodyText = fs.readFileSync(context.prBodyPath, "utf8");
+    bodyInfo = {
+      path: context.prBodyPath,
+      sha256: crypto.createHash("sha256").update(bodyText, "utf8").digest("hex"),
+      staleHeadShaRefs: findStaleHeadShaRefs(bodyText, {
+        oldHead: originalHeadSha,
+        newHead: headSha,
+      }),
+    };
+  }
+  const staleDetail = bodyInfo.staleHeadShaRefs.length > 0
+    ? bodyInfo.staleHeadShaRefs
+      .map(({ kind, token }) => `${kind} ${token}`)
+      .join(", ")
+    : "no head SHA pinned";
+  addCheck(
+    "PR body does not pin a stale head SHA",
+    bodyInfo.staleHeadShaRefs.length === 0,
+    bodyInfo.staleHeadShaRefs.length > 0
+      ? `${staleDetail}; refresh pr-body.md with scripts/refresh-pr-body-sha.sh, rerun validate-pr-body.mjs, then use the normal human gate and publish-openclaw-pr.mjs`
+      : bodyInfo.path
+        ? `${staleDetail} (${path.basename(bodyInfo.path)})`
+        : "no canonical PR body file",
+    { body: bodyInfo },
+  );
 
   const identities = gitCommitIdentities(repoPath, targetSha);
   const identityProblems = commitIdentityProblems(identities, account);
@@ -277,6 +310,7 @@ const receipt = {
   originalPatches,
   rebasedPatches,
   changedFiles,
+  body: bodyInfo,
   githubAccount: publicAccount(account),
   maintainer,
   checks,

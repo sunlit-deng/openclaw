@@ -18,14 +18,21 @@ function readJsonIfPresent(file) {
 }
 
 export function accountConfigPath(root = "") {
+  if (process.env.AUTO_PR_ACCOUNTS_FILE) return path.resolve(process.env.AUTO_PR_ACCOUNTS_FILE);
   if (process.env.OPENCLAW_ACCOUNTS_FILE) return path.resolve(process.env.OPENCLAW_ACCOUNTS_FILE);
   if (process.env.AUTO_PR_OPENCLAW_ACCOUNTS_FILE) return path.resolve(process.env.AUTO_PR_OPENCLAW_ACCOUNTS_FILE);
   const rootPath = root ? path.resolve(root) : "";
+  const candidates = [];
   if (rootPath) {
-    const rootConfig = path.join(rootPath, "accounts.json");
-    if (fs.existsSync(rootConfig)) return rootConfig;
+    candidates.push(path.join(rootPath, "accounts.json"));
+    // Shared workspaces keep the account registry under the OpenClaw checkout,
+    // while project workflows may run from a sibling checkout such as
+    // workspace/zeroclaw. Resolve that documented layout without requiring a
+    // project-specific environment variable.
+    candidates.push(path.join(path.dirname(rootPath), "openclaw", "accounts.json"));
   }
-  return path.join(os.homedir(), ".config", "auto-pr", "openclaw-accounts.json");
+  candidates.push(path.join(os.homedir(), ".config", "auto-pr", "openclaw-accounts.json"));
+  return candidates.find((candidate) => fs.existsSync(candidate)) ?? candidates.at(-1);
 }
 
 export function loadAccountConfig(root = "") {
@@ -65,6 +72,7 @@ export function resolveAccount({ workflow = {}, profile = "", root = "" } = {}) 
   const { file, config } = loadAccountConfig(workflowRoot);
   const profiles = config.profiles ?? {};
   const selected = profile
+    || process.env.AUTO_PR_ACCOUNT_PROFILE
     || process.env.OPENCLAW_ACCOUNT_PROFILE
     || workflow.githubAccountProfile
     || workflow.accountProfile
@@ -73,6 +81,9 @@ export function resolveAccount({ workflow = {}, profile = "", root = "" } = {}) 
 
   if (!selected) return { ...LEGACY_ACCOUNT, configPath: file };
   const candidate = profiles[selected];
+  if (!candidate && selected === LEGACY_ACCOUNT.profile) {
+    return { ...LEGACY_ACCOUNT, configPath: file };
+  }
   if (!candidate) {
     throw new Error(`GitHub account profile ${selected} was not found in ${file}`);
   }
@@ -81,12 +92,18 @@ export function resolveAccount({ workflow = {}, profile = "", root = "" } = {}) 
   if (!username || !email) {
     throw new Error(`GitHub account profile ${selected} must define username and email`);
   }
+  const workflowAccount = workflow.githubAccount;
+  const workflowRemote = workflowAccount
+    && workflowAccount.profile === selected
+    && workflowAccount.login === (candidate.login || username)
+    ? workflowAccount.pushRemote
+    : "";
   return {
     profile: selected,
     username,
     email,
     login: candidate.login || username,
-    pushRemote: candidate.pushRemote || selected,
+    pushRemote: workflowRemote || candidate.pushRemote || selected,
     token: tokenForProfile(selected, candidate),
     configured: true,
     configPath: file,

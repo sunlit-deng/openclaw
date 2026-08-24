@@ -22,7 +22,6 @@ const required = [
   "base-ref",
   "base-sha",
   "head-sha",
-  "pnpm-store-path",
   "pr-body-path",
   "preflight-path",
   "dependency-status",
@@ -41,8 +40,11 @@ const issueRaw = values.get("issue");
 const issue = issueRaw ? Number(issueRaw) : null;
 const createdAt = new Date().toISOString();
 const validationBaseSha = values.get("base-sha");
+const dependencyStorePath = values.get("dependency-store-path") || values.get("pnpm-store-path") || null;
 const state = {
-  schemaVersion: 2,
+  schemaVersion: 3,
+  projectId: values.get("project-id") || "openclaw",
+  projectConfigPath: values.get("project-config") || null,
   mode,
   issue,
   pr: values.has("pr") ? Number(values.get("pr")) : null,
@@ -60,7 +62,10 @@ const state = {
   latestObservedAt: createdAt,
   initialHeadSha: values.get("head-sha"),
   headSha: values.get("head-sha"),
-  pnpmStorePath: path.resolve(values.get("pnpm-store-path")),
+  intakePath: values.get("intake-path") ? path.resolve(values.get("intake-path")) : null,
+  reviewIntakePath: values.get("review-intake-path") ? path.resolve(values.get("review-intake-path")) : null,
+  pnpmStorePath: dependencyStorePath ? path.resolve(dependencyStorePath) : null,
+  dependencyStorePath: dependencyStorePath ? path.resolve(dependencyStorePath) : null,
   prBodyPath: path.resolve(values.get("pr-body-path")),
   preflightPath: path.resolve(values.get("preflight-path")),
   dependencies: {

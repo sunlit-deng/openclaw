@@ -1,17 +1,14 @@
 import { targetedValidationDecision } from "./targeted-validation.mjs";
+import { loadProjectProfile } from "../../../../auto-pr-core/project-profile.mjs";
+import { isDocumentationOnly } from "./path-policy.mjs";
 
-const DOCUMENTATION_BASENAMES = /^(?:readme|changelog|license|notice|authors)(?:\..*)?$/i;
+export { isDocumentationOnly };
 
-export function isDocumentationOnly(files) {
-  return files.length > 0 && files.every((file) => {
-    const normalized = file.replaceAll("\\", "/");
-    const basename = normalized.split("/").at(-1) ?? "";
-    return normalized.endsWith(".md") || DOCUMENTATION_BASENAMES.test(basename);
-  });
-}
-
-export function resolveValidationProfile(requestedProfile, changedFiles) {
+export function resolveValidationProfile(requestedProfile, changedFiles, projectInput = "openclaw") {
   if (requestedProfile !== "auto") return requestedProfile;
   if (isDocumentationOnly(changedFiles)) return "quick";
-  return targetedValidationDecision(changedFiles).safe ? "targeted" : "changed";
+  const project = typeof projectInput === "string" || !projectInput
+    ? loadProjectProfile(projectInput || "openclaw")
+    : projectInput;
+  return targetedValidationDecision(changedFiles, project).safe ? "targeted" : "changed";
 }

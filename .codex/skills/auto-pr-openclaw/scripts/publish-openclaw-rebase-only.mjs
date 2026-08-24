@@ -3,14 +3,16 @@
 import fs from "node:fs";
 import path from "node:path";
 import { spawnSync } from "node:child_process";
+import { findStaleHeadShaRefs } from "./lib/body-sha-utils.mjs";
 import { commitIdentityProblems, ghEnv, publicAccount, resolveAccount } from "./lib/account-utils.mjs";
+import { projectForWorkflow } from "../../../auto-pr-core/project-profile.mjs";
 
 function parseArgs(argv) {
   const result = {
     workflow: "",
     check: "",
     pushRemote: "",
-    repo: "openclaw/openclaw",
+    repo: "",
     target: "",
   };
   for (let index = 0; index < argv.length; index += 1) {
@@ -132,6 +134,8 @@ for (const key of ["workflow"]) {
 
 const workflowPath = path.resolve(args.workflow);
 const workflow = JSON.parse(fs.readFileSync(workflowPath, "utf8"));
+const project = projectForWorkflow(workflow);
+args.repo ||= project.github.repo;
 const checkPath = path.resolve(args.check || path.join(workflow.outputPath, "rebase-only-check.json"));
 const rebaseOnlyCheck = JSON.parse(fs.readFileSync(checkPath, "utf8"));
 const account = resolveAccount({ workflow });
@@ -161,7 +165,7 @@ try {
     || workflow.rebaseTargetSha
     || workflow.validationBaseSha
     || workflow.baseSha
-    || "refs/remotes/origin/main";
+    || `refs/remotes/origin/${project.github.defaultBranch}`;
   baseSha = execute("git", ["rev-parse", `${target}^{commit}`], { cwd: repoPath });
   mergeBase = execute("git", ["merge-base", currentHead, baseSha], { cwd: repoPath });
   if (mergeBase !== baseSha) failures.push(`branch does not contain pinned rebase target (${baseSha})`);
@@ -178,6 +182,18 @@ if (rebaseOnlyCheck.headSha !== currentHead) failures.push("rebase-only check do
 if (rebaseOnlyCheck.targetSha !== baseSha) failures.push("rebase-only check does not match the pinned rebase target");
 if (rebaseOnlyCheck.patchEquivalent !== true) failures.push("rebase-only check does not prove patch equivalence");
 if (!rebaseOnlyCheck.originalHeadSha) failures.push("rebase-only check does not record the original PR head");
+if (workflow.prBodyPath && fs.existsSync(path.resolve(workflow.prBodyPath))) {
+  const bodyText = fs.readFileSync(path.resolve(workflow.prBodyPath), "utf8");
+  const staleRefs = findStaleHeadShaRefs(bodyText, {
+    oldHead: rebaseOnlyCheck.originalHeadSha,
+    newHead: currentHead,
+  });
+  if (staleRefs.length > 0) {
+    failures.push(
+      `PR body pins a stale head SHA (${staleRefs.map((ref) => `${ref.kind} ${ref.token}`).join(", ")}); refresh-pr-body-sha.sh + normal human gate required`,
+    );
+  }
+}
 
 if (failures.length > 0) {
   console.error(failures.map((failure) => `- ${failure}`).join("\n"));
@@ -246,7 +262,7 @@ if (after.maintainerCanModify !== true) {
 
 workflow.baseSha = baseSha || workflow.baseSha;
 workflow.validationBaseSha = baseSha || workflow.validationBaseSha || workflow.baseSha;
-workflow.validationBaseRef ||= "origin/main";
+workflow.validationBaseRef ||= `origin/${project.github.defaultBranch}`;
 workflow.latestObservedMainSha = baseSha || workflow.latestObservedMainSha;
 workflow.latestObservedAt = new Date().toISOString();
 workflow.headSha = currentHead;

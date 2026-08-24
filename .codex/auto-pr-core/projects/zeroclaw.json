@@ -1,0 +1,243 @@
+{
+  "id": "zeroclaw",
+  "displayName": "ZeroClaw",
+  "github": {
+    "repo": "zeroclaw-labs/zeroclaw",
+    "defaultBranch": "master"
+  },
+  "workspace": {
+    "name": "zeroclaw",
+    "repoDir": "zeroclaw"
+  },
+  "intake": {
+    "script": ".codex/skills/auto-pr-zeroclaw/scripts/zeroclaw-intake.mjs",
+    "reviewScript": ".codex/skills/auto-pr-zeroclaw/scripts/zeroclaw-review-intake.mjs"
+  },
+  "reviewPolicy": {
+    "agents": "AGENTS.md",
+    "architectureMap": "docs/book/src/contributing/architecture-map.md",
+    "rfcProcess": "docs/book/src/contributing/rfcs.md",
+    "architecturePaths": [
+      "crates/",
+      "firmware/",
+      "Cargo.toml",
+      "Cargo.lock",
+      "src/"
+    ],
+    "rfcPaths": [
+      ".github/",
+      "config/",
+      "dev/",
+      "install.sh",
+      "scripts/ci/"
+    ]
+  },
+  "dependencies": {
+    "kind": "cargo",
+    "setup": [
+      {
+        "name": "fetch locked Cargo dependencies",
+        "bin": "cargo",
+        "args": ["fetch", "--locked"]
+      }
+    ]
+  },
+  "branch": {
+    "prefix": "fix"
+  },
+  "prPolicy": {
+    "requiredSections": [
+      "Summary",
+      "Testing",
+      "Security & Privacy Impact",
+      "Compatibility"
+    ],
+    "evidenceSection": "Testing",
+    "testingSubsection": "How I tested",
+    "reviewTestingSubsection": "How you can test (when useful)",
+    "conditionalSections": {
+      "rollback": "Rollback",
+      "supersedeAttribution": "Supersede Attribution"
+    },
+    "issueLinkVerbs": [
+      "Fixes",
+      "Closes",
+      "Resolves",
+      "Related",
+      "Depends on",
+      "Supersedes",
+      "Implements"
+    ],
+    "compatibilityRequired": true,
+    "requireCommittedProof": false,
+    "aiDisclosure": "forbidden-footer",
+    "forbiddenAiPatterns": [
+      "Co-authored-by:\\s*(?:Claude|Codex|GPT|ChatGPT)",
+      "Created with (?:Claude Code|Codex|ChatGPT)",
+      "Generated with (?:Claude Code|Codex|ChatGPT)"
+    ],
+    "requiredTemplatePath": ".github/pull_request_template.md",
+    "privacyRequired": true
+  },
+  "validation": {
+    "docs": [
+      {
+        "name": "documentation quality",
+        "bin": "bash",
+        "args": ["scripts/ci/docs_quality_gate.sh"]
+      },
+      {
+        "name": "documentation links",
+        "bin": "bash",
+        "args": ["scripts/ci/docs_links_gate.sh"]
+      }
+    ],
+    "targeted": [
+      {
+        "name": "Rust formatting",
+        "bin": "cargo",
+        "args": ["fmt", "--all", "--", "--check"]
+      },
+      {
+        "name": "Rust Clippy",
+        "bin": "cargo",
+        "args": ["clippy", "--workspace", "--exclude", "zeroclaw-desktop", "--all-targets", "--features", "ci-all", "--", "-D", "warnings"]
+      },
+      {
+        "name": "locked Rust tests",
+        "bin": "cargo",
+        "args": ["test", "--locked"]
+      }
+    ],
+    "changed": [
+      {
+        "name": "Rust formatting",
+        "bin": "cargo",
+        "args": ["fmt", "--all", "--", "--check"]
+      },
+      {
+        "name": "Rust Clippy",
+        "bin": "cargo",
+        "args": ["clippy", "--workspace", "--exclude", "zeroclaw-desktop", "--all-targets", "--features", "ci-all", "--", "-D", "warnings"]
+      },
+      {
+        "name": "locked Rust tests",
+        "bin": "cargo",
+        "args": ["test", "--locked"]
+      }
+    ],
+    "web": [
+      {
+        "name": "Web focused tests",
+        "bin": "npm",
+        "args": ["--prefix", "web", "test"]
+      },
+      {
+        "name": "Web dashboard build",
+        "bin": "cargo",
+        "args": ["web", "build"]
+      }
+    ],
+    "nextest": [
+      {
+        "name": "workspace nextest",
+        "bin": "cargo",
+        "args": ["nextest", "run", "--locked", "--workspace", "--exclude", "zeroclaw-desktop"]
+      }
+    ],
+    "parallel-runtime": [
+      {
+        "name": "parallel runtime regression gate",
+        "bin": "bash",
+        "args": ["scripts/ci/parallel_runtime_test_gate.sh"]
+      }
+    ],
+    "firmware": [
+      {
+        "name": "firmware protocol gate",
+        "bin": "bash",
+        "args": ["scripts/ci/firmware_protocol_gate.sh"]
+      }
+    ],
+    "install": [
+      {
+        "name": "installer shell syntax",
+        "bin": "bash",
+        "args": ["-n", "install.sh"]
+      }
+    ],
+    "docs-generated": [
+      {
+        "name": "generated documentation references",
+        "bin": "cargo",
+        "args": ["mdbook", "refs"]
+      }
+    ],
+    "docs-translation": [
+      {
+        "name": "documentation translation check",
+        "bin": "cargo",
+        "args": ["mdbook", "check"]
+      }
+    ],
+    "surfaceRules": [
+      {
+        "name": "firmware protocol",
+        "paths": ["firmware/zeroclaw-fw-protocol/"],
+        "lane": "firmware",
+        "escalate": true
+      },
+      {
+        "name": "parallel runtime coverage",
+        "paths": [
+          "crates/zeroclaw-runtime/",
+          "crates/zeroclaw-channels/",
+          "Cargo.toml",
+          "Cargo.lock",
+          "scripts/ci/parallel_runtime_test_gate.sh"
+        ],
+        "lane": "parallel-runtime",
+        "escalate": true
+      },
+      {
+        "name": "installer script",
+        "paths": ["install.sh"],
+        "lane": "install",
+        "escalate": true
+      },
+      {
+        "name": "generated documentation",
+        "paths": [
+          "docs/book/src/reference/",
+          "docs/book/src/config.md",
+          "docs/book/src/reference/cli.md"
+        ],
+        "lane": "docs-generated"
+      },
+      {
+        "name": "documentation translations",
+        "paths": ["docs/book/"],
+        "extensions": [".po"],
+        "lane": "docs-translation"
+      },
+      {
+        "name": "Web dashboard",
+        "paths": ["web/"],
+        "lane": "web"
+      },
+      {
+        "name": "integration and system tests",
+        "paths": ["tests/integration/", "tests/system/"],
+        "lane": "nextest",
+        "escalate": true
+      }
+    ],
+    "full": [
+      {
+        "name": "full ZeroClaw CI parity",
+        "bin": "bash",
+        "args": ["./dev/ci.sh", "all"]
+      }
+    ]
+  }
+}

@@ -8,6 +8,7 @@ import { ghEnv, publicAccount, resolveAccount } from "./lib/account-utils.mjs";
 import { validatePrBody } from "./lib/pr-body-validator.mjs";
 import { prUpdateRequired } from "./lib/publish-utils.mjs";
 import { validateWorkflowReceipt } from "./lib/receipt-utils.mjs";
+import { projectForWorkflow } from "../../../auto-pr-core/project-profile.mjs";
 
 function parseArgs(argv) {
   const result = {
@@ -16,9 +17,9 @@ function parseArgs(argv) {
     approvedBodySha: "",
     title: "",
     head: "",
-    base: "main",
+    base: "",
     pushRemote: "",
-    repo: "openclaw/openclaw",
+    repo: "",
     allowFailedPreflight: false,
     failedPreflightBypassReason: "",
   };
@@ -72,7 +73,7 @@ function normalizeNewlines(value) {
 function viewPr(selector, repo, env = process.env) {
   return JSON.parse(execute("gh", [
     "pr", "view", String(selector), "--repo", repo,
-    "--json", "number,url,title,body,maintainerCanModify,headRefName,headRepositoryOwner",
+    "--json", "number,url,title,body,maintainerCanModify,headRefName,headRefOid,headRepositoryOwner",
   ], { env }));
 }
 
@@ -107,6 +108,9 @@ for (const key of ["workflow", "approvedHead", "approvedBodySha"]) {
 
 const workflowPath = path.resolve(args.workflow);
 const workflow = JSON.parse(fs.readFileSync(workflowPath, "utf8"));
+const project = projectForWorkflow(workflow);
+args.repo ||= project.github.repo;
+args.base ||= workflow.baseRef?.replace(/^origin\//, "") || project.github.defaultBranch;
 const account = resolveAccount({ workflow });
 const accountEnv = ghEnv(account);
 args.pushRemote ||= account.pushRemote;
@@ -148,6 +152,7 @@ try {
     requireIssueLink: Number.isSafeInteger(workflow.issue) && workflow.issue > 0,
     repoPath,
     baseRef: workflow.validationBaseSha || workflow.baseRef,
+    project,
   });
   if (bodyValidation.status !== "passed") {
     failures.push(`current PR body failed validation: ${bodyValidation.errors.join("; ")}`);
@@ -167,7 +172,18 @@ let remoteUrl;
 try {
   remoteUrl = execute("git", ["remote", "get-url", args.pushRemote], { cwd: repoPath });
 } catch {
-  execute("gh", ["repo", "fork", args.repo, "--remote", "--remote-name", args.pushRemote], { cwd: repoPath, env: accountEnv });
+  const forkName = repoNameFromSlug(args.repo);
+  const forkUrl = `https://github.com/${ghLogin}/${forkName}.git`;
+  try {
+    execute("gh", ["api", "--method", "POST", `repos/${args.repo}/forks`], { env: accountEnv });
+  } catch (forkError) {
+    try {
+      execute("gh", ["api", `repos/${ghLogin}/${forkName}`], { env: accountEnv });
+    } catch {
+      throw forkError;
+    }
+  }
+  execute("git", ["remote", "add", args.pushRemote, forkUrl], { cwd: repoPath });
   remoteUrl = execute("git", ["remote", "get-url", args.pushRemote], { cwd: repoPath });
 }
 const remoteOwner = remoteOwnerFromUrl(remoteUrl);
@@ -189,6 +205,9 @@ if (prNumber) {
   if (ownerLogin(existing.headRepositoryOwner)?.toLowerCase() !== ghLogin.toLowerCase() || existing.headRefName !== remoteHeadRef) {
     throw new Error("existing PR head owner or branch does not match the authenticated push target");
   }
+  if (!existing.headRefOid) {
+    throw new Error("existing PR head OID is unavailable; refusing to push without a force-with-lease expectation");
+  }
 } else {
   if (!args.title || !args.head) {
     throw new Error("--title and --head <owner:branch> are required when creating a PR");
@@ -199,7 +218,11 @@ if (prNumber) {
   }
 }
 
-execute("git", ["push", "--set-upstream", args.pushRemote, `${currentBranch}:${remoteHeadRef}`], { cwd: repoPath, env: accountEnv });
+const pushArgs = ["push", "--set-upstream", args.pushRemote, `${currentBranch}:${remoteHeadRef}`];
+if (existing) {
+  pushArgs.splice(1, 0, `--force-with-lease=refs/heads/${remoteHeadRef}:${existing.headRefOid}`);
+}
+execute("git", pushArgs, { cwd: repoPath, env: accountEnv });
 
 let response;
 let prWriteSkipped = false;

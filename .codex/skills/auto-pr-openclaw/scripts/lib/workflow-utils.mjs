@@ -180,17 +180,28 @@ export function gitCommitIdentities(repoPath, baseSha) {
   });
 }
 
-export function prBodyInfo(prBodyPath) {
+function headingPattern(name) {
+  return name.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
+export function prBodyInfo(prBodyPath, policy = {}) {
   const body = fs.existsSync(prBodyPath) ? normalizeNewlines(fs.readFileSync(prBodyPath, "utf8")) : "";
-  const evidence = body.match(/## Evidence([\s\S]*?)(?:\n## |\nAI-assisted:|$)/i)?.[1] ?? "";
+  const evidenceHeading = policy.evidenceSection || "Evidence";
+  const evidence = body.match(new RegExp(`## ${headingPattern(evidenceHeading)}([\\s\\S]*?)(?:\\n## |\\nAI-assisted:|$)`, "i"))?.[1] ?? "";
   const lowerEvidence = evidence.toLowerCase();
+  const aiDisclosure = policy.aiDisclosure || (policy.aiMarker ? "marker" : "none");
   const hasBeforeEvidence = /\bbefore(?:[- ]fix)?\b|\bbaseline\b|\bbase branch\b/i.test(evidence);
   const hasAfterEvidence = /\bafter(?:[- ]fix)?\b|\bfixed head\b/i.test(evidence);
   return {
+    aiDisclosure,
+    hasForbiddenAiFooter: aiDisclosure === "forbidden-footer"
+      && (policy.forbiddenAiPatterns ?? []).some((pattern) => new RegExp(pattern, "i").test(body)),
     body,
     sha256: sha256(body),
-    hasEvidenceSection: /## Evidence/i.test(body),
-    hasAiMarker: /^AI-assisted: built with Codex\s*$/mi.test(body),
+    hasEvidenceSection: new RegExp(`## ${headingPattern(evidenceHeading)}`, "i").test(body),
+    hasAiMarker: policy.aiMarker
+      ? new RegExp(`^${headingPattern(policy.aiMarker)}\\s*$`, "mi").test(body)
+      : /^AI-assisted: built with Codex\s*$/mi.test(body),
     hasTerminalFence: /```(?:text|sh|bash|console)?\s*\n\$?[\s\S]*?\n```/i.test(evidence),
     hasDetailsProofSource: /<details>[\s\S]*?```(?:ts|tsx|js|mjs|py|sh|bash)/i.test(evidence),
     hasOnlyTestEvidence: /(?:vitest|jest|node --test|pnpm test|test:changed|check:changed)/i.test(evidence)
@@ -332,7 +343,12 @@ export function riskFlags(files, stats, workflow, preflight, duplicateCheck, bod
   if (bodyInfo?.hasEvidenceSection && !bodyInfo.hasBoundaryControls) {
     flags.push({ level: "advisory", reason: "Evidence lacks before/after or negative-control signal" });
   }
-  if (bodyInfo && !bodyInfo.hasAiMarker) flags.push({ level: "blocker", reason: "missing AI-assisted marker" });
+  if (bodyInfo?.aiDisclosure === "marker" && !bodyInfo.hasAiMarker) {
+    flags.push({ level: "blocker", reason: "missing AI-assisted marker" });
+  }
+  if (bodyInfo?.aiDisclosure === "forbidden-footer" && bodyInfo.hasForbiddenAiFooter) {
+    flags.push({ level: "blocker", reason: "PR body contains a forbidden AI attribution/footer" });
+  }
   return flags;
 }
 

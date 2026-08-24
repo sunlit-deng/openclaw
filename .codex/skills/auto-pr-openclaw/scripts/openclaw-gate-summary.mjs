@@ -23,6 +23,7 @@ import {
   publicAccount,
   resolveAccount,
 } from "./lib/account-utils.mjs";
+import { projectForWorkflow } from "../../../auto-pr-core/project-profile.mjs";
 
 function usage() {
   return `Usage: openclaw-gate-summary.mjs --workflow PATH [--duplicate-check PATH] [--candidate-score PATH] [--rebase-only-check PATH] [--output-md PATH] [--output-json PATH]
@@ -65,14 +66,26 @@ if (!args.workflow) {
 }
 
 const context = loadWorkflow(args.workflow);
+const project = projectForWorkflow(context.workflow);
+const projectName = project.displayName || project.id;
+const openclawDiagnostics = project.id === "openclaw";
 const duplicateCheckApplicable = !context.workflow.pr;
 const account = resolveAccount({ workflow: context.workflow });
 const accountEnv = ghEnv(account);
 const baseSha = context.workflow.validationBaseSha || context.workflow.baseSha;
 const headSha = currentHead(context.repoPath);
 const branch = currentBranch(context.repoPath);
-const body = prBodyInfo(context.prBodyPath);
+const body = prBodyInfo(context.prBodyPath, project.prPolicy);
+const headSubject = run("git", ["log", "-1", "--format=%s"], {
+  cwd: context.repoPath,
+  allowFailure: true,
+}).stdout.trim();
 const preflight = readJsonIfPresent(context.preflightPath);
+const intakePath = context.workflow.intakePath || path.join(context.outputPath, "intake.json");
+const intake = readJsonIfPresent(intakePath);
+const reviewIntakeApplicable = project.id === "zeroclaw" && context.workflow.mode === "existing-pr";
+const reviewIntakePath = context.workflow.reviewIntakePath || path.join(context.outputPath, "review-intake.json");
+const reviewIntake = reviewIntakeApplicable ? readJsonIfPresent(reviewIntakePath) : null;
 const duplicateCheckPath = args.duplicateCheck || path.join(context.outputPath, "duplicate-check.json");
 const candidateScorePath = args.candidateScore || path.join(context.outputPath, "candidate-score.json");
 const rebaseOnlyCheckPath = args.rebaseOnlyCheck || path.join(context.outputPath, "rebase-only-check.json");
@@ -129,7 +142,7 @@ const duplicateCheckBlocks = duplicateCheckApplicable && (
 let maintainer = { checked: false, maintainerCanModify: context.workflow.maintainerCanModify ?? null, error: null };
 if (context.workflow.pr) {
   const result = run("gh", [
-    "pr", "view", String(context.workflow.pr), "--repo", "openclaw/openclaw",
+    "pr", "view", String(context.workflow.pr), "--repo", project.github.repo,
     "--json", "maintainerCanModify,headRepositoryOwner,headRefName,url",
   ], { allowFailure: true, env: accountEnv });
   if (result.exitCode === 0) {
@@ -157,6 +170,22 @@ if (diffCheck.exitCode !== 0) blockers.push("git diff --check failed");
 if (!preflightPassed && !rebaseOnlyPassedForHead) {
   blockers.push(preflight?.status === "passed" ? "preflight receipt is invalid" : `preflight is ${checkStatus(preflight)}`);
 }
+if (project.id === "zeroclaw" && context.workflow.mode === "new-issue") {
+  if (!intake) blockers.push("ZeroClaw issue intake receipt is missing");
+  else if ((intake.blockers?.length ?? 0) > 0) blockers.push(...intake.blockers.map((item) => `issue intake: ${item}`));
+}
+if (reviewIntakeApplicable) {
+  if (!reviewIntake) blockers.push("ZeroClaw review and CI intake receipt is missing");
+  else {
+    if (reviewIntake.kind !== "zeroclaw-review-intake") blockers.push("review intake receipt kind is invalid");
+    if (reviewIntake.pr?.number !== context.workflow.pr) blockers.push("review intake PR does not match workflow PR");
+    if (reviewIntake.pr?.state !== "OPEN") blockers.push("review intake was not captured while the PR was open");
+    if (reviewIntake.pr?.headRefOid !== headSha) blockers.push("review intake head does not match current HEAD");
+    if (reviewIntake.pr?.baseRefName !== project.github.defaultBranch) blockers.push(`review intake base is not ${project.github.defaultBranch}`);
+    if (reviewIntake.untrustedGithubInput !== true) blockers.push("review intake does not record untrusted GitHub input handling");
+    if ((reviewIntake.lookupErrors ?? []).length > 0) blockers.push(...reviewIntake.lookupErrors);
+  }
+}
 if (!rebaseOnlyPassedForHead) blockers.push(...preflightValidation.problems);
 if (rebaseOnlyGateRequired && rebaseOnlyCheck && rebaseOnlyCheck.status !== "passed") blockers.push(`rebase-only check is ${rebaseOnlyCheck.status}`);
 if (rebaseOnlyGateRequired && rebaseOnlyCheck?.headSha && rebaseOnlyCheck.headSha !== headSha) blockers.push("rebase-only check head does not match current HEAD");
@@ -168,8 +197,8 @@ else if (duplicateCheck?.offline === true) blockers.push("duplicate-check is off
 else if ((duplicateCheck?.summary?.errors?.length ?? 0) > 0) blockers.push("duplicate-check has unresolved GitHub lookup errors");
 else if (duplicateCheckBlocks) blockers.push("duplicate-check found likely duplicates");
 if (duplicateCheckApplicable) blockers.push(...duplicateCheckValidation.problems);
-if (candidateScore && !candidateScoreStaleForExistingPr) blockers.push(...candidateScoreValidation.problems);
-if (!candidateScoreStaleForExistingPr && candidateScore?.verdict && ["needs-work", "poor-fit"].includes(candidateScore.verdict)) {
+if (openclawDiagnostics && candidateScore && !candidateScoreStaleForExistingPr) blockers.push(...candidateScoreValidation.problems);
+if (openclawDiagnostics && !candidateScoreStaleForExistingPr && candidateScore?.verdict && ["needs-work", "poor-fit"].includes(candidateScore.verdict)) {
   blockers.push(`candidate score verdict is ${candidateScore.verdict}`);
 }
 
@@ -177,6 +206,7 @@ const summary = {
   schemaVersion: 1,
   generatedAt: new Date().toISOString(),
   workflowPath: context.workflowPath,
+  project: { id: project.id, name: projectName, repo: project.github.repo, defaultBranch: project.github.defaultBranch },
   repoPath: context.repoPath,
   outputPath: context.outputPath,
   branch,
@@ -212,6 +242,25 @@ const summary = {
     receiptValid: preflightValidation.valid,
     receiptProblems: preflightValidation.problems,
   } : null,
+  intake: project.id === "zeroclaw" && context.workflow.mode === "new-issue" ? {
+    path: intakePath,
+    present: Boolean(intake),
+    issue: intake?.issue?.number ?? null,
+    relatedOpenPrCount: intake?.relatedOpenPrs?.length ?? 0,
+    blockers: intake?.blockers ?? [],
+  } : null,
+  reviewIntake: reviewIntakeApplicable ? {
+    path: reviewIntakePath,
+    present: Boolean(reviewIntake),
+    pr: reviewIntake?.pr?.number ?? null,
+    headRefOid: reviewIntake?.pr?.headRefOid ?? null,
+    activeChangeRequestCount: reviewIntake?.activeChangeRequests?.length ?? 0,
+    failedCheckCount: reviewIntake?.failedChecks?.length ?? 0,
+    lookupErrorCount: reviewIntake?.lookupErrors?.length ?? 0,
+    activeChangeRequests: reviewIntake?.activeChangeRequests ?? [],
+    failedChecks: reviewIntake?.failedChecks ?? [],
+    lookupErrors: reviewIntake?.lookupErrors ?? [],
+  } : null,
   rebaseOnlyCheck: rebaseOnlyCheck ? {
     path: rebaseOnlyCheckPath,
     status: rebaseOnlyCheck.status,
@@ -224,12 +273,15 @@ const summary = {
   duplicateCheck: duplicateCheck ? {
     path: duplicateCheckPath,
     likelyDuplicateCount,
+    rawLikelyDuplicateCount: duplicateCheck.summary?.rawLikelyDuplicateCount ?? likelyDuplicateCount,
+    reviewedLikelyDuplicateCount: duplicateCheck.summary?.reviewedLikelyDuplicateCount ?? 0,
+    reviewedPrs: duplicateCheck.reviewedPrs ?? [],
     relatedOpenPrCount,
     blocking: duplicateCheckBlocks,
     receiptValid: duplicateCheckValidation.valid,
     receiptProblems: duplicateCheckValidation.problems,
   } : null,
-  candidateScore: candidateScore ? {
+  candidateScore: candidateScore && openclawDiagnostics ? {
     path: candidateScorePath,
     score: candidateScore.score,
     verdict: candidateScore.verdict,
@@ -246,11 +298,28 @@ const summary = {
   },
 };
 
+// Ready-to-copy publish command for the human gate. New PR creation also
+// needs --title and --head; propose them from the head commit subject and the
+// selected account so approval never stalls on publisher argument discovery.
+const publishCommandParts = [
+  "node ./.codex/skills/auto-pr-openclaw/scripts/publish-openclaw-pr.mjs",
+  `--workflow ${context.workflowPath}`,
+  `--approved-head ${headSha}`,
+  `--approved-body-sha ${body.sha256}`,
+  `--push-remote ${account.pushRemote || account.profile}`,
+];
+if (!context.workflow.pr) {
+  publishCommandParts.push(`--title ${JSON.stringify(headSubject)}`);
+  publishCommandParts.push(`--head ${account.login}:${branch}`);
+}
+const publishCommand = publishCommandParts.join(" \\\n  ");
+summary.publishInputs.command = publishCommand;
+
 const outputJson = path.resolve(args.outputJson || path.join(context.outputPath, "gate-summary.json"));
 const outputMd = path.resolve(args.outputMd || path.join(context.outputPath, "gate-summary.md"));
 writeJson(outputJson, summary);
 
-const md = `# OpenClaw Human Gate Summary
+const md = `# ${projectName} Human Gate Summary
 
 Generated: ${summary.generatedAt}
 
@@ -273,12 +342,14 @@ ${mdList(nameStatus.map((line) => `\`${line}\``))}
 - preflight: ${checkStatus(preflight)}
 - preflight profile: ${preflight?.profile ?? "n/a"}${preflight?.validationDepth ? ` (${preflight.validationDepth})` : ""}
 - preflight receipt: \`${context.preflightPath}\`
+- issue intake: ${summary.intake ? (summary.intake.present ? `${summary.intake.relatedOpenPrCount} related open PRs` : "missing") : "not applicable"}
+- review/CI intake: ${summary.reviewIntake ? (summary.reviewIntake.present ? `${summary.reviewIntake.activeChangeRequestCount} active change requests, ${summary.reviewIntake.failedCheckCount} failed or pending checks${summary.reviewIntake.lookupErrorCount ? `, ${summary.reviewIntake.lookupErrorCount} lookup errors` : ""}` : "missing") : "not applicable"}
 - failed-preflight bypass: ${preflight?.status === "failed" && preflight.headSha === headSha ? "available only with explicit user approval for this HEAD and body hash" : "not applicable"}
 - rebase-only check: ${rebaseOnlyCheck ? `${rebaseOnlyCheck.status}${rebaseOnlyPassedForHead ? " (active fast path)" : ""}` : "missing"}
 - rebase-only receipt: \`${rebaseOnlyCheckPath}\`
-- duplicate check: ${duplicateCheckApplicable ? (duplicateCheck ? `${summary.duplicateCheck.likelyDuplicateCount} likely duplicates, ${summary.duplicateCheck.relatedOpenPrCount} related open PRs${summary.duplicateCheck.blocking ? "" : " (advisory)"}` : "missing") : "not applicable (existing PR)"}
-- candidate score: ${candidateScore ? (candidateScoreStaleForExistingPr ? "stale pre-existing-PR receipt (ignored; rerun scoring)" : `${candidateScore.score} (${candidateScore.verdict})`) : "missing"}
-- ClawSweeper A-readiness: ${candidateScore?.clawsweeperAReadiness?.verdict ?? "missing"} (advisory)
+- duplicate check: ${duplicateCheckApplicable ? (duplicateCheck ? `${summary.duplicateCheck.likelyDuplicateCount} unreviewed likely duplicates, ${summary.duplicateCheck.relatedOpenPrCount} related open PRs${summary.duplicateCheck.reviewedLikelyDuplicateCount ? `; ${summary.duplicateCheck.reviewedLikelyDuplicateCount} manually reviewed matches` : ""}${summary.duplicateCheck.blocking ? "" : " (advisory)"}` : "missing") : "not applicable (existing PR)"}
+- candidate score: ${openclawDiagnostics ? (candidateScore ? (candidateScoreStaleForExistingPr ? "stale pre-existing-PR receipt (ignored; rerun scoring)" : `${candidateScore.score} (${candidateScore.verdict})`) : "missing") : "not applicable"}
+- ClawSweeper A-readiness: ${openclawDiagnostics ? `${candidateScore?.clawsweeperAReadiness?.verdict ?? "missing"} (advisory)` : "not applicable"}
 - maintainer edit: ${maintainer.checked ? String(maintainer.maintainerCanModify) : maintainer.maintainerCanModify === null ? "not checked" : String(maintainer.maintainerCanModify)}
 
 ## Commit Identity
@@ -292,7 +363,7 @@ ${mdList(identities.map((identity) => `\`${identity.sha.slice(0, 12)}\` author=$
 - SHA-256: \`${body.sha256}\`
 - evidence section: ${body.hasEvidenceSection ? "yes" : "no"}
 - terminal/proof source: ${body.hasTerminalFence || body.hasDetailsProofSource ? "yes" : "no"}
-- AI marker: ${body.hasAiMarker ? "yes" : "no"}
+- AI policy: ${body.aiDisclosure === "forbidden-footer" ? (body.hasForbiddenAiFooter ? "forbidden footer found" : "no AI attribution footer") : body.hasAiMarker ? "required marker present" : "not configured"}
 
 ## Blockers
 
@@ -302,6 +373,12 @@ ${mdList(blockers)}
 
 - approved HEAD: \`${headSha}\`
 - approved body SHA-256: \`${body.sha256}\`
+
+### Publish command (run only after explicit approval)
+
+\`\`\`bash
+${publishCommand}
+\`\`\`
 
 Do not push, update the PR body, comment, or request review until the user explicitly approves this HEAD and body hash. This approval covers only the branch push and PR create/update; it does not authorize \`@clawsweeper re-review\`.
 `;
