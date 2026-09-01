@@ -1,0 +1,94 @@
+- generic [ref=f4e76]:
+  - link "Skip to main content" [ref=f4e77] [cursor=pointer]:
+    - /url: "#control-ui-main"
+  - generic [ref=f4e78]:
+    - button "Collapse sidebar" [expanded] [ref=f4e80]
+    - button "Open command palette" [ref=f4e85]
+  - complementary [ref=f4e91]:
+    - generic [ref=f4e92]:
+      - generic [ref=f4e93]:
+        - button "Assistant · Agent menu" [ref=f4e96]:
+          - generic [ref=f4e97]: A
+          - generic [ref=f4e99]:
+            - generic [ref=f4e100]: Assistant
+            - generic [ref=f4e104]: Ready to chat
+        - link "New session" [ref=f4e108]:
+          - /url: /new?agent=main
+      - generic [ref=f4e112]:
+        - navigation [ref=f4e113]:
+          - generic [ref=f4e114]:
+            - generic [ref=f4e115]: Pages
+            - button "Edit pinned items" [ref=f4e116]
+          - generic [ref=f4e119]:
+            - link "Home" [ref=f4e120]:
+              - /url: /chat/main
+            - link "Automations" [ref=f4e129]:
+              - /url: /automations
+            - link "Plugins" [ref=f4e137]:
+              - /url: /settings/plugins
+            - link "Workboard" [ref=f4e143]:
+              - /url: /workboard
+        - generic [ref=f4e149]:
+          - generic [ref=f4e150]: Sessions
+          - button "Filter & sort" [ref=f4e151]
+          - link "New session" [ref=f4e154]:
+            - /url: /new?agent=main
+      - generic [ref=f4e157]:
+        - generic [ref=f4e158]: sunlit/pr-134886
+        - generic [ref=f4e167]:
+          - 'button "Identity and app menu for Account: sunlit/pr-1348…@c235b48* · 5h ago" [ref=f4e168]':
+            - generic "Account" [ref=f4e170]: A
+            - generic "Account" [ref=f4e173]
+          - generic [ref=f4e174]:
+            - button "Talk to your Home agent" [ref=f4e176]
+            - generic [ref=f4e180]:
+              - status [ref=f4e181]: 0 inbox items
+              - button "0 inbox items" [ref=f4e182]
+  - separator "Resize sidebar" [ref=f4e187]
+  - main [ref=f4e188]:
+    - generic [ref=f4e205]:
+      - generic [ref=f4e206]:
+        - generic "Connect to the Gateway to change sessions." [ref=f4e209]: Main Session
+        - generic [ref=f4e211]:
+          - button "Toggle browser panel" [ref=f4e213]
+          - button "Show background tasks" [ref=f4e218]
+          - button "Side panel" [ref=f4e223]
+          - button "Open split view" [ref=f4e228]
+      - generic [ref=f4e231]:
+        - log [ref=f4e232]:
+          - status [ref=f4e233]
+          - generic [ref=f4e235]:
+            - generic [ref=f4e238]:
+              - heading "Assistant" [level=2] [ref=f4e239]
+              - paragraph [ref=f4e240]:
+                - text: Type a message below ·
+                - generic [ref=f4e241]: /
+                - text: for commands
+            - generic [ref=f4e244]:
+              - button "What can you do?" [ref=f4e245]
+              - button "Summarize my recent sessions" [ref=f4e246]
+              - button "Help me configure a channel" [ref=f4e247]
+              - button "Check system health" [ref=f4e248]
+        - generic [ref=f4e250]:
+          - generic [ref=f4e252]:
+            - textbox "Message Assistant" [ref=f4e253]
+            - status [ref=f4e254]
+            - status [ref=f4e255]
+          - generic [ref=f4e256]:
+            - generic [ref=f4e257]:
+              - generic "Add attachment" [ref=f4e258]:
+                - button "Add attachment" [ref=f4e259]
+              - 'button "Permissions: Default (Full Access)" [ref=f4e263]':
+                - generic [ref=f4e267]: Default (Full Access)
+            - generic [ref=f4e268]:
+              - group [ref=f4e272]:
+                - 'generic "Chat model: No models available" [ref=f4e273]': No models available
+              - generic [ref=f4e278]:
+                - generic [ref=f4e279]:
+                  - button "Start voice input" [ref=f4e281]
+                  - generic "Microphone input":
+                    - generic:
+                      - generic:
+                        - generic:
+                          - button "Microphone input"
+                - button "Write a message to send." [disabled] [ref=f4e286]

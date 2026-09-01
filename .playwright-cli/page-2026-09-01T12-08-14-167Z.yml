@@ -1,0 +1,190 @@
+- generic [ref=f5e7]:
+  - link "Skip to main content" [ref=f5e8] [cursor=pointer]:
+    - /url: "#control-ui-main"
+  - generic [ref=f5e9]:
+    - button "Collapse sidebar" [expanded] [ref=f5e11]
+    - button "Open command palette" [ref=f5e16]
+  - complementary [ref=f5e25]:
+    - generic [ref=f5e26]:
+      - generic [ref=f5e27]:
+        - button "Assistant · Agent menu" [ref=f5e30]:
+          - generic [ref=f5e31]: A
+          - generic [ref=f5e33]:
+            - generic [ref=f5e34]: Assistant
+            - generic [ref=f5e38]: Ready to chat
+        - link "New session" [ref=f5e42]:
+          - /url: /new?agent=main
+      - generic [ref=f5e46]:
+        - navigation [ref=f5e47]:
+          - generic [ref=f5e48]:
+            - generic [ref=f5e49]: Pages
+            - button "Edit pinned items" [ref=f5e50]
+          - generic [ref=f5e53]:
+            - link "Home" [ref=f5e54]:
+              - /url: /chat/main
+            - link "Automations" [ref=f5e63]:
+              - /url: /automations
+            - link "Plugins" [ref=f5e71]:
+              - /url: /settings/plugins
+            - link "Workboard" [ref=f5e77]:
+              - /url: /workboard
+        - generic [ref=f5e83]:
+          - generic [ref=f5e84]: Sessions
+          - button "Filter & sort" [ref=f5e85]
+          - link "New session" [ref=f5e88]:
+            - /url: /new?agent=main
+      - generic [ref=f5e91]:
+        - generic [ref=f5e92]: sunlit/pr-134886
+        - generic [ref=f5e101]:
+          - 'button "Identity and app menu for Account: sunlit/pr-1348…@c235b48* · 5h ago" [ref=f5e102]':
+            - generic "Account" [ref=f5e104]: A
+            - generic "Account" [ref=f5e107]
+          - generic [ref=f5e108]:
+            - button "Talk to your Home agent" [ref=f5e110]
+            - generic [ref=f5e114]:
+              - status [ref=f5e115]: 0 inbox items
+              - button "0 inbox items" [ref=f5e116]
+  - separator "Resize sidebar" [ref=f5e21]
+  - main [ref=f5e22]:
+    - generic [ref=f5e121]:
+      - generic [ref=f5e122]: Workboard
+      - generic [ref=f5e127]:
+        - generic [ref=f5e128]:
+          - generic [ref=f5e129]:
+            - searchbox "Search cards" [ref=f5e130]
+            - generic [ref=f5e132]:
+              - generic [ref=f5e133]: Workboard view
+              - generic [ref=f5e137]:
+                - combobox "Workboard view" [ref=f5e138]: All cards
+                - textbox [ref=f5e139]: all
+            - generic [ref=f5e145]:
+              - generic [ref=f5e146]: All priorities
+              - generic [ref=f5e150]:
+                - combobox "All priorities" [ref=f5e151]
+                - textbox [ref=f5e152]: all
+            - button "Archived" [ref=f5e157]
+            - generic [ref=f5e160]:
+              - group "Card layout" [ref=f5e161]:
+                - button "Compact card density" [pressed] [ref=f5e163]
+                - button "Comfortable card density" [ref=f5e170]
+              - generic [ref=f5e174]: Updated 20:07
+            - generic [ref=f5e176]:
+              - generic [ref=f5e177]: Empty columns
+              - generic [ref=f5e181]:
+                - combobox "Empty columns" [ref=f5e182]: Show all
+                - textbox [ref=f5e183]: show
+          - generic [ref=f5e188]:
+            - button "Refresh" [disabled] [ref=f5e189]
+            - button "Dispatch ready work" [disabled] [ref=f5e190]
+            - button "New card" [ref=f5e193]
+        - generic "Workboard health" [ref=f5e196]:
+          - button "0 running" [ref=f5e197]:
+            - strong [ref=f5e198]: "0"
+            - text: running
+          - button "0 blocked" [ref=f5e199]:
+            - strong [ref=f5e200]: "0"
+            - text: blocked
+          - button "0 stale" [ref=f5e201]:
+            - strong [ref=f5e202]: "0"
+            - text: stale
+          - button "1 ready unassigned" [ref=f5e203]:
+            - strong [ref=f5e204]: "1"
+            - text: ready unassigned
+          - button "0 missing proof" [ref=f5e445]:
+            - strong [ref=f5e206]: "0"
+            - text: missing proof
+          - button "0 failed attempts" [ref=f5e207]:
+            - strong [ref=f5e208]: "0"
+            - text: failed attempts
+        - generic [ref=f5e209]:
+          - region "Triage, 0" [ref=f5e210]:
+            - generic [ref=f5e211]:
+              - heading "Triage" [level=2] [ref=f5e212]
+              - generic [ref=f5e213]:
+                - generic [ref=f5e214]: "0"
+                - button "Collapse Triage column" [expanded] [ref=f5e216]
+            - generic [ref=f5e222]: Drop work here
+          - region "Backlog, 0" [ref=f5e224]:
+            - generic [ref=f5e225]:
+              - heading "Backlog" [level=2] [ref=f5e226]
+              - generic [ref=f5e227]:
+                - generic [ref=f5e228]: "0"
+                - button "Collapse Backlog column" [expanded] [ref=f5e230]
+            - generic [ref=f5e236]: Drop work here
+          - region "Todo, 0" [ref=f5e238]:
+            - generic [ref=f5e239]:
+              - heading "Todo" [level=2] [ref=f5e240]
+              - generic [ref=f5e241]:
+                - generic [ref=f5e242]: "0"
+                - button "Collapse Todo column" [expanded] [ref=f5e244]
+            - generic [ref=f5e250]: Drop work here
+          - region "Scheduled, 0" [ref=f5e252]:
+            - generic [ref=f5e253]:
+              - heading "Scheduled" [level=2] [ref=f5e254]
+              - generic [ref=f5e255]:
+                - generic [ref=f5e256]: "0"
+                - button "Collapse Scheduled column" [expanded] [ref=f5e258]
+            - generic [ref=f5e264]: Drop work here
+          - region "Ready, 1" [ref=f5e266]:
+            - generic [ref=f5e267]:
+              - heading "Ready" [level=2] [ref=f5e268]
+              - generic [ref=f5e269]:
+                - generic [ref=f5e270]: "1"
+                - button "Collapse Ready column" [expanded] [ref=f5e272]
+            - 'button "Updated: Sep 1, 8:02 PM Run default agent Edit card Archive card Normal main Move dependent child (live proof) No session Start or link a session No linked session View details Ready Delete card" [ref=f5e446]':
+              - generic [ref=f5e280]:
+                - 'generic "Updated: Sep 1, 8:02 PM" [ref=f5e281]': Sep 1, 8:02 PM
+                - generic [ref=f5e287]:
+                  - button "Run default agent" [ref=f5e290]
+                  - button "Edit card" [ref=f5e295]
+                  - button "Archive card" [ref=f5e300]
+              - generic [ref=f5e304]:
+                - generic [ref=f5e305]: Normal
+                - generic "Using default agent main" [ref=f5e306]: main
+              - heading "Move dependent child (live proof)" [level=3] [ref=f5e307]
+              - generic [ref=f5e308]:
+                - generic [ref=f5e309]: No session
+                - generic [ref=f5e310]: Start or link a session
+              - generic [ref=f5e313]: No linked session
+              - generic [ref=f5e315]:
+                - button "View details" [ref=f5e318]
+                - generic "Status" [ref=f5e326]:
+                  - 'combobox "Status: Move dependent child (live proof)" [ref=f5e327]':
+                    - option "Triage"
+                    - option "Backlog"
+                    - option "Todo"
+                    - option "Scheduled"
+                    - option "Ready" [selected]
+                    - option "Running"
+                    - option "Review"
+                    - option "Blocked"
+                    - option "Done"
+                - button "Delete card" [ref=f5e330]
+          - region "Running, 0" [ref=f5e333]:
+            - generic [ref=f5e334]:
+              - heading "Running" [level=2] [ref=f5e335]
+              - generic [ref=f5e336]:
+                - generic [ref=f5e337]: "0"
+                - button "Collapse Running column" [expanded] [ref=f5e339]
+            - generic [ref=f5e345]: Drop work here
+          - region "Review, 0" [ref=f5e347]:
+            - generic [ref=f5e348]:
+              - heading "Review" [level=2] [ref=f5e349]
+              - generic [ref=f5e350]:
+                - generic [ref=f5e351]: "0"
+                - button "Collapse Review column" [expanded] [ref=f5e353]
+            - generic [ref=f5e359]: Drop work here
+          - region "Blocked, 0" [ref=f5e361]:
+            - generic [ref=f5e362]:
+              - heading "Blocked" [level=2] [ref=f5e363]
+              - generic [ref=f5e364]:
+                - generic [ref=f5e365]: "0"
+                - button "Collapse Blocked column" [expanded] [ref=f5e367]
+            - generic [ref=f5e373]: Drop work here
+          - region "Done, 0" [ref=f5e447]:
+            - generic [ref=f5e376]:
+              - heading "Done" [level=2] [ref=f5e377]
+              - generic [ref=f5e378]:
+                - generic [ref=f5e379]: "0"
+                - button "Collapse Done column" [expanded] [ref=f5e381]
+            - generic [ref=f5e387]: Drop work here

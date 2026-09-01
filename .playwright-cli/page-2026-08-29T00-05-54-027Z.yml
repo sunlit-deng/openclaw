@@ -1,0 +1,1796 @@
+- generic [ref=e2]:
+  - generic [ref=e3]:
+    - link "Skip to content" [ref=e4] [cursor=pointer]:
+      - /url: "#start-of-content"
+    - banner [ref=e9]:
+      - heading "Navigation Menu" [level=2] [ref=e10]
+      - generic [ref=e11]:
+        - link "Homepage" [ref=e13] [cursor=pointer]:
+          - /url: /
+        - generic [ref=e16]:
+          - navigation "Global" [ref=e17]:
+            - list [ref=e18]:
+              - listitem [ref=e19]:
+                - button "Platform" [ref=e21] [cursor=pointer]
+              - listitem [ref=e24]:
+                - button "Solutions" [ref=e26] [cursor=pointer]
+              - listitem [ref=e29]:
+                - button "Resources" [ref=e31] [cursor=pointer]
+              - listitem [ref=e34]:
+                - button "Open Source" [ref=e36] [cursor=pointer]
+              - listitem [ref=e39]:
+                - button "Enterprise" [ref=e41] [cursor=pointer]
+              - listitem [ref=e44]:
+                - link "Pricing" [ref=e45] [cursor=pointer]:
+                  - /url: https://github.com/pricing
+          - generic [ref=e46]:
+            - button "Search or jump to, type / to search" [ref=e48] [cursor=pointer]
+            - link "Sign in" [ref=e55] [cursor=pointer]:
+              - /url: /login?return_to=https%3A%2F%2Fgithub.com%2Fzeroclaw-labs%2Fzeroclaw%2Fpull%2F10081
+            - link "Sign up" [ref=e58] [cursor=pointer]:
+              - /url: /signup?ref_cta=Sign+up&ref_loc=header+logged+out&ref_page=%2F%3Cuser-name%3E%2F%3Crepo-name%3E%2Fvoltron%2Fpull_requests_fragments%2Fpull_request_layout&source=header-repo&source_repo=zeroclaw-labs%2Fzeroclaw
+            - button "Appearance settings" [ref=e61] [cursor=pointer]
+  - main [ref=e68]:
+    - generic [ref=e69]:
+      - generic [ref=e70]:
+        - generic [ref=e72]:
+          - link "zeroclaw-labs" [ref=e76] [cursor=pointer]:
+            - /url: /zeroclaw-labs
+          - generic [ref=e77]: /
+          - strong [ref=e78]:
+            - link "zeroclaw" [ref=e79] [cursor=pointer]:
+              - /url: /zeroclaw-labs/zeroclaw
+          - generic [ref=e80]: Public
+        - generic [ref=e81]:
+          - list:
+            - listitem [ref=e82]:
+              - link "You must be signed in to change notification settings" [ref=e83] [cursor=pointer]:
+                - /url: /login?return_to=%2Fzeroclaw-labs%2Fzeroclaw
+                - text: Notifications
+            - listitem [ref=e86]:
+              - link "Fork 4.9k" [ref=e87] [cursor=pointer]:
+                - /url: /login?return_to=%2Fzeroclaw-labs%2Fzeroclaw
+                - text: Fork
+                - generic "4,915" [ref=e90]: 4.9k
+            - listitem [ref=e91]:
+              - link "You must be signed in to star a repository" [ref=e93] [cursor=pointer]:
+                - /url: /login?return_to=%2Fzeroclaw-labs%2Fzeroclaw
+                - text: Star
+                - generic "32666 users starred this repository" [ref=e96]: 32.7k
+      - navigation "Repository" [ref=e97]:
+        - list [ref=e98]:
+          - listitem [ref=e99]:
+            - link "Code" [ref=e100] [cursor=pointer]:
+              - /url: /zeroclaw-labs/zeroclaw
+          - listitem [ref=e104]:
+            - link "Issues 503" [ref=e105] [cursor=pointer]:
+              - /url: /zeroclaw-labs/zeroclaw/issues
+              - generic [ref=e109]: Issues
+              - generic "503" [ref=e110]
+          - listitem [ref=e111]:
+            - link "Pull requests 304" [ref=e112] [cursor=pointer]:
+              - /url: /zeroclaw-labs/zeroclaw/pulls
+              - generic [ref=e115]: Pull requests
+              - generic "304" [ref=e116]
+          - listitem [ref=e117]:
+            - link "Discussions" [ref=e118] [cursor=pointer]:
+              - /url: /zeroclaw-labs/zeroclaw/discussions
+          - listitem [ref=e122]:
+            - link "Actions" [ref=e123] [cursor=pointer]:
+              - /url: /zeroclaw-labs/zeroclaw/actions
+          - listitem [ref=e127]:
+            - link "Projects" [ref=e128] [cursor=pointer]:
+              - /url: /zeroclaw-labs/zeroclaw/projects
+          - listitem [ref=e132]:
+            - link "Wiki" [ref=e133] [cursor=pointer]:
+              - /url: /zeroclaw-labs/zeroclaw/wiki
+          - listitem [ref=e137]:
+            - link "Security and quality" [ref=e138] [cursor=pointer]:
+              - /url: /zeroclaw-labs/zeroclaw/security
+          - listitem [ref=e142]:
+            - link "Insights" [ref=e143] [cursor=pointer]:
+              - /url: /zeroclaw-labs/zeroclaw/pulse
+    - generic [ref=e153]:
+      - generic [ref=e157]:
+        - generic [ref=e159]:
+          - 'heading "fix(web): show channel descriptor defaults in Quickstart - #10081" [level=1] [ref=e160]':
+            - text: "fix(web): show channel descriptor defaults in Quickstart"
+            - generic [ref=e161]: "- #10081"
+          - generic [ref=e162]: "#10081"
+        - generic [ref=e165]:
+          - generic [ref=e167]:
+            - img "Pull request" [ref=e168]
+            - text: Open
+          - generic [ref=e171]:
+            - link "sunlit-deng" [ref=e172] [cursor=pointer]:
+              - /url: /sunlit-deng
+            - text: wants to merge 5 commits into
+            - generic [ref=e173]:
+              - link "zeroclaw-labs:master" [ref=e174] [cursor=pointer]:
+                - /url: /zeroclaw-labs/zeroclaw/tree/master
+              - generic [ref=e175]: from
+              - generic [ref=e176]:
+                - link "sunlit-deng:fix/issue-9760-quickstart-channel-defaults" [ref=e177] [cursor=pointer]:
+                  - /url: /sunlit-deng/zeroclaw/tree/fix/issue-9760-quickstart-channel-defaults
+                - button "Copy head branch name to clipboard" [ref=e178] [cursor=pointer]
+        - navigation "Pull request navigation" [ref=e184]:
+          - generic [ref=e185]:
+            - link "Conversation" [ref=e186] [cursor=pointer]:
+              - /url: /zeroclaw-labs/zeroclaw/pull/10081
+            - link "Commits (5)" [ref=e189] [cursor=pointer]:
+              - /url: /zeroclaw-labs/zeroclaw/pull/10081/commits
+              - text: Commits
+              - generic [ref=e192]: "5"
+              - generic [ref=e193]: (5)
+            - link "Checks" [ref=e194] [cursor=pointer]:
+              - /url: /zeroclaw-labs/zeroclaw/pull/10081/checks
+            - link "Files changed" [ref=e197] [cursor=pointer]:
+              - /url: /zeroclaw-labs/zeroclaw/pull/10081/files
+      - generic [ref=e204]:
+        - generic [ref=e206]:
+          - heading "Conversation" [level=2] [ref=e207]
+          - generic [ref=e208]:
+            - generic [ref=e209]:
+              - generic [ref=e211]:
+                - link [ref=e212] [cursor=pointer]:
+                  - /url: /sunlit-deng
+                  - img "@sunlit-deng" [ref=e213]
+                - generic [ref=e215]:
+                  - generic [ref=e216]:
+                    - heading "sunlit-deng commented Aug 18, 2026last week •" [level=3] [ref=e217]:
+                      - generic [ref=e218]:
+                        - strong [ref=e219]:
+                          - link "sunlit-deng" [ref=e220] [cursor=pointer]:
+                            - /url: /sunlit-deng
+                        - text: commented
+                        - link "Aug 18, 2026last week" [ref=e221] [cursor=pointer]:
+                          - /url: "#issue-5183547961"
+                        - generic [ref=e222]:
+                          - generic [ref=e223]: •
+                          - group [ref=e224]:
+                            - button "edited" [ref=e225] [cursor=pointer]
+                    - generic [ref=e229]:
+                      - group [ref=e231]:
+                        - button [ref=e232] [cursor=pointer]:
+                          - img "Show options" [ref=e235]
+                      - generic "This user has previously committed to the zeroclaw repository." [ref=e238]: Contributor
+                  - generic [ref=e243]:
+                    - heading "Summary" [level=2] [ref=e244]
+                    - list [ref=e245]:
+                      - listitem [ref=e246]:
+                        - strong [ref=e247]: "Base branch:"
+                        - code [ref=e248]: master
+                        - text: (all contributions)
+                      - listitem [ref=e249]:
+                        - strong [ref=e250]: "What changed and why:"
+                        - list [ref=e251]:
+                          - listitem [ref=e252]:
+                            - text: Seed the Web Quickstart channel form from each descriptor's explicit
+                            - code [ref=e253]: default
+                            - text: value, while leaving descriptors without defaults empty.
+                          - listitem [ref=e254]:
+                            - text: Show the existing warning-style
+                            - code [ref=e255]: Required
+                            - text: affordance and native accessibility metadata for descriptor-declared required fields.
+                          - listitem [ref=e256]:
+                            - text: Keep edited channel fields in production state when switching between
+                            - strong [ref=e257]: Create new
+                            - text: and
+                            - strong [ref=e258]: Use existing
+                            - text: .
+                          - listitem [ref=e259]:
+                            - text: Extract the production
+                            - code [ref=e260]: ChannelAddForm
+                            - text: boundary and cover the real mode transition, descriptor-loading effect, and edited-field retention with component-level tests.
+                      - listitem [ref=e261]:
+                        - strong [ref=e262]: "Scope boundary:"
+                        - text: This changes only the Web Quickstart channel form; provider defaults, backend descriptor generation, CLI behavior, TUI behavior, and other configuration surfaces are unchanged.
+                      - listitem [ref=e263]:
+                        - strong [ref=e264]: "Blast radius:"
+                        - text: Web Quickstart users adding a fresh channel; existing-channel selection and non-Quickstart surfaces are unaffected.
+                      - listitem [ref=e265]:
+                        - strong [ref=e266]: "Linked issue(s):"
+                        - text: Fixes
+                        - 'link "bug(web): display channel descriptor defaults in Quickstart #9760" [ref=e271] [cursor=pointer]':
+                          - /url: https://github.com/zeroclaw-labs/zeroclaw/issues/9760
+                      - listitem [ref=e272]:
+                        - strong [ref=e273]: "Labels:"
+                        - code [ref=e274]: bug
+                        - text: ","
+                        - code [ref=e275]: trusted contributor
+                        - text: ","
+                        - code [ref=e276]: needs-author-action
+                        - text: ","
+                        - code [ref=e277]: risk:medium
+                        - text: ","
+                        - code [ref=e278]: web
+                        - text: ","
+                        - code [ref=e279]: quickstart
+                        - text: ","
+                        - code [ref=e280]: size:XL
+                    - heading "Testing (required)" [level=2] [ref=e281]
+                    - heading "How you can test (when useful)" [level=3] [ref=e282]
+                    - list [ref=e283]:
+                      - listitem [ref=e284]:
+                        - strong [ref=e285]: Reviewer testing requested?
+                        - text: "Yes"
+                      - listitem [ref=e286]:
+                        - strong [ref=e287]: "Interface(s) exercised:"
+                        - code [ref=e288]: web
+                        - text: surface, Web Quickstart channel form
+                      - listitem [ref=e289]:
+                        - strong [ref=e290]: "Setup / preconditions:"
+                        - text: Run the gateway with the Web dashboard available and open Quickstart; no external channel credentials are needed. For the transition check, an unassigned local channel entry is enough to make
+                        - strong [ref=e291]: Use existing
+                        - text: available.
+                      - listitem [ref=e292]:
+                        - strong [ref=e293]: "Steps to run:"
+                        - text: Select
+                        - strong [ref=e294]: Add channel
+                        - text: ", choose"
+                        - strong [ref=e295]: Create new
+                        - text: ", choose"
+                        - strong [ref=e296]: Webhook
+                        - text: ", and inspect the generated fields. For the regression flow, enter synthetic port and secret values, click"
+                        - strong [ref=e297]: Use existing
+                        - text: and wait for the existing-channel select to render, then click
+                        - strong [ref=e298]: Create new
+                        - text: in a separate interaction and re-query the live inputs. Repeat the same steps on
+                        - code [ref=e299]: master
+                        - text: for the before comparison.
+                      - listitem [ref=e300]:
+                        - strong [ref=e301]: "Expected on this branch (after):"
+                        - text: The Webhook port field is initialized to
+                        - code [ref=e302]: "8090"
+                        - text: ; descriptor-declared required fields show the existing
+                        - code [ref=e303]: Required
+                        - text: badge and required accessibility metadata; fields without a declared default remain empty. After editing the port and secret, the values remain unchanged across
+                        - strong [ref=e304]: Create new
+                        - text: →
+                        - strong [ref=e305]: Use existing
+                        - text: →
+                        - strong [ref=e306]: Create new
+                        - text: .
+                      - listitem [ref=e307]:
+                        - strong [ref=e308]: "Prior behavior on master (before):"
+                        - text: The Webhook port field is blank despite the descriptor declaring
+                        - code [ref=e309]: "8090"
+                        - text: ", descriptor-declared required fields have no required-field affordance in this form, and the mode round-trip can replace edited values with descriptor defaults."
+                    - heading "How I tested" [level=3] [ref=e310]
+                    - list [ref=e311]:
+                      - listitem [ref=e312]:
+                        - strong [ref=e313]: "CI checks relied on and why they cover this change:"
+                        - text: The existing PR review/CI intake recorded all required checks green on the previously published head
+                        - code [ref=e314]: 4148f9e4face5e4fe29850b39af34a805ea85cf8
+                        - text: . Those results are historical because this revision is rebased; fresh hosted CI for the new head is pending publication. The local Web and workspace checks below cover the rebased code directly.
+                      - listitem [ref=e315]:
+                        - strong [ref=e316]: "Known CI coverage gap, if any:"
+                        - text: Fresh hosted CI has not run on the rebased head yet. The local production build used an isolated output directory because the default
+                        - code [ref=e317]: web/dist
+                        - text: cleanup was stopped by the repository safe-delete guard for 108 pre-existing assets; the equivalent Vite production build passed.
+                      - listitem [ref=e318]:
+                        - strong [ref=e319]: "Commands run and tail output:"
+                    - generic [ref=e320]:
+                      - code [ref=e322]: "$ npm test native node:test suites: 12 passed, 0 failed SOPS suites: 5 passed, 0 failed component interaction suite: 1 passed, 0 failed $ npm run test:permissions 22 passed, 0 failed $ npm run test:contexts 18 passed, 0 failed $ cargo web check status: 0 (OpenAPI bindings generated; npx tsc -b passed) $ npm run build -- --outDir /tmp/zeroclaw-pr-10081-web-dist 2,181 modules transformed ✓ built in 276ms $ cargo fmt --all -- --check status: 0 $ cargo clippy --workspace --exclude zeroclaw-desktop --all-targets --features ci-all -- -D warnings cargo clippy: No issues found $ cargo test --locked cargo test: 1105 passed, 9 ignored (10 suites, 40.82s) $ git diff --check status: 0"
+                      - button "Copy code to clipboard" [ref=e324] [cursor=pointer]
+                    - list [ref=e328]:
+                      - listitem [ref=e329]:
+                        - strong [ref=e330]: Beyond CI, what did you manually verify?
+                        - text: On exact head
+                        - code [ref=e331]: 67efbfaa4
+                        - text: ", served the production dashboard from a local gateway and verified successful"
+                        - code [ref=e332]: "200"
+                        - text: responses for health, dashboard, Quickstart state, and Quickstart field endpoints. The real Webhook form rendered port
+                        - code [ref=e333]: "8090"
+                        - text: ", the required affordance, and an empty secret field. A separate awaited"
+                        - strong [ref=e334]: Use existing
+                        - text: action rendered the existing-channel select before a separate
+                        - strong [ref=e335]: Create new
+                        - text: action; re-querying the remounted inputs confirmed the synthetic edited port and secret were retained. No external channel or credential flow was exercised.
+                      - listitem [ref=e336]:
+                        - strong [ref=e337]: Visual interface changed?
+                        - text: "Yes"
+                      - listitem [ref=e338]:
+                        - strong [ref=e339]: "Tested revision, interface, and terminal or viewport dimensions:"
+                        - code [ref=e340]: 67efbfaa4
+                        - text: rebased onto
+                        - code [ref=e341]: master
+                        - text: at
+                        - code [ref=e342]: 6d6b7cb6acf6ca63f851e4214c4296a58706cd9b
+                        - text: ; Web dashboard Quickstart at
+                        - code [ref=e343]: 1440x1000
+                        - text: .
+                      - listitem [ref=e344]:
+                        - strong [ref=e345]: "Screenshot evidence:"
+                        - text: A privacy-safe screenshot of Quickstart → Add channel → Create new → Webhook is staged for attachment with this update. It shows the initialized
+                        - code [ref=e346]: "8090"
+                        - text: port, required affordance, empty secret field, and surrounding dashboard layout; it contains no credentials, tokens, personal data, or edited secret value.
+                      - listitem [ref=e347]:
+                        - strong [ref=e348]: "Action or changed state and observed result:"
+                        - text: The default-value flow showed port
+                        - code [ref=e349]: "8090"
+                        - text: and an empty secret; the separate mode-transition flow restored the fresh form with synthetic edited values intact.
+                      - listitem [ref=e350]:
+                        - strong [ref=e351]: "If any command was intentionally skipped, why:"
+                        - code [ref=e352]: cargo web build
+                        - text: was not used as the final build evidence because its default
+                        - code [ref=e353]: web/dist
+                        - text: cleanup hit the repository safe-delete guard on pre-existing generated assets. The same production TypeScript/Vite build passed with the isolated output directory shown above.
+                    - heading "Security & Privacy Impact" [level=2] [ref=e354]
+                    - list [ref=e355]:
+                      - listitem [ref=e356]: New permissions, capabilities, or file system access scope? No
+                      - listitem [ref=e357]: New external network calls? No
+                      - listitem [ref=e358]: Secrets / tokens / credentials handling changed? No
+                      - listitem [ref=e359]: PII, real identities, or personal data in diff, tests, fixtures, or docs? No
+                      - listitem [ref=e360]: Prompt injection or untrusted model-visible text introduced/changed? No
+                      - listitem [ref=e361]:
+                        - text: If any
+                        - code [ref=e362]: "Yes"
+                        - text: ", describe the risk and mitigation: N/A"
+                    - heading "Compatibility" [level=2] [ref=e363]
+                    - list [ref=e364]:
+                      - listitem [ref=e365]: Backward compatible? Yes
+                      - listitem [ref=e366]: Config / env / CLI surface changed? No
+                      - listitem [ref=e367]: Rust/MSRV/toolchain floor changed? No
+                      - listitem [ref=e368]:
+                        - text: If backward compatibility is
+                        - code [ref=e369]: "No"
+                        - text: or either surface/floor question is
+                        - code [ref=e370]: "Yes"
+                        - text: ": exact upgrade steps for existing users: N/A — no upgrade steps or migration are required."
+                    - heading "Rollback" [level=2] [ref=e371]
+                    - list [ref=e372]:
+                      - listitem [ref=e373]:
+                        - strong [ref=e374]: "Fast rollback command/path:"
+                        - text: "Revert the five PR commits newest first:"
+                        - code [ref=e375]: git revert --no-edit 67efbfaa4 235a91b93 ec4c8e71a dbe14a7b9 236d563f8
+                        - text: .
+                      - listitem [ref=e376]:
+                        - strong [ref=e377]: "Feature flags or config toggles:"
+                        - text: None
+                      - listitem [ref=e378]:
+                        - strong [ref=e379]: "Observable failure symptoms:"
+                        - text: Quickstart-created channels show incorrect descriptor defaults or required-field affordances, or edited channel fields change after the
+                        - strong [ref=e380]: Create new
+                        - text: →
+                        - strong [ref=e381]: Use existing
+                        - text: →
+                        - strong [ref=e382]: Create new
+                        - text: transition.
+              - generic [ref=e383]:
+                - generic [ref=e384]:
+                  - generic [ref=e390]:
+                    - link [ref=e392] [cursor=pointer]:
+                      - /url: /sunlit-deng
+                      - img "@sunlit-deng" [ref=e393]
+                    - generic [ref=e394]:
+                      - link "sunlit-deng" [ref=e395] [cursor=pointer]:
+                        - /url: /sunlit-deng
+                      - text: requested review from
+                      - link "IftekharUddin" [ref=e396] [cursor=pointer]:
+                        - /url: /IftekharUddin
+                      - text: and
+                      - link "JordanTheJet" [ref=e397] [cursor=pointer]:
+                        - /url: /JordanTheJet
+                      - text: as
+                      - link "code owners" [ref=e398] [cursor=pointer]:
+                        - /url: /zeroclaw-labs/zeroclaw/blob/ccc6157d18028eb9f70e64aa6db7efd692752261/.github/CODEOWNERS#L43
+                      - link "August 18, 2026 15:33last week" [ref=e399] [cursor=pointer]:
+                        - /url: "#event-29629258524"
+                  - generic [ref=e404]:
+                    - link [ref=e405] [cursor=pointer]:
+                      - /url: /apps/github-actions
+                      - img "@github-actions" [ref=e406]
+                    - link "github-actions" [ref=e407] [cursor=pointer]:
+                      - /url: /apps/github-actions
+                    - generic [ref=e408]: Bot
+                    - text: added
+                    - link "web" [ref=e409] [cursor=pointer]:
+                      - /url: /zeroclaw-labs/zeroclaw/issues?q=state%3Aopen%20label%3Aweb
+                    - link "quickstart" [ref=e410] [cursor=pointer]:
+                      - /url: /zeroclaw-labs/zeroclaw/issues?q=state%3Aopen%20label%3Aquickstart
+                    - text: labels
+                    - link "Aug 18, 2026last week" [ref=e411] [cursor=pointer]:
+                      - /url: "#event-29629268448"
+                - generic [ref=e414]:
+                  - generic [ref=e415]:
+                    - link [ref=e416] [cursor=pointer]:
+                      - /url: /IftekharUddin
+                      - img "IftekharUddin" [ref=e417]
+                    - generic [ref=e421]:
+                      - generic [ref=e422]:
+                        - strong [ref=e423]:
+                          - link "IftekharUddin" [ref=e424] [cursor=pointer]:
+                            - /url: /IftekharUddin
+                        - text: reviewed
+                        - link "Aug 18, 2026last week" [ref=e426] [cursor=pointer]:
+                          - /url: "#pullrequestreview-4963383684"
+                      - link "View reviewed changes" [ref=e428] [cursor=pointer]:
+                        - /url: /zeroclaw-labs/zeroclaw/pull/10081/files
+                  - generic [ref=e434]:
+                    - generic [ref=e435]:
+                      - button "Comment thread" [expanded] [ref=e436] [cursor=pointer]
+                      - generic [ref=e437]:
+                        - link "web/src/pages/quickstart/Quickstart.tsx" [ref=e438] [cursor=pointer]:
+                          - /url: /zeroclaw-labs/zeroclaw/pull/10081/files#diff-58bb13820fb286c60a10d26b99c855fe31bbf07ab79b7e67b2a538e2777c214d
+                        - 'generic "Label: Outdated" [ref=e439]': Outdated
+                    - generic [ref=e440]:
+                      - table [ref=e443]:
+                        - rowgroup [ref=e444]:
+                          - row [ref=e445]:
+                            - cell "1058" [ref=e446] [cursor=pointer]
+                            - cell [ref=e447] [cursor=pointer]
+                            - cell "- if (!cancelled) setDescriptors(f.fields);" [ref=e448]
+                          - row [ref=e450]:
+                            - cell [ref=e451] [cursor=pointer]
+                            - cell "1070" [ref=e452] [cursor=pointer]
+                            - 'cell "+ if (!cancelled) {" [ref=e453]'
+                          - row [ref=e455]:
+                            - cell [ref=e456] [cursor=pointer]
+                            - cell "1071" [ref=e457] [cursor=pointer]
+                            - cell "+ setDescriptors(f.fields);" [ref=e458]
+                          - row [ref=e460]:
+                            - cell [ref=e461] [cursor=pointer]
+                            - cell "1072" [ref=e462] [cursor=pointer]
+                            - cell "+ setFields(initialChannelFieldValues(f.fields));" [ref=e463]
+                      - generic [ref=e468]:
+                        - generic [ref=e469]:
+                          - heading [level=3] [ref=e470]:
+                            - generic [ref=e471]:
+                              - img "@IftekharUddin" [ref=e473]
+                              - strong [ref=e474]:
+                                - link "IftekharUddin" [ref=e475] [cursor=pointer]:
+                                  - /url: /IftekharUddin
+                              - link "Aug 18, 2026last week" [ref=e476] [cursor=pointer]:
+                                - /url: "#discussion_r3805987517"
+                          - generic [ref=e477]:
+                            - group [ref=e479]:
+                              - button [ref=e480] [cursor=pointer]:
+                                - img "Show options" [ref=e483]
+                            - generic "This user has been invited to collaborate on the zeroclaw repository." [ref=e486]: Collaborator
+                        - generic [ref=e491]:
+                          - paragraph [ref=e492]:
+                            - text: 🔴
+                            - strong [ref=e493]: Blocking — preserve in-progress values across mode switches
+                          - paragraph [ref=e494]:
+                            - text: This assignment runs not only when
+                            - code [ref=e495]: type
+                            - text: changes, but every time
+                            - code [ref=e496]: mode
+                            - text: returns to
+                            - code [ref=e497]: fresh
+                            - text: because
+                            - code [ref=e498]: mode
+                            - text: is an effect dependency. After a user enters a custom port or secret, a
+                            - strong [ref=e499]: Use existing → Create new
+                            - text: round-trip refetches the descriptors and replaces those edits with defaults. Please seed defaults only for a newly selected/changed channel type, preserve edits when revisiting the mode, and pin that transition with a regression.
+                - generic [ref=e502]:
+                  - generic [ref=e503]:
+                    - link [ref=e504] [cursor=pointer]:
+                      - /url: /IftekharUddin
+                      - img "IftekharUddin" [ref=e505]
+                    - generic [ref=e509]:
+                      - generic [ref=e510]:
+                        - strong [ref=e511]:
+                          - link "IftekharUddin" [ref=e512] [cursor=pointer]:
+                            - /url: /IftekharUddin
+                        - text: requested changes
+                        - link "Aug 18, 2026last week" [ref=e514] [cursor=pointer]:
+                          - /url: "#pullrequestreview-4963384866"
+                      - link "View reviewed changes" [ref=e516] [cursor=pointer]:
+                        - /url: /zeroclaw-labs/zeroclaw/pull/10081/files
+                  - generic [ref=e521]:
+                    - generic [ref=e522]:
+                      - heading [level=3] [ref=e523]:
+                        - generic [ref=e524]:
+                          - strong [ref=e525]:
+                            - link "IftekharUddin" [ref=e526] [cursor=pointer]:
+                              - /url: /IftekharUddin
+                          - text: left a comment
+                      - generic [ref=e527]:
+                        - group [ref=e529]:
+                          - button [ref=e530] [cursor=pointer]:
+                            - img "Show options" [ref=e533]
+                        - generic "This user has been invited to collaborate on the zeroclaw repository." [ref=e536]: Collaborator
+                    - generic [ref=e540]:
+                      - paragraph [ref=e541]:
+                        - text: I reviewed this at exact head
+                        - link "1879b04" [ref=e542] [cursor=pointer]:
+                          - /url: https://github.com/zeroclaw-labs/zeroclaw/commit/1879b04fde77280a32fdb0f8922ea45cf0c702e3
+                        - text: against the descriptor contract and the current Web Quickstart state transitions. The four-file, +66/-2 shape is appropriately narrow, and the daemon remains the canonical source for channel defaults. There were no prior reviews, inline threads, or author commitments to reconcile.
+                      - paragraph [ref=e543]:
+                        - text: Unless a finding includes a
+                        - strong [ref=e544]: Follow-up path
+                        - text: ", it needs to be corrected on this branch; opening an issue alone does not resolve it."
+                      - heading "🔴 Blocking — preserve in-progress channel values across mode switches" [level=3] [ref=e545]
+                      - paragraph [ref=e546]:
+                        - text: The new
+                        - code [ref=e547]: setFields(initialChannelFieldValues(f.fields))
+                        - text: call runs whenever the effect refetches descriptors, and the effect depends on both
+                        - code [ref=e548]: mode
+                        - text: and
+                        - code [ref=e549]: type
+                        - text: . A user can select Webhook, enter a custom port and secret, switch to
+                        - strong [ref=e550]: Use existing
+                        - text: ", then return to"
+                        - strong [ref=e551]: Create new
+                        - text: ; when the fetch completes, the new code replaces those edits with the descriptor defaults. Before this change, that mode round-trip hid and restored the same
+                        - code [ref=e552]: fields
+                        - text: state.
+                      - paragraph [ref=e553]:
+                        - strong [ref=e554]: "Why this matters:"
+                        - text: descriptor defaults should seed a new channel type, not become an ongoing authority that overwrites user-entered form state.
+                      - paragraph [ref=e555]:
+                        - strong [ref=e556]: "If ignored:"
+                        - text: a user can silently lose a credential or custom setting while comparing the existing and fresh paths, then stage an incomplete or unintended channel configuration.
+                      - paragraph [ref=e557]:
+                        - strong [ref=e558]: "Required change:"
+                        - text: initialize defaults when a channel type is first selected or changed, while preserving edits when the user only switches away from and back to the fresh mode. Add a regression for the
+                        - code [ref=e559]: fresh → existing → fresh
+                        - text: transition with edited values so this interaction stays pinned.
+                      - heading "🟡 Warning — the new Web unit test is outside required CI" [level=3] [ref=e560]
+                      - paragraph [ref=e561]:
+                        - text: The author-provided local
+                        - code [ref=e562]: npm test
+                        - text: evidence reports 10/10 passing, but the required workflow runs
+                        - code [ref=e563]: npm run test:permissions
+                        - text: and
+                        - code [ref=e564]: npm run test:contexts
+                        - text: ; it never runs the
+                        - code [ref=e565]: npm test
+                        - text: script that now includes
+                        - code [ref=e566]: channel-fields.test.ts
+                        - text: . Please correct the PR body's “Known CI coverage gap” statement so it does not imply that the live browser is the only uncovered boundary. Wiring the general Web test script into required CI can be a scoped follow-up because this is an existing repository-wide gap, but the public evidence should name it accurately here.
+                      - heading "🟢 What looks good — explicit descriptor defaults remain authoritative" [level=3] [ref=e567]
+                      - paragraph [ref=e568]:
+                        - code [ref=e569]: initialChannelFieldValues
+                        - text: materializes only non-null values returned by
+                        - code [ref=e570]: QuickstartFieldDescriptor.default
+                        - text: ", so the UI does not invent a secret or duplicate the Webhook port constant. The current runtime contract declares"
+                        - code [ref=e571]: port = 8090
+                        - text: ", marks both Webhook fields required, and leaves the secret default null; the helper preserves that distinction."
+                      - heading "🟢 What looks good — required-field affordance reuses the Web vocabulary" [level=3] [ref=e572]
+                      - paragraph [ref=e573]:
+                        - text: The form reuses the existing localized
+                        - code [ref=e574]: fieldform.badge_required
+                        - text: text and adds native
+                        - code [ref=e575]: required
+                        - text: plus
+                        - code [ref=e576]: aria-required
+                        - text: metadata to both input variants. This is a presentation/accessibility change rather than a new validation authority, which keeps backend validation in charge.
+                      - heading "🔵 Verification — exact-head evidence and unrelated gate failures" [level=3] [ref=e577]
+                      - paragraph [ref=e578]:
+                        - text: The relevant exact-head checks passed, including
+                        - code [ref=e579]: Test
+                        - text: ","
+                        - code [ref=e580]: Lint
+                        - text: ","
+                        - code [ref=e581]: Format
+                        - text: ", the build/check matrix,"
+                        - code [ref=e582]: Web Permission Tests
+                        - text: ", and"
+                        - code [ref=e583]: Zerocode RPC Boundary
+                        - text: ; the author also records successful
+                        - code [ref=e584]: npm test
+                        - text: ","
+                        - code [ref=e585]: cargo web check
+                        - text: ", and"
+                        - code [ref=e586]: cargo web build
+                        - text: runs. Required CI does not execute the new Node test, as noted above.
+                        - code [ref=e587]: Security
+                        - text: fails on the repository-wide RUSTSEC-2026-0258 advisory already reproduced by master's Daily Advisory Scan, while
+                        - code [ref=e588]: Nix Module Eval
+                        - text: was cancelled inside the Install Nix action; this PR changes no Rust dependency, advisory policy, Nix, or workflow file. The branch also merges cleanly with current
+                        - code [ref=e589]: master
+                        - text: .
+                - generic [ref=e590]:
+                  - generic [ref=e595]:
+                    - link [ref=e596] [cursor=pointer]:
+                      - /url: /IftekharUddin
+                      - img "@IftekharUddin" [ref=e597]
+                    - link "IftekharUddin" [ref=e598] [cursor=pointer]:
+                      - /url: /IftekharUddin
+                    - text: added
+                    - link "bug" [ref=e599] [cursor=pointer]:
+                      - /url: /zeroclaw-labs/zeroclaw/issues?q=state%3Aopen%20label%3Abug
+                    - link "priority:p3" [ref=e600] [cursor=pointer]:
+                      - /url: /zeroclaw-labs/zeroclaw/issues?q=state%3Aopen%20label%3Apriority%3Ap3
+                    - link "risk:low" [ref=e601] [cursor=pointer]:
+                      - /url: /zeroclaw-labs/zeroclaw/issues?q=state%3Aopen%20label%3Arisk%3Alow
+                    - link "size:XS" [ref=e602] [cursor=pointer]:
+                      - /url: /zeroclaw-labs/zeroclaw/issues?q=state%3Aopen%20label%3Asize%3AXS
+                    - link "needs-author-action" [ref=e603] [cursor=pointer]:
+                      - /url: /zeroclaw-labs/zeroclaw/issues?q=state%3Aopen%20label%3Aneeds-author-action
+                    - text: labels
+                    - link "Aug 18, 2026last week" [ref=e604] [cursor=pointer]:
+                      - /url: "#event-29632223492"
+                  - generic [ref=e609]:
+                    - link [ref=e610] [cursor=pointer]:
+                      - /url: /IftekharUddin
+                      - img "@IftekharUddin" [ref=e611]
+                    - link "IftekharUddin" [ref=e612] [cursor=pointer]:
+                      - /url: /IftekharUddin
+                    - text: added this to the
+                    - link "v0.8.5" [ref=e613] [cursor=pointer]:
+                      - /url: /zeroclaw-labs/zeroclaw/milestone/29
+                    - text: milestone
+                    - link "Aug 18, 2026last week" [ref=e614] [cursor=pointer]:
+                      - /url: "#event-29632224402"
+                  - generic [ref=e620]:
+                    - link [ref=e622] [cursor=pointer]:
+                      - /url: /sunlit-deng
+                      - img "@sunlit-deng" [ref=e623]
+                    - generic [ref=e624]:
+                      - link "sunlit-deng" [ref=e625] [cursor=pointer]:
+                        - /url: /sunlit-deng
+                      - text: requested a review from
+                      - link "IftekharUddin" [ref=e626] [cursor=pointer]:
+                        - /url: /IftekharUddin
+                      - link "August 19, 2026 00:53last week" [ref=e627] [cursor=pointer]:
+                        - /url: "#event-29654186512"
+                - generic [ref=e629]:
+                  - link [ref=e631] [cursor=pointer]:
+                    - /url: /sunlit-deng
+                    - img "@sunlit-deng" [ref=e632]
+                  - generic [ref=e634]:
+                    - generic [ref=e635]:
+                      - heading [level=3] [ref=e636]:
+                        - generic [ref=e637]:
+                          - strong [ref=e638]:
+                            - link "sunlit-deng" [ref=e639] [cursor=pointer]:
+                              - /url: /sunlit-deng
+                          - text: commented
+                          - link "Aug 19, 2026last week" [ref=e640] [cursor=pointer]:
+                            - /url: "#issuecomment-5336581783"
+                      - generic [ref=e641]:
+                        - group [ref=e643]:
+                          - button [ref=e644] [cursor=pointer]:
+                            - img "Show options" [ref=e647]
+                        - generic [ref=e649]:
+                          - generic "This user has previously committed to the zeroclaw repository." [ref=e650]: Contributor
+                          - generic "This user is the author of this pull request." [ref=e652]: Author
+                    - table [ref=e656]:
+                      - rowgroup [ref=e657]:
+                        - row [ref=e658]:
+                          - cell [ref=e659]:
+                            - blockquote [ref=e660]:
+                              - paragraph [ref=e661]:
+                                - text: I reviewed this at exact head
+                                - link "1879b04" [ref=e662] [cursor=pointer]:
+                                  - /url: https://github.com/zeroclaw-labs/zeroclaw/commit/1879b04fde77280a32fdb0f8922ea45cf0c702e3
+                                - text: against the descriptor contract and the current Web Quickstart state transitions. The four-file, +66/-2 shape is appropriately narrow, and the daemon remains the canonical source for channel defaults. There were no prior reviews, inline threads, or author commitments to reconcile.
+                              - paragraph [ref=e663]:
+                                - text: Unless a finding includes a
+                                - strong [ref=e664]: Follow-up path
+                                - text: ", it needs to be corrected on this branch; opening an issue alone does not resolve it."
+                              - heading "🔴 Blocking — preserve in-progress channel values across mode switches" [level=3] [ref=e665]
+                              - paragraph [ref=e666]:
+                                - text: The new
+                                - code [ref=e667]: setFields(initialChannelFieldValues(f.fields))
+                                - text: call runs whenever the effect refetches descriptors, and the effect depends on both
+                                - code [ref=e668]: mode
+                                - text: and
+                                - code [ref=e669]: type
+                                - text: . A user can select Webhook, enter a custom port and secret, switch to
+                                - strong [ref=e670]: Use existing
+                                - text: ", then return to"
+                                - strong [ref=e671]: Create new
+                                - text: ; when the fetch completes, the new code replaces those edits with the descriptor defaults. Before this change, that mode round-trip hid and restored the same
+                                - code [ref=e672]: fields
+                                - text: state.
+                              - paragraph [ref=e673]:
+                                - strong [ref=e674]: "Why this matters:"
+                                - text: descriptor defaults should seed a new channel type, not become an ongoing authority that overwrites user-entered form state.
+                              - paragraph [ref=e675]:
+                                - strong [ref=e676]: "If ignored:"
+                                - text: a user can silently lose a credential or custom setting while comparing the existing and fresh paths, then stage an incomplete or unintended channel configuration.
+                              - paragraph [ref=e677]:
+                                - strong [ref=e678]: "Required change:"
+                                - text: initialize defaults when a channel type is first selected or changed, while preserving edits when the user only switches away from and back to the fresh mode. Add a regression for the
+                                - code [ref=e679]: fresh → existing → fresh
+                                - text: transition with edited values so this interaction stays pinned.
+                              - heading "🟡 Warning — the new Web unit test is outside required CI" [level=3] [ref=e680]
+                              - paragraph [ref=e681]:
+                                - text: The author-provided local
+                                - code [ref=e682]: npm test
+                                - text: evidence reports 10/10 passing, but the required workflow runs
+                                - code [ref=e683]: npm run test:permissions
+                                - text: and
+                                - code [ref=e684]: npm run test:contexts
+                                - text: ; it never runs the
+                                - code [ref=e685]: npm test
+                                - text: script that now includes
+                                - code [ref=e686]: channel-fields.test.ts
+                                - text: . Please correct the PR body's “Known CI coverage gap” statement so it does not imply that the live browser is the only uncovered boundary. Wiring the general Web test script into required CI can be a scoped follow-up because this is an existing repository-wide gap, but the public evidence should name it accurately here.
+                              - heading "🟢 What looks good — explicit descriptor defaults remain authoritative" [level=3] [ref=e687]
+                              - paragraph [ref=e688]:
+                                - code [ref=e689]: initialChannelFieldValues
+                                - text: materializes only non-null values returned by
+                                - code [ref=e690]: QuickstartFieldDescriptor.default
+                                - text: ", so the UI does not invent a secret or duplicate the Webhook port constant. The current runtime contract declares"
+                                - code [ref=e691]: port = 8090
+                                - text: ", marks both Webhook fields required, and leaves the secret default null; the helper preserves that distinction."
+                              - heading "🟢 What looks good — required-field affordance reuses the Web vocabulary" [level=3] [ref=e692]
+                              - paragraph [ref=e693]:
+                                - text: The form reuses the existing localized
+                                - code [ref=e694]: fieldform.badge_required
+                                - text: text and adds native
+                                - code [ref=e695]: required
+                                - text: plus
+                                - code [ref=e696]: aria-required
+                                - text: metadata to both input variants. This is a presentation/accessibility change rather than a new validation authority, which keeps backend validation in charge.
+                              - heading "🔵 Verification — exact-head evidence and unrelated gate failures" [level=3] [ref=e697]
+                              - paragraph [ref=e698]:
+                                - text: The relevant exact-head checks passed, including
+                                - code [ref=e699]: Test
+                                - text: ","
+                                - code [ref=e700]: Lint
+                                - text: ","
+                                - code [ref=e701]: Format
+                                - text: ", the build/check matrix,"
+                                - code [ref=e702]: Web Permission Tests
+                                - text: ", and"
+                                - code [ref=e703]: Zerocode RPC Boundary
+                                - text: ; the author also records successful
+                                - code [ref=e704]: npm test
+                                - text: ","
+                                - code [ref=e705]: cargo web check
+                                - text: ", and"
+                                - code [ref=e706]: cargo web build
+                                - text: runs. Required CI does not execute the new Node test, as noted above.
+                                - code [ref=e707]: Security
+                                - text: fails on the repository-wide RUSTSEC-2026-0258 advisory already reproduced by master's Daily Advisory Scan, while
+                                - code [ref=e708]: Nix Module Eval
+                                - text: was cancelled inside the Install Nix action; this PR changes no Rust dependency, advisory policy, Nix, or workflow file. The branch also merges cleanly with current
+                                - code [ref=e709]: master
+                                - text: .
+                            - paragraph [ref=e710]:
+                              - text: Addressed in
+                              - link "924afea" [ref=e711] [cursor=pointer]:
+                                - /url: https://github.com/zeroclaw-labs/zeroclaw/commit/924afea1498d7df382c412f62bb152557d86b378
+                              - text: .
+                            - paragraph [ref=e712]: The effect now reloads channel descriptors only when the channel type changes, so switching Create new → Use existing → Create new no longer overwrites in-progress values. Defaults are applied only for missing fields, and a regression test covers edited port and secret values across the round-trip.
+                            - paragraph [ref=e713]: Validation is green, including the required CI gate and Web tests (11/11). Please re-review.
+                - generic [ref=e719]:
+                  - generic [ref=e720]:
+                    - link [ref=e721] [cursor=pointer]:
+                      - /url: /vyahhi
+                      - img "@vyahhi" [ref=e722]
+                    - link "vyahhi" [ref=e723] [cursor=pointer]:
+                      - /url: /vyahhi
+                    - text: mentioned this pull request
+                    - link "Aug 19, 2026last week" [ref=e724] [cursor=pointer]:
+                      - /url: "#ref-issue-5068257466"
+                  - generic [ref=e725]:
+                    - 'link "bug(web): display channel descriptor defaults in Quickstart #9760" [ref=e727] [cursor=pointer]':
+                      - /url: /zeroclaw-labs/zeroclaw/issues/9760
+                    - 'generic "Status: Open" [ref=e729]': Open
+                  - generic [ref=e733]: 2 tasks
+                - generic [ref=e740]:
+                  - link [ref=e742] [cursor=pointer]:
+                    - /url: /apps/zeroclaw-reviewer
+                    - img "@zeroclaw-reviewer" [ref=e743]
+                  - generic [ref=e745]:
+                    - generic [ref=e746]:
+                      - heading "zeroclaw-reviewer Bot commented Aug 21, 2026last week" [level=3] [ref=e747]:
+                        - generic [ref=e748]:
+                          - strong [ref=e749]:
+                            - link "zeroclaw-reviewer" [ref=e750] [cursor=pointer]:
+                              - /url: /apps/zeroclaw-reviewer
+                            - generic [ref=e751]: Bot
+                          - text: commented
+                          - link "Aug 21, 2026last week" [ref=e752] [cursor=pointer]:
+                            - /url: "#issuecomment-5370426556"
+                      - group [ref=e755]:
+                        - button [ref=e756] [cursor=pointer]:
+                          - img "Show options" [ref=e759]
+                    - table [ref=e763]:
+                      - rowgroup [ref=e764]:
+                        - row [ref=e765]:
+                          - cell [ref=e766]:
+                            - heading [level=1] [ref=e767]:
+                              - text: Review — PR
+                              - link "#10081" [ref=e768] [cursor=pointer]:
+                                - /url: https://github.com/zeroclaw-labs/zeroclaw/pull/10081
+                              - text: ": fix(web): show channel descriptor defaults in Quickstart"
+                            - paragraph [ref=e769]:
+                              - text: "Head reviewed:"
+                              - link "924afea" [ref=e770] [cursor=pointer]:
+                                - /url: https://github.com/zeroclaw-labs/zeroclaw/commit/924afea1498d7df382c412f62bb152557d86b378
+                            - heading "Summary" [level=2] [ref=e771]
+                            - paragraph [ref=e772]:
+                              - text: I re-reviewed the current head against the previous
+                              - code [ref=e773]: CHANGES_REQUESTED
+                              - text: review, the linked issue
+                              - link "#9760" [ref=e774] [cursor=pointer]:
+                                - /url: https://github.com/zeroclaw-labs/zeroclaw/issues/9760
+                              - text: ", the descriptor contract, the Web Quickstart state flow, and the exact-head CI result. The production change now limits descriptor loading to channel-type changes and merges defaults into the current field map, so the previously reported loss of edits during a fresh → existing → fresh round-trip is addressed. The default/required wiring is otherwise narrow and keeps the daemon as the source of truth."
+                            - paragraph [ref=e775]: "One blocking test-quality gap remains: the new round-trip test does not drive the component or its effect, so it would remain green if the caller regressed while the user-visible data-loss bug returned."
+                            - heading "Take stock" [level=2] [ref=e776]
+                            - list [ref=e777]:
+                              - listitem [ref=e778]:
+                                - text: The prior review at
+                                - link "1879b04" [ref=e779] [cursor=pointer]:
+                                  - /url: https://github.com/zeroclaw-labs/zeroclaw/commit/1879b04fde77280a32fdb0f8922ea45cf0c702e3
+                                - text: requested that edited channel values survive a fresh → existing → fresh transition and that the public CI-gap wording be corrected.
+                              - listitem [ref=e780]:
+                                - text: The author pushed
+                                - link "924afea" [ref=e781] [cursor=pointer]:
+                                  - /url: https://github.com/zeroclaw-labs/zeroclaw/commit/924afea1498d7df382c412f62bb152557d86b378
+                                - text: . The current
+                                - code [ref=e782]: Quickstart.tsx
+                                - text: effect depends only on
+                                - code [ref=e783]: type
+                                - text: ", passes the current field map to"
+                                - code [ref=e784]: initialChannelFieldValues
+                                - text: ", and the PR body now explicitly names the general"
+                                - code [ref=e785]: npm test
+                                - text: gap.
+                              - listitem [ref=e786]: There are no unresolved inline threads beyond the test-boundary concern below. The earlier implementation finding is resolved; the current review does not re-raise it as an implementation defect.
+                              - listitem [ref=e787]:
+                                - text: The live PR is still marked
+                                - code [ref=e788]: needs-author-action
+                                - text: even though a substantive update was pushed. The live
+                                - code [ref=e789]: size:XS
+                                - text: label also does not match the 89 changed lines under the repository's ≤80-line XS threshold. These are maintainer-owned metadata cleanups, not merge blockers.
+                            - heading "Findings" [level=2] [ref=e790]
+                            - heading "🔴 Blocking — exercise the actual fresh-to-existing-to-fresh transition" [level=3] [ref=e791]
+                            - paragraph [ref=e792]:
+                              - code [ref=e793]: web/src/pages/quickstart/channel-fields.test.ts:36-46
+                              - text: calls
+                              - code [ref=e794]: initialChannelFieldValues
+                              - text: with a pre-edited object and labels that call as the mode transition, but it never renders or drives
+                              - code [ref=e795]: ChannelAddForm
+                              - text: ", changes"
+                              - code [ref=e796]: mode
+                              - text: ", or exercises the"
+                              - code [ref=e797]: useEffect
+                              - text: at
+                              - code [ref=e798]: web/src/pages/quickstart/Quickstart.tsx:1061-1081
+                              - text: .
+                            - paragraph [ref=e799]:
+                              - text: "That distinction matters because the previous defect lived in the caller: the effect refetched on"
+                              - code [ref=e800]: mode
+                              - text: changes and replaced the component's state. A future change could restore
+                              - code [ref=e801]: mode
+                              - text: to the dependency array, or change line 1072 back to
+                              - code [ref=e802]: initialChannelFieldValues(f.fields)
+                              - text: without the current state, and all three new tests would still pass. The test therefore proves the helper's merge semantics but not the user-visible regression that this PR claims to pin.
+                            - paragraph [ref=e803]: Please add a component/interaction-level regression for fresh → existing → fresh with edited port and secret values, or extract a production transition helper that is actually used by the component and test that helper as the state-machine boundary. Keep the current helper tests as lower-level coverage.
+                            - heading "🟡 Warning — refresh stale public metadata after the new head" [level=3] [ref=e804]
+                            - paragraph [ref=e805]:
+                              - text: The PR body still says that a fresh remote run is required for
+                              - link "924afea" [ref=e806] [cursor=pointer]:
+                                - /url: https://github.com/zeroclaw-labs/zeroclaw/commit/924afea1498d7df382c412f62bb152557d86b378
+                              - text: ", while the current required"
+                              - code [ref=e807]: CI Required Gate
+                              - text: is already passing on that exact head. The body also presents a
+                              - code [ref=e808]: cargo test --locked
+                              - text: tail of nine passing tests, which does not describe the workspace test command's actual scope; the required CI uses
+                              - code [ref=e809]: cargo nextest run --locked --workspace --exclude zeroclaw-desktop
+                              - text: .
+                            - paragraph [ref=e810]:
+                              - text: Please refresh that paragraph to identify the exact-head required CI as the evidence being relied on and retain the honest gap that the general Web
+                              - code [ref=e811]: npm test
+                              - text: script is not part of the required Web Permission Tests job. Separately, a maintainer should remove the stale
+                              - code [ref=e812]: needs-author-action
+                              - text: label and recalculate
+                              - code [ref=e813]: size
+                              - text: from
+                              - code [ref=e814]: size:XS
+                              - text: to the live matching label (
+                              - code [ref=e815]: size:S
+                              - text: for this 89-line diff), if those labels remain the repository's current policy.
+                            - heading "Resolved" [level=2] [ref=e816]
+                            - heading "✅ Resolved — preserve in-progress channel values across mode switches" [level=3] [ref=e817]
+                            - paragraph [ref=e818]:
+                              - text: The effect now depends only on
+                              - code [ref=e819]: type
+                              - text: at
+                              - code [ref=e820]: web/src/pages/quickstart/Quickstart.tsx:1061-1081
+                              - text: ", and line 1072 merges descriptor defaults only into missing keys in the current field map. Switching between existing and fresh mode no longer triggers the refetch/reset path that caused the original data-loss finding."
+                            - heading "✅ Resolved — name the Web test coverage gap accurately" [level=3] [ref=e821]
+                            - paragraph [ref=e822]:
+                              - text: The current PR body acknowledges that required CI runs
+                              - code [ref=e823]: npm run test:permissions
+                              - text: and
+                              - code [ref=e824]: npm run test:contexts
+                              - text: ", not the general"
+                              - code [ref=e825]: npm test
+                              - text: script containing
+                              - code [ref=e826]: channel-fields.test.ts
+                              - text: . That is materially more accurate than the previous wording; wiring the general test script into required CI remains a separate repository-level follow-up.
+                            - heading "What looks good" [level=2] [ref=e827]
+                            - heading "🟢 What looks good — descriptor defaults remain canonical" [level=3] [ref=e828]
+                            - paragraph [ref=e829]:
+                              - code [ref=e830]: web/src/pages/quickstart/channel-fields.ts:3-17
+                              - text: consumes only the explicit
+                              - code [ref=e831]: QuickstartFieldDescriptor.default
+                              - text: returned by the daemon and does not duplicate the webhook port constant. A
+                              - code [ref=e832]: "null"
+                              - text: secret default remains absent, while the returned port default becomes visible input state.
+                            - heading "🟢 What looks good — required-field presentation stays within the Web contract" [level=3] [ref=e833]
+                            - paragraph [ref=e834]:
+                              - code [ref=e835]: web/src/pages/quickstart/Quickstart.tsx:1182-1191
+                              - text: forwards descriptor
+                              - code [ref=e836]: required
+                              - text: metadata to the existing input component, which adds the localized required badge plus native
+                              - code [ref=e837]: required
+                              - text: and
+                              - code [ref=e838]: aria-required
+                              - text: attributes. Backend validation remains authoritative, and the change does not add a new client-side credential policy.
+                            - heading "Validation" [level=2] [ref=e839]
+                            - list [ref=e840]:
+                              - listitem [ref=e841]:
+                                - code [ref=e842]: CI Required Gate
+                                - text: — pass on
+                                - link "924afea" [ref=e843] [cursor=pointer]:
+                                  - /url: https://github.com/zeroclaw-labs/zeroclaw/commit/924afea1498d7df382c412f62bb152557d86b378
+                                - text: . The exact-head status set also reports the repository format, lint, build/check matrix, workspace test, and Web Permission Tests jobs successful.
+                              - listitem [ref=e844]:
+                                - code [ref=e845]: cargo web check
+                                - text: — pass; generated the OpenAPI TypeScript surfaces and completed
+                                - code [ref=e846]: tsc -b
+                                - text: .
+                              - listitem [ref=e847]:
+                                - code [ref=e848]: cargo web build
+                                - text: — pass; completed TypeScript and Vite production builds. Vite emitted the existing large-chunk warning for bundles such as
+                                - code [ref=e849]: createLucideIcon
+                                - text: ","
+                                - code [ref=e850]: MarkdownEditor
+                                - text: ", and"
+                                - code [ref=e851]: sops
+                                - text: ; the changed Quickstart bundle was 23.35 kB and is not the warned chunk.
+                              - listitem [ref=e852]:
+                                - code [ref=e853]: cargo fmt --all -- --check
+                                - text: — pass.
+                              - listitem [ref=e854]:
+                                - code [ref=e855]: cargo clippy --workspace --exclude zeroclaw-desktop --all-targets --features ci-all -- -D warnings
+                                - text: — pass.
+                              - listitem [ref=e856]:
+                                - code [ref=e857]: git diff --check
+                                - text: — pass.
+                              - listitem [ref=e858]:
+                                - code [ref=e859]: npx --no-install jiti src/pages/quickstart/channel-fields.test.ts
+                                - text: — pass, 3/3 focused tests.
+                              - listitem [ref=e860]:
+                                - code [ref=e861]: npm run test:permissions
+                                - text: — pass.
+                              - listitem [ref=e862]:
+                                - code [ref=e863]: npm test
+                                - text: and
+                                - code [ref=e864]: npm run test:contexts
+                                - text: could not run under this checkout's Node 20.20.2 because
+                                - code [ref=e865]: .nvmrc
+                                - text: and
+                                - code [ref=e866]: web/package.json
+                                - text: require Node 24 and
+                                - code [ref=e867]: "--experimental-strip-types"
+                                - text: is unavailable in Node 20. The exact-head remote Web Permission Tests job passed; no local Node 24 binary was available.
+                              - listitem [ref=e868]:
+                                - code [ref=e869]: cargo test --locked
+                                - text: and the matching
+                                - code [ref=e870]: cargo nextest
+                                - text: run first hit the operator's configured non-English locale in an unrelated Fluent assertion. With an isolated config directory, the focused locale test passed and
+                                - code [ref=e871]: cargo test --locked -p zeroclaw-runtime webhook_channel
+                                - text: passed 5/5; the full local nextest run then reached an unrelated PTY test requiring the unavailable
+                                - code [ref=e872]: expect
+                                - text: executable. The CI
+                                - code [ref=e873]: Test
+                                - text: /required gate on the exact head is green, so these local failures are environment gaps rather than regressions in this Web-only diff.
+                            - heading "Recommendation" [level=2] [ref=e874]
+                            - paragraph [ref=e875]: Request changes for the blocking production-boundary regression test. After that test and the stale public metadata are corrected, the implementation itself appears ready for approval.
+                - generic [ref=e877]:
+                  - link [ref=e879] [cursor=pointer]:
+                    - /url: /apps/zeroclaw-reviewer
+                    - img "@zeroclaw-reviewer" [ref=e880]
+                  - generic [ref=e882]:
+                    - generic [ref=e883]:
+                      - heading "zeroclaw-reviewer Bot commented Aug 21, 2026last week" [level=3] [ref=e884]:
+                        - generic [ref=e885]:
+                          - strong [ref=e886]:
+                            - link "zeroclaw-reviewer" [ref=e887] [cursor=pointer]:
+                              - /url: /apps/zeroclaw-reviewer
+                            - generic [ref=e888]: Bot
+                          - text: commented
+                          - link "Aug 21, 2026last week" [ref=e889] [cursor=pointer]:
+                            - /url: "#issuecomment-5372030513"
+                      - group [ref=e892]:
+                        - button [ref=e893] [cursor=pointer]:
+                          - img "Show options" [ref=e896]
+                    - table [ref=e900]:
+                      - rowgroup [ref=e901]:
+                        - row [ref=e902]:
+                          - cell [ref=e903]:
+                            - heading [level=1] [ref=e904]:
+                              - text: Review — PR
+                              - link "#10081" [ref=e905] [cursor=pointer]:
+                                - /url: https://github.com/zeroclaw-labs/zeroclaw/pull/10081
+                              - text: ": fix(web): show channel descriptor defaults in Quickstart"
+                            - paragraph [ref=e906]:
+                              - text: "Head reviewed:"
+                              - link "b1b25a6" [ref=e907] [cursor=pointer]:
+                                - /url: https://github.com/zeroclaw-labs/zeroclaw/commit/b1b25a63888b3dd32a2b608a380eba095c6b0f98
+                            - heading "Summary" [level=2] [ref=e908]
+                            - paragraph [ref=e909]:
+                              - text: I re-reviewed the current head against the earlier reviews and inline thread, linked issue
+                              - link "#9760" [ref=e910] [cursor=pointer]:
+                                - /url: https://github.com/zeroclaw-labs/zeroclaw/issues/9760
+                              - text: ", the Quickstart descriptor contract, the production channel-form state flow, and the exact-head CI result. The implementation now consumes daemon-provided defaults, exposes descriptor-required metadata, and moves channel state into a reducer so mode changes no longer trigger the old reset behavior."
+                            - paragraph [ref=e911]:
+                              - text: "One blocking test-boundary gap remains: the new mode-round-trip test drives the reducer directly but never exercises the"
+                              - code [ref=e912]: ChannelAddForm
+                              - text: caller or its descriptor-loading effect. The user-visible regression that the earlier review identified can therefore return while all of the new tests remain green.
+                            - heading "Take stock" [level=2] [ref=e913]
+                            - list [ref=e914]:
+                              - listitem [ref=e915]:
+                                - text: The prior blocking implementation finding at
+                                - link "1879b04" [ref=e916] [cursor=pointer]:
+                                  - /url: https://github.com/zeroclaw-labs/zeroclaw/commit/1879b04fde77280a32fdb0f8922ea45cf0c702e3
+                                - text: was addressed in
+                                - link "924afea" [ref=e917] [cursor=pointer]:
+                                  - /url: https://github.com/zeroclaw-labs/zeroclaw/commit/924afea1498d7df382c412f62bb152557d86b378
+                                - text: ": the effect is now keyed only by channel type and merges defaults into the current field map."
+                              - listitem [ref=e918]:
+                                - text: "The prior warning about naming the general Web test coverage gap is resolved: the PR body now states that required CI runs"
+                                - code [ref=e919]: npm run test:permissions
+                                - text: and
+                                - code [ref=e920]: npm run test:contexts
+                                - text: ", not the general"
+                                - code [ref=e921]: npm test
+                                - text: script containing this new test.
+                              - listitem [ref=e922]:
+                                - text: The later blocking finding at
+                                - link "924afea" [ref=e923] [cursor=pointer]:
+                                  - /url: https://github.com/zeroclaw-labs/zeroclaw/commit/924afea1498d7df382c412f62bb152557d86b378
+                                - text: remains live. The new test still calls reducer actions directly and does not render or drive the component boundary.
+                              - listitem [ref=e924]:
+                                - text: The live PR still carries
+                                - code [ref=e925]: needs-author-action
+                                - text: after the author pushed the follow-up head. The live
+                                - code [ref=e926]: size:XS
+                                - text: label also disagrees with the current body (
+                                - code [ref=e927]: size:S
+                                - text: ) and the repository's size thresholds for this 237-line diff. These are maintainer-owned metadata cleanups, not a reason to hold the code once the blocking test gap is fixed.
+                            - heading "Findings" [level=2] [ref=e928]
+                            - heading "🔴 Blocking — exercise the actual fresh-to-existing-to-fresh transition" [level=3] [ref=e929]
+                            - paragraph [ref=e930]:
+                              - code [ref=e931]: web/src/pages/quickstart/channel-fields.test.ts:49-93
+                              - text: labels a sequence of reducer actions as the mode transition, but it never renders or drives
+                              - code [ref=e932]: ChannelAddForm
+                              - text: ", changes the component's mode through its buttons, or exercises the descriptor-loading"
+                              - code [ref=e933]: useEffect
+                              - text: at
+                              - code [ref=e934]: web/src/pages/quickstart/Quickstart.tsx:1053-1082
+                              - text: .
+                            - paragraph [ref=e935]:
+                              - text: "That distinction matters because the original data-loss defect lived in the caller: the effect previously refetched on mode changes and replaced the component's field state. A future edit could restore"
+                              - code [ref=e936]: mode
+                              - text: to the effect dependency array, stop dispatching the current
+                              - code [ref=e937]: state.fields
+                              - text: at
+                              - code [ref=e938]: web/src/pages/quickstart/Quickstart.tsx:1068-1072
+                              - text: ", or otherwise disconnect the reducer from the component, and all four new tests would still pass. The test proves the reducer's merge semantics, not the user-visible regression that this PR claims to pin."
+                            - paragraph [ref=e939]:
+                              - text: Please add a component/interaction-level regression for
+                              - code [ref=e940]: fresh → existing → fresh
+                              - text: with edited port and secret values, or extract a production transition helper that is the actual state-machine boundary and test that helper from the caller path. Keep the current reducer tests as useful lower-level coverage.
+                            - heading "🟡 Warning — refresh stale public validation and label metadata" [level=3] [ref=e941]
+                            - paragraph [ref=e942]:
+                              - text: The PR body still says that fresh required CI for head
+                              - link "b1b25a6" [ref=e943] [cursor=pointer]:
+                                - /url: https://github.com/zeroclaw-labs/zeroclaw/commit/b1b25a63888b3dd32a2b608a380eba095c6b0f98
+                              - text: is required after publication and identifies
+                              - link "924afea" [ref=e944] [cursor=pointer]:
+                                - /url: https://github.com/zeroclaw-labs/zeroclaw/commit/924afea1498d7df382c412f62bb152557d86b378
+                              - text: as the published CI head, but the live
+                              - code [ref=e945]: CI Required Gate
+                              - text: and relevant required jobs are already green on the current
+                              - link "b1b25a6" [ref=e946] [cursor=pointer]:
+                                - /url: https://github.com/zeroclaw-labs/zeroclaw/commit/b1b25a63888b3dd32a2b608a380eba095c6b0f98
+                              - text: head. Please update
+                              - code [ref=e947]: How I tested
+                              - text: to identify the current exact-head CI evidence. The body also omits the live
+                              - code [ref=e948]: needs-author-action
+                              - text: label and says
+                              - code [ref=e949]: size:S
+                              - text: while the live label is
+                              - code [ref=e950]: size:XS
+                              - text: ; a maintainer should reconcile those labels with the current policy rather than leaving the public snapshot contradictory.
+                            - paragraph [ref=e951]: This is maintainer-owned metadata and does not need to block the author once the test-boundary finding is addressed, but stale validation provenance makes the review record harder to trust.
+                            - heading "Resolved" [level=2] [ref=e952]
+                            - heading "✅ Resolved — preserve in-progress channel values across mode switches" [level=3] [ref=e953]
+                            - paragraph [ref=e954]:
+                              - text: The production effect at
+                              - code [ref=e955]: web/src/pages/quickstart/Quickstart.tsx:1061-1082
+                              - text: now depends only on
+                              - code [ref=e956]: type
+                              - text: ", and the"
+                              - code [ref=e957]: descriptors-loaded
+                              - text: reducer action merges descriptor defaults into the existing field map at
+                              - code [ref=e958]: web/src/pages/quickstart/channel-fields.ts:60-66
+                              - text: . Switching between existing and fresh mode no longer refetches and resets edited values for the same channel type.
+                            - heading "✅ Resolved — describe the general Web test coverage gap accurately" [level=3] [ref=e959]
+                            - paragraph [ref=e960]:
+                              - text: The current PR body explicitly distinguishes the required permission/context jobs from the general
+                              - code [ref=e961]: npm test
+                              - text: script. Wiring the general Web test script into required CI remains a separate repository-level follow-up, but the current public statement no longer implies that only live browser verification is uncovered.
+                            - heading "What looks good" [level=2] [ref=e962]
+                            - heading "🟢 What looks good — descriptor defaults remain canonical" [level=3] [ref=e963]
+                            - paragraph [ref=e964]:
+                              - code [ref=e965]: web/src/pages/quickstart/channel-fields.ts:28-43
+                              - text: consumes only the explicit
+                              - code [ref=e966]: QuickstartFieldDescriptor.default
+                              - text: returned by the daemon and preserves an existing key, including an intentionally cleared empty string. A null secret default remains absent, while the webhook port default is surfaced without duplicating the backend constant in the Web form.
+                            - heading "🟢 What looks good — required-field presentation stays within the existing Web vocabulary" [level=3] [ref=e967]
+                            - paragraph [ref=e968]:
+                              - code [ref=e969]: web/src/pages/quickstart/Quickstart.tsx:659-720
+                              - text: reuses the localized
+                              - code [ref=e970]: fieldform.badge_required
+                              - text: label and adds native
+                              - code [ref=e971]: required
+                              - text: plus
+                              - code [ref=e972]: aria-required
+                              - text: metadata to the descriptor-backed inputs. The backend remains the validation authority, and this change does not add a separate client-side credential policy.
+                            - heading "Validation" [level=2] [ref=e973]
+                            - list [ref=e974]:
+                              - listitem [ref=e975]:
+                                - text: "Exact-head GitHub status:"
+                                - code [ref=e976]: CI Required Gate
+                                - text: passed on
+                                - link "b1b25a6" [ref=e977] [cursor=pointer]:
+                                  - /url: https://github.com/zeroclaw-labs/zeroclaw/commit/b1b25a63888b3dd32a2b608a380eba095c6b0f98
+                                - text: . The exact-head status set also reports
+                                - code [ref=e978]: Test
+                                - text: ","
+                                - code [ref=e979]: Lint
+                                - text: ","
+                                - code [ref=e980]: Format
+                                - text: ", the build/check matrix, and"
+                                - code [ref=e981]: Web Permission Tests
+                                - text: successful.
+                              - listitem [ref=e982]:
+                                - code [ref=e983]: npm ci
+                                - text: — completed with the environment warning that this checkout requires Node
+                                - code [ref=e984]: ">=24.0.0"
+                                - text: while the reviewer environment has Node
+                                - code [ref=e985]: v20.20.2
+                                - text: .
+                              - listitem [ref=e986]:
+                                - code [ref=e987]: npm --prefix web test
+                                - text: — could not run because Node 20 rejects the repository's
+                                - code [ref=e988]: "--experimental-strip-types"
+                                - text: flag. This is an environment/toolchain gap, not a test failure attributable to the patch.
+                              - listitem [ref=e989]:
+                                - code [ref=e990]: npm --prefix web run test:contexts
+                                - text: — same Node 20
+                                - code [ref=e991]: "--experimental-strip-types"
+                                - text: limitation.
+                              - listitem [ref=e992]:
+                                - text: Focused workaround,
+                                - code [ref=e993]: (cd web && npx --no-install jiti src/pages/quickstart/channel-fields.test.ts)
+                                - text: — pass, 4/4 tests. This validates the reducer module but does not remove the component-boundary finding above.
+                              - listitem [ref=e994]:
+                                - code [ref=e995]: npm --prefix web run test:permissions
+                                - text: — pass; all constituent permission, catalog, validation-warning, and navigation suites passed (22 tests total).
+                              - listitem [ref=e996]:
+                                - code [ref=e997]: cargo web check
+                                - text: — pass; regenerated the OpenAPI TypeScript surfaces and completed
+                                - code [ref=e998]: tsc -b
+                                - text: .
+                              - listitem [ref=e999]:
+                                - code [ref=e1000]: cargo web build
+                                - text: — pass; completed the TypeScript and Vite production build. Vite emitted the existing large-chunk warning for unrelated bundles; the changed Quickstart bundle was 23.87 kB and was not one of the warned chunks.
+                              - listitem [ref=e1001]:
+                                - code [ref=e1002]: cargo fmt --all -- --check
+                                - text: — pass.
+                              - listitem [ref=e1003]:
+                                - code [ref=e1004]: cargo clippy --workspace --exclude zeroclaw-desktop --all-targets --features ci-all -- -D warnings
+                                - text: — pass.
+                              - listitem [ref=e1005]:
+                                - code [ref=e1006]: git diff --check
+                                - text: — pass.
+                              - listitem [ref=e1007]: No live browser click-through was run; the gateway and a configured Quickstart session were not started in this review.
+                            - heading "Recommendation" [level=2] [ref=e1008]
+                            - paragraph [ref=e1009]: Request changes for the blocking production-boundary regression test. The implementation changes addressing the original field-loss bug appear correct; after the caller-level test is added and the stale public metadata is refreshed, this looks ready for approval.
+                - generic [ref=e1011]:
+                  - link [ref=e1013] [cursor=pointer]:
+                    - /url: /apps/zeroclaw-reviewer
+                    - img "@zeroclaw-reviewer" [ref=e1014]
+                  - generic [ref=e1016]:
+                    - generic [ref=e1017]:
+                      - heading "zeroclaw-reviewer Bot commented Aug 21, 2026last week" [level=3] [ref=e1018]:
+                        - generic [ref=e1019]:
+                          - strong [ref=e1020]:
+                            - link "zeroclaw-reviewer" [ref=e1021] [cursor=pointer]:
+                              - /url: /apps/zeroclaw-reviewer
+                            - generic [ref=e1022]: Bot
+                          - text: commented
+                          - link "Aug 21, 2026last week" [ref=e1023] [cursor=pointer]:
+                            - /url: "#issuecomment-5372510001"
+                      - group [ref=e1026]:
+                        - button [ref=e1027] [cursor=pointer]:
+                          - img "Show options" [ref=e1030]
+                    - table [ref=e1034]:
+                      - rowgroup [ref=e1035]:
+                        - row [ref=e1036]:
+                          - cell [ref=e1037]:
+                            - heading [level=1] [ref=e1038]:
+                              - text: Review — PR
+                              - link "#10081" [ref=e1039] [cursor=pointer]:
+                                - /url: https://github.com/zeroclaw-labs/zeroclaw/pull/10081
+                              - text: ": fix(web): show channel descriptor defaults in Quickstart"
+                            - paragraph [ref=e1040]:
+                              - text: "Head reviewed:"
+                              - link "4148f9e" [ref=e1041] [cursor=pointer]:
+                                - /url: https://github.com/zeroclaw-labs/zeroclaw/commit/4148f9e4face5e4fe29850b39af34a805ea85cf8
+                            - heading "Summary" [level=2] [ref=e1042]
+                            - paragraph [ref=e1043]:
+                              - text: I reviewed the current head against the linked issue
+                              - link "#9760" [ref=e1044] [cursor=pointer]:
+                                - /url: https://github.com/zeroclaw-labs/zeroclaw/issues/9760
+                              - text: ", the descriptor contract, the Quickstart channel state flow, the full prior review/reply history, and the exact-head validation state. The implementation now keeps the daemon as the source of channel defaults, preserves edited fields across the fresh → existing → fresh interaction, and adds a component-level regression that exercises the production"
+                              - code [ref=e1045]: ChannelAddForm
+                              - text: rather than only the reducer.
+                            - paragraph [ref=e1046]:
+                              - text: The earlier blocking findings at
+                              - link "1879b04" [ref=e1047] [cursor=pointer]:
+                                - /url: https://github.com/zeroclaw-labs/zeroclaw/commit/1879b04fde77280a32fdb0f8922ea45cf0c702e3
+                              - text: ","
+                              - link "924afea" [ref=e1048] [cursor=pointer]:
+                                - /url: https://github.com/zeroclaw-labs/zeroclaw/commit/924afea1498d7df382c412f62bb152557d86b378
+                              - text: ", and"
+                              - link "b1b25a6" [ref=e1049] [cursor=pointer]:
+                                - /url: https://github.com/zeroclaw-labs/zeroclaw/commit/b1b25a63888b3dd32a2b608a380eba095c6b0f98
+                              - text: are reconciled by the current diff. I found no new blocking code defect. One non-blocking public-artifact warning remains.
+                            - heading "Take stock" [level=2] [ref=e1050]
+                            - list [ref=e1051]:
+                              - listitem [ref=e1052]:
+                                - text: The first review's blocking finding was that descriptor loading depended on
+                                - code [ref=e1053]: mode
+                                - text: and overwrote user-entered fields on a fresh → existing → fresh round-trip. The current effect at
+                                - code [ref=e1054]: web/src/pages/quickstart/ChannelAddForm.tsx:63-84
+                                - text: depends on the channel type, not the mode, and the reducer merges defaults into the current field map.
+                              - listitem [ref=e1055]:
+                                - text: "The second and third reviews correctly narrowed the remaining concern to test boundary quality: reducer-only tests could pass while the component caller regressed. The new"
+                                - code [ref=e1056]: web/src/pages/quickstart/channel-form.test.ts:89-216
+                                - text: renders the real
+                                - code [ref=e1057]: ChannelAddForm
+                                - text: ", drives the actual Create new and Use existing buttons, loads descriptors through the component effect, edits both fields, and asserts that the edited values survive the round-trip."
+                              - listitem [ref=e1058]: The prior warning about the general Web test script being outside the required permission/context jobs remains accurately described in the PR body.
+                              - listitem [ref=e1059]:
+                                - text: The visible
+                                - code [ref=e1060]: CHANGES_REQUESTED
+                                - text: reviews are on older heads. Their substantive concerns are addressed by the current head; this review does not re-raise them as unresolved implementation defects.
+                              - listitem [ref=e1061]:
+                                - text: The live PR is still
+                                - code [ref=e1062]: BLOCKED
+                                - text: with
+                                - code [ref=e1063]: CHANGES_REQUESTED
+                                - text: while this fresh review and the current CI run are pending. No current exact-head check was failing when I captured the status.
+                            - heading "Findings" [level=2] [ref=e1064]
+                            - heading "🟡 Warning — refresh exact-head validation and live risk/size metadata (non-blocking)" [level=3] [ref=e1065]
+                            - paragraph [ref=e1066]:
+                              - text: The PR body's
+                              - code [ref=e1067]: Testing → How I tested
+                              - text: section still says that the published
+                              - code [ref=e1068]: b1b25a63888b3dd32a2b608a380eba095c6b0f98
+                              - text: head passed the required gate and that fresh required CI must run after publication. The reviewed head is now
+                              - link "4148f9e" [ref=e1069] [cursor=pointer]:
+                                - /url: https://github.com/zeroclaw-labs/zeroclaw/commit/4148f9e4face5e4fe29850b39af34a805ea85cf8
+                              - text: ", with a new exact-head CI run that was still pending for"
+                              - code [ref=e1070]: Lint
+                              - text: ","
+                              - code [ref=e1071]: Test
+                              - text: ","
+                              - code [ref=e1072]: Build x86_64-unknown-linux-gnu
+                              - text: ","
+                              - code [ref=e1073]: Check (plugins cranelift backend)
+                              - text: ", and"
+                              - code [ref=e1074]: Parallel Runtime Test
+                              - text: when checked. Please refresh the public evidence to name the current head and distinguish passed from pending checks rather than leaving the older head as the primary validation reference.
+                            - paragraph [ref=e1075]:
+                              - text: The same snapshot lists
+                              - code [ref=e1076]: risk:low
+                              - text: and
+                              - code [ref=e1077]: size:XS
+                              - text: . The live label definitions describe
+                              - code [ref=e1078]: risk:low
+                              - text: as docs/chore-only and
+                              - code [ref=e1079]: size:XS
+                              - text: as 80 or fewer non-doc changed lines, while this PR changes production Web code and its exact diff is 789 additions plus 232 deletions across eight files. A maintainer should recalculate those labels and the body snapshot against the current policy. This is metadata and evidence hygiene, not a code-level merge blocker.
+                            - heading "Resolved" [level=2] [ref=e1080]
+                            - heading "✅ Resolved — preserve edited fields across mode switches" [level=3] [ref=e1081]
+                            - paragraph [ref=e1082]:
+                              - text: The production boundary is now covered by
+                              - code [ref=e1083]: web/src/pages/quickstart/channel-form.test.ts:89-216
+                              - text: . The test loads descriptors through
+                              - code [ref=e1084]: ChannelAddForm
+                              - text: ", edits the port and secret inputs, clicks Use existing and Create new, and checks both DOM values afterward. It also asserts that the descriptor loader ran only once, which pins the intended no-refetch-on-mode-change behavior."
+                            - paragraph [ref=e1085]:
+                              - text: The implementation supports that contract at
+                              - code [ref=e1086]: web/src/pages/quickstart/ChannelAddForm.tsx:63-84
+                              - text: and
+                              - code [ref=e1087]: web/src/pages/quickstart/channel-fields.ts:60-66
+                              - text: ": descriptor loading is keyed by"
+                              - code [ref=e1088]: type
+                              - text: ", stale responses are cancelled, and defaults are merged only for keys that are not already present. The earlier data-loss blocker is resolved on the reviewed head."
+                            - heading "✅ Resolved — test the caller rather than only reducer semantics" [level=3] [ref=e1089]
+                            - paragraph [ref=e1090]:
+                              - text: The new component interaction test exercises the real rendered component and its effect, so a future change that restores
+                              - code [ref=e1091]: mode
+                              - text: as an effect dependency or stops passing the current field state to the reducer would fail this test. The lower-level reducer tests remain useful supplementary coverage.
+                            - heading "What looks good" [level=2] [ref=e1092]
+                            - heading "🟢 What looks good — descriptor defaults remain canonical" [level=3] [ref=e1093]
+                            - paragraph [ref=e1094]:
+                              - code [ref=e1095]: web/src/pages/quickstart/channel-fields.ts:28-42
+                              - text: consumes only the explicit
+                              - code [ref=e1096]: QuickstartFieldDescriptor.default
+                              - text: supplied by the daemon. It preserves an existing key, including an intentionally cleared empty string, and does not duplicate the Webhook port constant or invent a secret value.
+                            - heading "🟢 What looks good — the extraction leaves the Quickstart integration narrow" [level=3] [ref=e1097]
+                            - paragraph [ref=e1098]:
+                              - code [ref=e1099]: web/src/pages/quickstart/Quickstart.tsx:939-950
+                              - text: now delegates the channel-add boundary to
+                              - code [ref=e1100]: ChannelAddForm
+                              - text: while retaining staging, conflict detection, and parent state ownership in
+                              - code [ref=e1101]: ChannelsList
+                              - text: . This keeps the change scoped to the channel form instead of introducing a second configuration source.
+                            - heading "🟢 What looks good — required-field presentation stays within the existing Web vocabulary" [level=3] [ref=e1102]
+                            - paragraph [ref=e1103]:
+                              - code [ref=e1104]: web/src/pages/quickstart/quickstart-form-controls.tsx:31-68
+                              - text: reuses the localized
+                              - code [ref=e1105]: fieldform.badge_required
+                              - text: label and adds native
+                              - code [ref=e1106]: required
+                              - text: plus
+                              - code [ref=e1107]: aria-required
+                              - text: metadata to descriptor-backed inputs. The backend remains the validation authority; the Web form does not create a separate credential policy.
+                            - heading "Validation" [level=2] [ref=e1108]
+                            - heading "Exact-head remote status" [level=3] [ref=e1109]
+                            - paragraph [ref=e1110]:
+                              - text: At
+                              - link "4148f9e" [ref=e1111] [cursor=pointer]:
+                                - /url: https://github.com/zeroclaw-labs/zeroclaw/commit/4148f9e4face5e4fe29850b39af34a805ea85cf8
+                              - text: ", the relevant"
+                              - code [ref=e1112]: Web Permission Tests
+                              - text: ","
+                              - code [ref=e1113]: Format
+                              - text: ","
+                              - code [ref=e1114]: Security
+                              - text: ","
+                              - code [ref=e1115]: Repository Structure
+                              - text: ", and other completed checks were passing, with no failed or cancelled checks observed. Required work was still pending for"
+                              - code [ref=e1116]: Lint
+                              - text: ","
+                              - code [ref=e1117]: Test
+                              - text: ","
+                              - code [ref=e1118]: Build x86_64-unknown-linux-gnu
+                              - text: ","
+                              - code [ref=e1119]: Check (plugins cranelift backend)
+                              - text: ", and"
+                              - code [ref=e1120]: Parallel Runtime Test
+                              - text: ; therefore I do not treat the exact-head required gate as green yet.
+                            - heading "Local commands" [level=3] [ref=e1121]
+                            - list [ref=e1122]:
+                              - listitem [ref=e1123]:
+                                - code [ref=e1124]: npm ci
+                                - text: — passed; installed 226 packages and reported 0 vulnerabilities. npm emitted the environment warning that this checkout requires Node
+                                - code [ref=e1125]: ">=24.0.0"
+                                - text: while the review environment has Node
+                                - code [ref=e1126]: v20.20.2
+                                - text: .
+                              - listitem [ref=e1127]:
+                                - code [ref=e1128]: npx --no-install jiti src/pages/quickstart/channel-form.test.ts
+                                - text: — passed, 1/1 component interaction test.
+                              - listitem [ref=e1129]:
+                                - code [ref=e1130]: npx --no-install jiti src/pages/quickstart/channel-fields.test.ts
+                                - text: — passed, 4/4 reducer/default tests.
+                              - listitem [ref=e1131]:
+                                - code [ref=e1132]: npm --prefix web run test:permissions
+                                - text: — passed; all permission, catalog, warning, and navigation suites passed.
+                              - listitem [ref=e1133]:
+                                - code [ref=e1134]: git diff --check origin/master...HEAD
+                                - text: — passed.
+                              - listitem [ref=e1135]:
+                                - code [ref=e1136]: npm --prefix web test
+                                - text: — could not run because Node 20 rejects the repository's
+                                - code [ref=e1137]: "--experimental-strip-types"
+                                - text: flag (
+                                - code [ref=e1138]: "node: bad option: --experimental-strip-types"
+                                - text: ).
+                              - listitem [ref=e1139]:
+                                - code [ref=e1140]: npm --prefix web run test:contexts
+                                - text: — could not run for the same Node 20
+                                - code [ref=e1141]: "--experimental-strip-types"
+                                - text: limitation.
+                              - listitem [ref=e1142]:
+                                - code [ref=e1143]: npm --prefix web run build
+                                - text: — failed before Vite assembly. The output included missing generated modules such as
+                                - code [ref=e1144]: "src/lib/api.ts(17,33): error TS2307: Cannot find module './api-generated'"
+                                - text: and unrelated implicit-
+                                - code [ref=e1145]: any
+                                - text: errors in
+                                - code [ref=e1146]: src/components/SopStepList.tsx
+                                - text: ","
+                                - code [ref=e1147]: src/pages/SopCanvas.tsx
+                                - text: ", and"
+                                - code [ref=e1148]: src/pages/Sops.tsx
+                                - text: . The changed Quickstart files were not named in the reported errors. The preceding
+                                - code [ref=e1149]: cargo web check
+                                - text: could not be run in this environment, so generated API artifacts were not available for this direct build.
+                              - listitem [ref=e1150]:
+                                - code [ref=e1151]: cargo web check
+                                - text: "— not run:"
+                                - code [ref=e1152]: "cargo: command not found"
+                                - text: .
+                              - listitem [ref=e1153]:
+                                - code [ref=e1154]: cargo web build
+                                - text: "— not run:"
+                                - code [ref=e1155]: "cargo: command not found"
+                                - text: .
+                              - listitem [ref=e1156]:
+                                - code [ref=e1157]: cargo fmt --all -- --check
+                                - text: "— not run:"
+                                - code [ref=e1158]: "cargo: command not found"
+                                - text: .
+                              - listitem [ref=e1159]:
+                                - code [ref=e1160]: cargo clippy --workspace --exclude zeroclaw-desktop --all-targets --features ci-all -- -D warnings
+                                - text: "— not run:"
+                                - code [ref=e1161]: "cargo: command not found"
+                                - text: .
+                              - listitem [ref=e1162]:
+                                - code [ref=e1163]: cargo test --locked
+                                - text: "— not run:"
+                                - code [ref=e1164]: "cargo: command not found"
+                                - text: .
+                              - listitem [ref=e1165]:
+                                - code [ref=e1166]: cargo nextest run --locked --workspace --exclude zeroclaw-desktop
+                                - text: "— not run:"
+                                - code [ref=e1167]: "cargo: command not found"
+                                - text: .
+                              - listitem [ref=e1168]: No live browser click-through was run; I did not start a gateway or configure a Quickstart session.
+                            - heading "Recommendation" [level=2] [ref=e1169]
+                            - paragraph [ref=e1170]:
+                              - text: No blocking code findings remain at
+                              - link "4148f9e" [ref=e1171] [cursor=pointer]:
+                                - /url: https://github.com/zeroclaw-labs/zeroclaw/commit/4148f9e4face5e4fe29850b39af34a805ea85cf8
+                              - text: . Once the exact-head required checks complete successfully, the implementation is suitable for approval. Before posting an approval, refresh the stale validation paragraph and recalculate the risk/size metadata so the public PR record describes this head accurately.
+                - generic [ref=e1177]:
+                  - link [ref=e1178] [cursor=pointer]:
+                    - /url: /Audacity88
+                    - img "@Audacity88" [ref=e1179]
+                  - link "Audacity88" [ref=e1180] [cursor=pointer]:
+                    - /url: /Audacity88
+                  - text: removed the
+                  - link "priority:p3" [ref=e1181] [cursor=pointer]:
+                    - /url: /zeroclaw-labs/zeroclaw/issues?q=state%3Aopen%20label%3Apriority%3Ap3
+                  - text: label
+                  - link "Aug 22, 2026last week" [ref=e1182] [cursor=pointer]:
+                    - /url: "#event-29836835202"
+                - generic [ref=e1185]:
+                  - generic [ref=e1186]:
+                    - link [ref=e1187] [cursor=pointer]:
+                      - /url: /Audacity88
+                      - img "Audacity88" [ref=e1188]
+                    - generic [ref=e1192]:
+                      - generic [ref=e1193]:
+                        - strong [ref=e1194]:
+                          - link "Audacity88" [ref=e1195] [cursor=pointer]:
+                            - /url: /Audacity88
+                        - text: requested changes
+                        - link "Aug 28, 20266 hours ago" [ref=e1197] [cursor=pointer]:
+                          - /url: "#pullrequestreview-5053496728"
+                      - link "View reviewed changes" [ref=e1199] [cursor=pointer]:
+                        - /url: /zeroclaw-labs/zeroclaw/pull/10081/files
+                  - generic [ref=e1204]:
+                    - generic [ref=e1205]:
+                      - heading [level=3] [ref=e1206]:
+                        - generic [ref=e1207]:
+                          - strong [ref=e1208]:
+                            - link "Audacity88" [ref=e1209] [cursor=pointer]:
+                              - /url: /Audacity88
+                          - text: left a comment
+                      - generic [ref=e1210]:
+                        - group [ref=e1212]:
+                          - button [ref=e1213] [cursor=pointer]:
+                            - img "Show options" [ref=e1216]
+                        - generic "This user has been invited to collaborate on the zeroclaw repository." [ref=e1219]: Collaborator
+                    - generic [ref=e1223]:
+                      - paragraph [ref=e1224]:
+                        - link "@sunlit-deng" [ref=e1225] [cursor=pointer]:
+                          - /url: https://github.com/sunlit-deng
+                        - text: ", I reviewed this at exact head"
+                        - link "4148f9e" [ref=e1226] [cursor=pointer]:
+                          - /url: https://github.com/zeroclaw-labs/zeroclaw/commit/4148f9e4face5e4fe29850b39af34a805ea85cf8
+                        - text: . Required CI is green, and the production reducer now keeps descriptor defaults and user edits under one channel-form state owner.
+                      - paragraph [ref=e1227]:
+                        - text: I independently reconciled
+                        - link "@IftekharUddin" [ref=e1228] [cursor=pointer]:
+                          - /url: https://github.com/IftekharUddin
+                        - text: "'s earlier change request and the"
+                        - link "current zeroclaw-reviewer re-review" [ref=e1229] [cursor=pointer]:
+                          - /url: https://github.com/zeroclaw-labs/zeroclaw/pull/10081#issuecomment-5372510001
+                        - text: . I agree that the original production reset is repaired, but the new component test can still pass without proving the mode round-trip it claims to cover. The PR also still lacks actual-dashboard evidence for its central visible result.
+                      - paragraph [ref=e1230]:
+                        - text: "The raw diff is over 1,000 lines, but the scope is coherent: most of it is the extracted channel form, focused interaction tests, and the"
+                        - code [ref=e1231]: happy-dom
+                        - text: lockfile expansion. I do not think this needs to be split.
+                      - heading "✅ Resolved — keep edited fields under one production state owner" [level=3] [ref=e1232]
+                      - paragraph [ref=e1233]:
+                        - text: The current reducer preserves fields on mode changes, resets them only when the channel type changes, and rejects descriptor responses for a stale type. That addresses
+                        - link "@IftekharUddin" [ref=e1234] [cursor=pointer]:
+                          - /url: https://github.com/IftekharUddin
+                        - text: "'s original data-loss finding: returning from"
+                        - strong [ref=e1235]: Use existing
+                        - text: no longer makes the production effect replace edits with descriptor defaults.
+                      - heading "🟢 What looks good — descriptor defaults remain canonical" [level=3] [ref=e1236]
+                      - paragraph [ref=e1237]:
+                        - text: The Web form consumes only
+                        - code [ref=e1238]: QuickstartFieldDescriptor.default
+                        - text: . It preserves an explicit user value, including an empty string, and does not duplicate the Webhook port constant or invent a secret default. Required presentation also reuses the existing localized Web vocabulary while backend validation remains authoritative.
+                      - heading "🔴 Blocking — make the interaction regression observe the returned form" [level=3] [ref=e1239]
+                      - paragraph [ref=e1240]:
+                        - code [ref=e1241]: channel-form.test.ts
+                        - text: clicks
+                        - strong [ref=e1242]: Use existing
+                        - text: and
+                        - strong [ref=e1243]: Create new
+                        - text: inside one
+                        - code [ref=e1244]: act()
+                        - text: ", without observing the existing-mode render between them. It then checks the same"
+                        - code [ref=e1245]: port
+                        - text: and
+                        - code [ref=e1246]: secret
+                        - text: element references captured before those clicks. React may batch the two updates into one final render, and detached input nodes retain their old
+                        - code [ref=e1247]: .value
+                        - text: ", so the test can pass even if the returned fresh form remounts with the wrong values."
+                      - paragraph [ref=e1248]:
+                        - text: "Please commit the transition in two phases: click"
+                        - strong [ref=e1249]: Use existing
+                        - text: in its own awaited
+                        - code [ref=e1250]: act()
+                        - text: ", assert that the existing-mode control is present and the fresh inputs are absent, then click"
+                        - strong [ref=e1251]: Create new
+                        - text: in a second awaited
+                        - code [ref=e1252]: act()
+                        - text: . Re-query the live inputs from the document before asserting their values. Keep the loader-count assertion as the separate no-refetch invariant.
+                      - heading "🔴 Blocking — prove the visible Quickstart result in the actual dashboard" [level=3] [ref=e1253]
+                      - paragraph [ref=e1254]:
+                        - text: The linked issue is a browser-visible consistency defect, and this PR also changes the rendered required-field state. The component test proves DOM behavior in
+                        - code [ref=e1255]: happy-dom
+                        - text: ", but the repository's"
+                        - link "user-boundary proof contract" [ref=e1256] [cursor=pointer]:
+                          - /url: https://github.com/zeroclaw-labs/zeroclaw/blob/master/docs/book/src/contributing/user-boundary-proof.md#visual-presentation-changes
+                        - text: requires actual-interface evidence for visible presentation.
+                      - paragraph [ref=e1257]:
+                        - text: Please run this exact head in the Web dashboard at a representative viewport and attach a privacy-safe screenshot of
+                        - strong [ref=e1258]: Quickstart → Add channel → Create new → Webhook
+                        - text: showing the port initialized to
+                        - code [ref=e1259]: "8090"
+                        - text: and the required affordance with enough surrounding form context to judge it. Also record the
+                        - strong [ref=e1260]: Create new → Use existing → Create new
+                        - text: action and observed result with synthetic edited values; no external channel credentials are needed.
+                      - paragraph [ref=e1261]: This is a focused blocker assessment. The full PR review is not yet complete, and I may identify additional issues after these user-boundary gaps are repaired.
+                - generic [ref=e1267]:
+                  - link [ref=e1268] [cursor=pointer]:
+                    - /url: /Audacity88
+                    - img "@Audacity88" [ref=e1269]
+                  - link "Audacity88" [ref=e1270] [cursor=pointer]:
+                    - /url: /Audacity88
+                  - text: added
+                  - link "risk:medium" [ref=e1271] [cursor=pointer]:
+                    - /url: /zeroclaw-labs/zeroclaw/issues?q=state%3Aopen%20label%3Arisk%3Amedium
+                  - link "size:XL" [ref=e1272] [cursor=pointer]:
+                    - /url: /zeroclaw-labs/zeroclaw/issues?q=state%3Aopen%20label%3Asize%3AXL
+                  - link "trusted contributor" [ref=e1273] [cursor=pointer]:
+                    - /url: /zeroclaw-labs/zeroclaw/issues?q=state%3Aopen%20label%3A%22trusted%20contributor%22
+                  - text: and removed
+                  - link "risk:low" [ref=e1274] [cursor=pointer]:
+                    - /url: /zeroclaw-labs/zeroclaw/issues?q=state%3Aopen%20label%3Arisk%3Alow
+                  - link "size:XS" [ref=e1275] [cursor=pointer]:
+                    - /url: /zeroclaw-labs/zeroclaw/issues?q=state%3Aopen%20label%3Asize%3AXS
+                  - text: labels
+                  - link "Aug 28, 20266 hours ago" [ref=e1276] [cursor=pointer]:
+                    - /url: "#event-30178884565"
+                - generic [ref=e1278]:
+                  - generic [ref=e1283]:
+                    - link "sunlit-deng" [ref=e1284] [cursor=pointer]:
+                      - /url: /sunlit-deng
+                    - text: added 5 commits
+                    - link "August 29, 2026 07:1847 minutes ago" [ref=e1285] [cursor=pointer]:
+                      - /url: "#commits-pushed-236d563"
+                  - generic [ref=e1286]:
+                    - generic [ref=e1294]:
+                      - link [ref=e1297] [cursor=pointer]:
+                        - /url: /sunlit-deng
+                        - img "@sunlit-deng" [ref=e1298]
+                      - code [ref=e1300]:
+                        - 'link "fix(web): show channel descriptor defaults in Quickstart" [ref=e1301] [cursor=pointer]':
+                          - /url: /zeroclaw-labs/zeroclaw/pull/10081/commits/236d563f870436f5a11aa3d9c7f8c8519d8ebbd1
+                      - code [ref=e1309]:
+                        - link "236d563" [ref=e1310] [cursor=pointer]:
+                          - /url: /zeroclaw-labs/zeroclaw/pull/10081/commits/236d563f870436f5a11aa3d9c7f8c8519d8ebbd1
+                    - generic [ref=e1318]:
+                      - link [ref=e1321] [cursor=pointer]:
+                        - /url: /sunlit-deng
+                        - img "@sunlit-deng" [ref=e1322]
+                      - code [ref=e1324]:
+                        - 'link "fix(web): preserve quickstart channel fields" [ref=e1325] [cursor=pointer]':
+                          - /url: /zeroclaw-labs/zeroclaw/pull/10081/commits/dbe14a7b98e39bafc3ae964a9fce47e8d046e25a
+                      - code [ref=e1333]:
+                        - link "dbe14a7" [ref=e1334] [cursor=pointer]:
+                          - /url: /zeroclaw-labs/zeroclaw/pull/10081/commits/dbe14a7b98e39bafc3ae964a9fce47e8d046e25a
+                    - generic [ref=e1342]:
+                      - link [ref=e1345] [cursor=pointer]:
+                        - /url: /sunlit-deng
+                        - img "@sunlit-deng" [ref=e1346]
+                      - code [ref=e1348]:
+                        - 'link "fix(web): cover quickstart channel transitions" [ref=e1349] [cursor=pointer]':
+                          - /url: /zeroclaw-labs/zeroclaw/pull/10081/commits/ec4c8e71a7f36605c955bea485978d9c98839620
+                      - code [ref=e1357]:
+                        - link "ec4c8e7" [ref=e1358] [cursor=pointer]:
+                          - /url: /zeroclaw-labs/zeroclaw/pull/10081/commits/ec4c8e71a7f36605c955bea485978d9c98839620
+                    - generic [ref=e1366]:
+                      - link [ref=e1369] [cursor=pointer]:
+                        - /url: /sunlit-deng
+                        - img "@sunlit-deng" [ref=e1370]
+                      - code [ref=e1372]:
+                        - 'link "test(web): cover quickstart form interactions" [ref=e1373] [cursor=pointer]':
+                          - /url: /zeroclaw-labs/zeroclaw/pull/10081/commits/235a91b93e38b436028b2e109efe0f940ddebf9a
+                      - code [ref=e1381]:
+                        - link "235a91b" [ref=e1382] [cursor=pointer]:
+                          - /url: /zeroclaw-labs/zeroclaw/pull/10081/commits/235a91b93e38b436028b2e109efe0f940ddebf9a
+                    - generic [ref=e1390]:
+                      - link [ref=e1393] [cursor=pointer]:
+                        - /url: /sunlit-deng
+                        - img "@sunlit-deng" [ref=e1394]
+                      - code [ref=e1396]:
+                        - 'link "test(web): pin quickstart mode transition boundary" [ref=e1397] [cursor=pointer]':
+                          - /url: /zeroclaw-labs/zeroclaw/pull/10081/commits/67efbfaa48b78f734d02e7a81c7459c185b421c7
+                      - code [ref=e1405]:
+                        - link "67efbfa" [ref=e1406] [cursor=pointer]:
+                          - /url: /zeroclaw-labs/zeroclaw/pull/10081/commits/67efbfaa48b78f734d02e7a81c7459c185b421c7
+                - generic [ref=e1413]:
+                  - link [ref=e1415] [cursor=pointer]:
+                    - /url: /sunlit-deng
+                    - img "@sunlit-deng" [ref=e1416]
+                  - generic [ref=e1417]:
+                    - link "sunlit-deng" [ref=e1418] [cursor=pointer]:
+                      - /url: /sunlit-deng
+                    - link "force-pushed" [ref=e1419] [cursor=pointer]:
+                      - /url: /zeroclaw-labs/zeroclaw/compare/4148f9e4face5e4fe29850b39af34a805ea85cf8..67efbfaa48b78f734d02e7a81c7459c185b421c7
+                    - text: the
+                    - generic [ref=e1420]: fix/issue-9760-quickstart-channel-defaults
+                    - text: branch from
+                    - link [ref=e1422] [cursor=pointer]:
+                      - /url: /zeroclaw-labs/zeroclaw/commit/4148f9e4face5e4fe29850b39af34a805ea85cf8
+                      - code [ref=e1423]: 4148f9e
+                    - text: to
+                    - link [ref=e1424] [cursor=pointer]:
+                      - /url: /zeroclaw-labs/zeroclaw/commit/67efbfaa48b78f734d02e7a81c7459c185b421c7
+                      - code [ref=e1425]: 67efbfa
+                    - link "Compare" [ref=e1426] [cursor=pointer]:
+                      - /url: /zeroclaw-labs/zeroclaw/compare/4148f9e4face5e4fe29850b39af34a805ea85cf8..67efbfaa48b78f734d02e7a81c7459c185b421c7
+                    - link "August 29, 2026 00:05now" [ref=e1429] [cursor=pointer]:
+                      - /url: "#event-30193855125"
+            - generic [ref=e1433]:
+              - link "Sign up for free" [ref=e1434] [cursor=pointer]:
+                - /url: /join?source=comment-repo
+              - strong [ref=e1435]: to join this conversation on GitHub
+              - text: . Already have an account?
+              - link "Sign in to comment" [ref=e1436] [cursor=pointer]:
+                - /url: /login?return_to=https%3A%2F%2Fgithub.com%2Fzeroclaw-labs%2Fzeroclaw%2Fpull%2F10081
+        - generic [ref=e1440]:
+          - form "Select reviewers" [ref=e1442]:
+            - heading "Reviewers" [level=3] [ref=e1443]
+            - generic [ref=e1444]:
+              - generic [ref=e1445]:
+                - generic [ref=e1446]:
+                  - link [ref=e1447] [cursor=pointer]:
+                    - /url: /Audacity88
+                    - img "@Audacity88" [ref=e1448]
+                  - link "Audacity88" [ref=e1449] [cursor=pointer]:
+                    - /url: /Audacity88
+                - link "Audacity88 requested changes" [ref=e1450] [cursor=pointer]:
+                  - /url: /zeroclaw-labs/zeroclaw/pull/10081/files/4148f9e4face5e4fe29850b39af34a805ea85cf8
+              - generic [ref=e1454]:
+                - generic [ref=e1455]:
+                  - link [ref=e1456] [cursor=pointer]:
+                    - /url: /JordanTheJet
+                    - img "@JordanTheJet" [ref=e1457]
+                  - link "JordanTheJet" [ref=e1458] [cursor=pointer]:
+                    - /url: /JordanTheJet
+                - button "Awaiting requested review from JordanTheJet" [ref=e1459] [cursor=pointer]
+                - button "JordanTheJet is a code owner" [ref=e1463] [cursor=pointer]
+              - generic [ref=e1467]:
+                - generic [ref=e1468]:
+                  - link [ref=e1469] [cursor=pointer]:
+                    - /url: /IftekharUddin
+                    - img "@IftekharUddin" [ref=e1470]
+                  - link "IftekharUddin" [ref=e1471] [cursor=pointer]:
+                    - /url: /IftekharUddin
+                - button "Awaiting requested review from IftekharUddin" [ref=e1472] [cursor=pointer]
+                - button "IftekharUddin is a code owner" [ref=e1476] [cursor=pointer]
+              - paragraph [ref=e1480]: Requested changes must be addressed to merge this pull request.
+          - form "Select assignees" [ref=e1482]:
+            - heading "Assignees" [level=3] [ref=e1483]
+            - text: No one assigned
+          - generic [ref=e1484]:
+            - heading "Labels" [level=3] [ref=e1485]
+            - generic [ref=e1486]:
+              - link "bug" [ref=e1487] [cursor=pointer]:
+                - /url: /zeroclaw-labs/zeroclaw/issues?q=state%3Aopen%20label%3Abug
+              - link "needs-author-action" [ref=e1489] [cursor=pointer]:
+                - /url: /zeroclaw-labs/zeroclaw/issues?q=state%3Aopen%20label%3Aneeds-author-action
+              - link "quickstart" [ref=e1491] [cursor=pointer]:
+                - /url: /zeroclaw-labs/zeroclaw/issues?q=state%3Aopen%20label%3Aquickstart
+              - link "risk:medium" [ref=e1493] [cursor=pointer]:
+                - /url: /zeroclaw-labs/zeroclaw/issues?q=state%3Aopen%20label%3Arisk%3Amedium
+              - link "size:XL" [ref=e1495] [cursor=pointer]:
+                - /url: /zeroclaw-labs/zeroclaw/issues?q=state%3Aopen%20label%3Asize%3AXL
+              - link "trusted contributor" [ref=e1497] [cursor=pointer]:
+                - /url: /zeroclaw-labs/zeroclaw/issues?q=state%3Aopen%20label%3A%22trusted%20contributor%22
+              - link "web" [ref=e1499] [cursor=pointer]:
+                - /url: /zeroclaw-labs/zeroclaw/issues?q=state%3Aopen%20label%3Aweb
+          - form "Select projects" [ref=e1502]:
+            - heading "Projects" [level=3] [ref=e1503]
+            - text: None yet
+          - form "Select milestones" [ref=e1505]:
+            - heading "Milestone" [level=3] [ref=e1506]
+            - link [ref=e1509] [cursor=pointer]:
+              - /url: /zeroclaw-labs/zeroclaw/milestone/29
+              - strong [ref=e1510]: v0.8.5
+          - form "Link issues" [ref=e1516]:
+            - heading "Development" [level=3] [ref=e1517]
+            - paragraph [ref=e1518]: Successfully merging this pull request may close these issues.
+            - link [ref=e1520] [cursor=pointer]:
+              - /url: https://github.com/zeroclaw-labs/zeroclaw/issues/9760
+              - img "Open issue" [ref=e1521]
+              - text: "bug(web): display channel descriptor defaults in Quickstart"
+          - generic [ref=e1525]:
+            - heading "3 participants" [level=3] [ref=e1526]
+            - generic [ref=e1527]:
+              - link [ref=e1528] [cursor=pointer]:
+                - /url: /sunlit-deng
+                - img "@sunlit-deng" [ref=e1529]
+              - link [ref=e1530] [cursor=pointer]:
+                - /url: /Audacity88
+                - img "@Audacity88" [ref=e1531]
+              - link [ref=e1532] [cursor=pointer]:
+                - /url: /IftekharUddin
+                - img "@IftekharUddin" [ref=e1533]
+  - contentinfo [ref=e1534]:
+    - heading "Footer" [level=2] [ref=e1535]
+    - generic [ref=e1536]:
+      - generic [ref=e1537]:
+        - link "GitHub Homepage" [ref=e1538] [cursor=pointer]:
+          - /url: https://github.com
+        - generic [ref=e1541]: © 2026 GitHub, Inc.
+      - navigation "Footer" [ref=e1542]:
+        - heading "Footer navigation" [level=3] [ref=e1543]
+        - list "Footer navigation" [ref=e1544]:
+          - listitem [ref=e1545]:
+            - link "Terms" [ref=e1546] [cursor=pointer]:
+              - /url: https://docs.github.com/site-policy/github-terms/github-terms-of-service
+          - listitem [ref=e1547]:
+            - link "Privacy" [ref=e1548] [cursor=pointer]:
+              - /url: https://docs.github.com/site-policy/privacy-policies/github-privacy-statement
+          - listitem [ref=e1549]:
+            - link "Security" [ref=e1550] [cursor=pointer]:
+              - /url: https://github.com/security
+          - listitem [ref=e1551]:
+            - link "Status" [ref=e1552] [cursor=pointer]:
+              - /url: https://www.githubstatus.com/
+          - listitem [ref=e1553]:
+            - link "Community" [ref=e1554] [cursor=pointer]:
+              - /url: https://github.community/
+          - listitem [ref=e1555]:
+            - link "Docs" [ref=e1556] [cursor=pointer]:
+              - /url: https://docs.github.com/
+          - listitem [ref=e1557]:
+            - link "Contact" [ref=e1558] [cursor=pointer]:
+              - /url: https://support.github.com?tags=dotcom-footer
+          - listitem [ref=e1559]:
+            - button "Manage cookies" [ref=e1561] [cursor=pointer]
+          - listitem [ref=e1562]:
+            - button "Do not share my personal information" [ref=e1564] [cursor=pointer]

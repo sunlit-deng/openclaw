@@ -1,6 +1,6 @@
 # auto-pr
 
-Personal Codex and Claude Code workflows for preparing OpenClaw and ZeroClaw pull requests with repeatable local gates on macOS and Linux. Project-specific policy and validation live in `.codex/auto-pr-core/projects/*.json`; the guarded workflow remains shared.
+Personal Codex and Claude Code workflows for preparing OpenClaw and ZeroClaw pull requests with repeatable local gates on macOS and Linux. Project-specific policy and validation live in `.codex/auto-pr-core/projects/*.json`; the guarded workflow remains shared, with an explicit one-attempt user override for local publication gates.
 
 ## Layout
 
@@ -39,7 +39,11 @@ tests. Start a workflow with:
 For an existing PR, use `prepare-zeroclaw-pr-worktree.mjs`. Draft the body from
 `.codex/skills/auto-pr-zeroclaw/references/pr-body.md`, then run the ZeroClaw
 body validator, preflight, and gate summary. The publisher uses `master` from
-the project profile and remains behind the same explicit human approval gate.
+the project profile and remains behind the same human approval gate by default.
+When the user explicitly directs a workflow-rule bypass, pass
+`--allow-workflow-rule-bypass --workflow-rule-bypass-reason "<user reason>"` to
+the publisher; the bypass is recorded in `workflow.json` and does not relax
+target/account, lease, secret/privacy, or final-body integrity checks.
 See `.codex/skills/auto-pr-zeroclaw/references/contribution-policy.md` for the
 upstream contribution, PR-format, privacy, and validation requirements.
 
@@ -269,10 +273,12 @@ checkouts:
 
 After the human gate, `publish-openclaw-pr.mjs` requires the approved HEAD and
 body SHA-256 and pushes through an explicitly named SSH remote associated with
-the `gh` identity. Both new PR creation and existing PR body updates use `gh
-api` with the REST pulls API so the validated body/proof is preserved verbatim.
-The script re-reads the PR with `gh pr view` and verifies the body and
-maintainer edit access.
+the `gh` identity. An explicit workflow-rule bypass may omit those two
+approval-input flags; the publisher binds them to the current HEAD/body at
+startup and records the bypass reason. Both new PR creation and existing PR
+body updates use `gh api` with the REST pulls API so the body is preserved
+verbatim. The script re-reads the PR with `gh pr view` and verifies the body
+and remote target.
 
 `workspace/` is local working state and is ignored by git.
 

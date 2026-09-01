@@ -1,0 +1,113 @@
+- generic [ref=f3e7]:
+  - link "跳转到主要内容" [ref=f3e8] [cursor=pointer]:
+    - /url: "#control-ui-main"
+  - complementary [ref=f3e10]:
+    - generic [ref=f3e11]:
+      - button "返回应用" [ref=f3e12]:
+        - text: 返回应用
+        - generic [ref=f3e16]: esc
+      - heading "设置" [level=1] [ref=f3e17]
+    - search [ref=f3e18]:
+      - searchbox "搜索设置" [ref=f3e19]
+    - navigation "设置分区" [ref=f3e20]:
+      - generic [ref=f3e21]:
+        - link "询问 OpenClaw" [ref=f3e22] [cursor=pointer]:
+          - /url: /custodian
+        - link "个人资料" [ref=f3e35] [cursor=pointer]:
+          - /url: /settings/profile
+        - link "外观与设置" [ref=f3e42] [cursor=pointer]:
+          - /url: /settings/appearance
+        - link "通知" [ref=f3e51] [cursor=pointer]:
+          - /url: /settings/notifications
+      - generic [ref=f3e56]:
+        - generic [ref=f3e57]: 连接
+        - link "连接" [ref=f3e58] [cursor=pointer]:
+          - /url: /settings/connection
+        - link "频道" [ref=f3e64] [cursor=pointer]:
+          - /url: /settings/channels
+        - link "通信" [ref=f3e70] [cursor=pointer]:
+          - /url: /settings/communications
+        - link "语音" [ref=f3e75] [cursor=pointer]:
+          - /url: /settings/talk
+        - link "节点" [ref=f3e80] [cursor=pointer]:
+          - /url: /settings/devices
+        - link "云工作器" [ref=f3e86] [cursor=pointer]:
+          - /url: /settings/cloud-workers
+      - generic [ref=f3e92]:
+        - generic [ref=f3e93]: 代理与工具
+        - link "代理" [ref=f3e94] [cursor=pointer]:
+          - /url: /settings/agents
+        - link "实验室" [ref=f3e100] [cursor=pointer]:
+          - /url: /settings/labs
+        - link "模型提供商" [ref=f3e105] [cursor=pointer]:
+          - /url: /settings/model-providers
+        - link "MCP" [ref=f3e110] [cursor=pointer]:
+          - /url: /settings/mcp
+        - link "记忆" [ref=f3e115] [cursor=pointer]:
+          - /url: /settings/memory
+        - link "自动化" [ref=f3e120] [cursor=pointer]:
+          - /url: /settings/automation
+      - generic [ref=f3e125]:
+        - generic [ref=f3e126]: 隐私与安全
+        - link "隐私与安全" [ref=f3e127] [cursor=pointer]:
+          - /url: /settings/security
+        - link "Secrets" [ref=f3e132] [cursor=pointer]:
+          - /url: /settings/secrets
+        - link "审批" [ref=f3e139] [cursor=pointer]:
+          - /url: /settings/approvals
+      - generic [ref=f3e145]:
+        - generic [ref=f3e146]: 系统
+        - link "基础设施" [ref=f3e147] [cursor=pointer]:
+          - /url: /settings/infrastructure
+        - link "高级" [ref=f3e153] [cursor=pointer]:
+          - /url: /settings/advanced
+        - link "调试" [ref=f3e160] [cursor=pointer]:
+          - /url: /debug
+        - link "日志" [ref=f3e172] [cursor=pointer]:
+          - /url: /logs
+        - link "更新" [ref=f3e178] [cursor=pointer]:
+          - /url: /settings/updates
+        - link "关于" [ref=f3e184] [cursor=pointer]:
+          - /url: /settings/about
+    - link "Control UI 构建详细信息" [ref=f3e193] [cursor=pointer]:
+      - /url: /settings/about
+      - generic [ref=f3e194]: 2026.8.1 · sunlit/pr-1305…@d85d130
+  - main [ref=f3e195]:
+    - generic [ref=f3e196]:
+      - status [ref=f3e197]: 0 个收件箱项目
+      - button "0 个收件箱项目" [ref=f3e198]
+    - generic [ref=f3e204]:
+      - generic [ref=f3e205]:
+        - generic [ref=f3e206]:
+          - generic [ref=f3e207]: 模型提供商
+          - generic [ref=f3e208]:
+            - text: Model providers with auth, plan, quota, and cost data.
+            - link "了解更多" [ref=f3e209] [cursor=pointer]:
+              - /url: https://docs.openclaw.ai/concepts/model-providers
+        - button "模型设置" [ref=f3e211]
+      - generic [ref=f3e214]:
+        - generic [ref=f3e216]:
+          - heading "模型与思考" [level=2] [ref=f3e218]
+          - generic [ref=f3e219]:
+            - generic [ref=f3e220]:
+              - generic [ref=f3e221]:
+                - generic [ref=f3e222]: 思考
+                - generic [ref=f3e223]: 使用默认值：模型策略
+              - radiogroup [ref=f3e226]:
+                - generic [ref=f3e228]:
+                  - radio "默认" [checked] [ref=f3e229]
+                  - radio "关闭" [ref=f3e231]
+                  - radio "低" [ref=f3e233]
+                  - radio "中" [ref=f3e235]
+                  - radio "高" [ref=f3e237]
+            - generic [ref=f3e239]:
+              - generic [ref=f3e240]:
+                - generic [ref=f3e241]: 快速模式
+                - generic [ref=f3e242]: 使用默认值：模型策略
+              - radiogroup [ref=f3e245]:
+                - generic [ref=f3e247]:
+                  - radio "默认" [checked] [ref=f3e248]
+                  - radio "自动" [ref=f3e250]
+                  - radio "快速" [ref=f3e252]
+                  - radio "标准" [ref=f3e254]
+        - generic [ref=f3e256]: 加载中…

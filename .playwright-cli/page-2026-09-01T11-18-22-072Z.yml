@@ -1,0 +1,27 @@
+- generic [ref=e8]:
+  - generic [ref=e9]:
+    - img "OpenClaw" [ref=e10]
+    - generic [ref=e11]: OpenClaw
+    - generic [ref=e12]: 网关仪表盘
+  - generic [ref=e13]:
+    - generic [ref=e14]:
+      - generic [ref=e15]: WebSocket URL
+      - textbox "WebSocket URL" [ref=e16]:
+        - /placeholder: ws://127.0.0.1:18789
+        - text: ws://127.0.0.1:50718
+    - generic [ref=e17]:
+      - generic [ref=e18]: Gateway 令牌
+      - generic [ref=e19]:
+        - textbox "Gateway 令牌 切换令牌可见性" [ref=e20]:
+          - /placeholder: OPENCLAW_GATEWAY_TOKEN (可选)
+          - text: pr-134886-live-proof-token
+        - button "切换令牌可见性" [ref=e22]
+    - generic [ref=e25]:
+      - generic [ref=e26]: 密码（不存储）
+      - generic [ref=e27]:
+        - textbox "密码（不存储） 切换密码可见性" [ref=e28]:
+          - /placeholder: 可选
+        - button "切换密码可见性" [ref=e30]
+    - button "连接" [active] [ref=e33]
+  - group [ref=e83]:
+    - generic "如何连接" [ref=e84]

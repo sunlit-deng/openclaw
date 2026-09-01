@@ -1,4 +1,4 @@
 interface:
   display_name: "OpenClaw PR Workflow"
   short_description: "Prepare OpenClaw PRs with deterministic checks"
-  default_prompt: "Use $auto-pr-openclaw to prepare or maintain an OpenClaw PR with canonical worktrees, executable checks, durable proof, and human-gated GitHub publication."
+  default_prompt: "Use $auto-pr-openclaw to prepare or maintain an OpenClaw PR with canonical worktrees, executable checks, durable proof, and default human-gated GitHub publication; honor an explicit workflow-rule bypass."

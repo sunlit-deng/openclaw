@@ -137,4 +137,6 @@ Do not rewrite historical predictions after seeing the rating.
 - A receipt validates structure and workflow identity. It does not make a false
   observation true; retain the actual reproduction command and output.
 - `candidate-scout.json` and `proof-receipt.json` are advisory quality evidence.
-  Deterministic preflight and the human GitHub write gate remain mandatory.
+  Deterministic preflight and the human GitHub write gate remain mandatory by
+  default; an explicit workflow-rule override may bypass those local gates for
+  one publish attempt, with the reason recorded in `workflow.json`.

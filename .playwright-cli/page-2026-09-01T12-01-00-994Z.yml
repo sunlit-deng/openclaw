@@ -1,0 +1,47 @@
+- generic [ref=f3e6]:
+  - generic [ref=f3e7]:
+    - img "OpenClaw" [ref=f3e8]
+    - generic [ref=f3e9]: OpenClaw
+    - generic [ref=f3e10]: Gateway Dashboard
+  - generic [ref=f3e11]:
+    - generic [ref=f3e12]:
+      - generic [ref=f3e13]: WebSocket URL
+      - textbox "WebSocket URL" [ref=f3e14]:
+        - /placeholder: ws://127.0.0.1:18789
+        - text: ws://127.0.0.1:57009
+    - generic [ref=f3e15]:
+      - generic [ref=f3e16]: Gateway Token
+      - generic [ref=f3e17]:
+        - textbox "Gateway Token Toggle token visibility" [ref=f3e18]:
+          - /placeholder: OPENCLAW_GATEWAY_TOKEN (optional)
+        - button "Toggle token visibility" [ref=f3e20]
+    - generic [ref=f3e23]:
+      - generic [ref=f3e24]: Password (not stored)
+      - generic [ref=f3e25]:
+        - textbox "Password (not stored) Toggle password visibility" [ref=f3e26]:
+          - /placeholder: optional
+        - button "Toggle password visibility" [ref=f3e28]
+    - button "Connect" [ref=f3e31]
+  - alert [ref=f3e32]:
+    - generic [ref=f3e33]: Auth required
+    - generic [ref=f3e34]: The Gateway is reachable, but it needs a matching token or password before this browser can connect.
+    - list [ref=f3e35]:
+      - listitem [ref=f3e36]:
+        - text: Paste the token from
+        - 'button "Copy command: openclaw gateway auth-token --show" [ref=f3e38]':
+          - code [ref=f3e39]: openclaw gateway auth-token --show
+          - button "Copy command" [ref=f3e41]
+        - text: or enter the configured password.
+      - listitem [ref=f3e50]:
+        - text: If no token is configured, run
+        - 'button "Copy command: openclaw doctor --generate-gateway-token" [ref=f3e52]':
+          - code [ref=f3e53]: openclaw doctor --generate-gateway-token
+          - button "Copy command" [ref=f3e55]
+        - text: on the gateway host.
+      - listitem [ref=f3e64]: Click Connect again after updating the credential.
+    - group [ref=f3e65]:
+      - generic "Raw error" [ref=f3e66]
+    - link "Learn more" [ref=f3e67] [cursor=pointer]:
+      - /url: https://docs.openclaw.ai/web/dashboard
+  - group [ref=f3e68]:
+    - generic "How to connect" [ref=f3e69]

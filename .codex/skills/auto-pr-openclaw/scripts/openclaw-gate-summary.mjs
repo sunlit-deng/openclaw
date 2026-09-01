@@ -295,12 +295,21 @@ const summary = {
   publishInputs: {
     approvedHead: headSha,
     approvedBodySha256: body.sha256,
+    workflowRuleBypass: {
+      flag: "--allow-workflow-rule-bypass",
+      reasonFlag: "--workflow-rule-bypass-reason",
+      scope: "current publish attempt",
+      explicitUserInstructionRequired: true,
+    },
   },
 };
 
-// Ready-to-copy publish command for the human gate. New PR creation also
+// Ready-to-copy normal publish command for the human gate. New PR creation also
 // needs --title and --head; propose them from the head commit subject and the
 // selected account so approval never stalls on publisher argument discovery.
+// The title is provisional: the human gate must check it against the issue's
+// semantic type and .github/pull_request_template.md before publishing.
+// An explicit workflow-rule bypass may omit the approval-input flags.
 const publishCommandParts = [
   "node ./.codex/skills/auto-pr-openclaw/scripts/publish-openclaw-pr.mjs",
   `--workflow ${context.workflowPath}`,
@@ -345,6 +354,7 @@ ${mdList(nameStatus.map((line) => `\`${line}\``))}
 - issue intake: ${summary.intake ? (summary.intake.present ? `${summary.intake.relatedOpenPrCount} related open PRs` : "missing") : "not applicable"}
 - review/CI intake: ${summary.reviewIntake ? (summary.reviewIntake.present ? `${summary.reviewIntake.activeChangeRequestCount} active change requests, ${summary.reviewIntake.failedCheckCount} failed or pending checks${summary.reviewIntake.lookupErrorCount ? `, ${summary.reviewIntake.lookupErrorCount} lookup errors` : ""}` : "missing") : "not applicable"}
 - failed-preflight bypass: ${preflight?.status === "failed" && preflight.headSha === headSha ? "available only with explicit user approval for this HEAD and body hash" : "not applicable"}
+- workflow-rule bypass: available only after an explicit user instruction for this publish; add \`--allow-workflow-rule-bypass --workflow-rule-bypass-reason \"<reason>\"\`
 - rebase-only check: ${rebaseOnlyCheck ? `${rebaseOnlyCheck.status}${rebaseOnlyPassedForHead ? " (active fast path)" : ""}` : "missing"}
 - rebase-only receipt: \`${rebaseOnlyCheckPath}\`
 - duplicate check: ${duplicateCheckApplicable ? (duplicateCheck ? `${summary.duplicateCheck.likelyDuplicateCount} unreviewed likely duplicates, ${summary.duplicateCheck.relatedOpenPrCount} related open PRs${summary.duplicateCheck.reviewedLikelyDuplicateCount ? `; ${summary.duplicateCheck.reviewedLikelyDuplicateCount} manually reviewed matches` : ""}${summary.duplicateCheck.blocking ? "" : " (advisory)"}` : "missing") : "not applicable (existing PR)"}
@@ -365,6 +375,11 @@ ${mdList(identities.map((identity) => `\`${identity.sha.slice(0, 12)}\` author=$
 - terminal/proof source: ${body.hasTerminalFence || body.hasDetailsProofSource ? "yes" : "no"}
 - AI policy: ${body.aiDisclosure === "forbidden-footer" ? (body.hasForbiddenAiFooter ? "forbidden footer found" : "no AI attribution footer") : body.hasAiMarker ? "required marker present" : "not configured"}
 
+## PR Title
+
+- provisional proposal from HEAD commit subject: ${headSubject ? `\`${headSubject}\`` : "(empty)"}
+- review against \`.github/pull_request_template.md\` before publishing: feature issues use feat, incorrect existing behavior or regressions use fix; the commit subject is not authoritative
+
 ## Blockers
 
 ${mdList(blockers)}
@@ -374,13 +389,13 @@ ${mdList(blockers)}
 - approved HEAD: \`${headSha}\`
 - approved body SHA-256: \`${body.sha256}\`
 
-### Publish command (run only after explicit approval)
+### Publish command (run after explicit approval, or after an explicit workflow-rule override)
 
 \`\`\`bash
 ${publishCommand}
 \`\`\`
 
-Do not push, update the PR body, comment, or request review until the user explicitly approves this HEAD and body hash. This approval covers only the branch push and PR create/update; it does not authorize \`@clawsweeper re-review\`.
+Do not push or update the PR body until the user explicitly approves this HEAD and body hash, unless the user has explicitly instructed this workflow to bypass its local rules. Comments and review requests always require a separate explicit request. A workflow-rule bypass covers only this publish attempt and does not authorize \`@clawsweeper re-review\` or other unrelated writes.
 `;
 
 fs.writeFileSync(outputMd, md, "utf8");

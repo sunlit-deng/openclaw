@@ -1,0 +1,48 @@
+- generic [ref=f1e7]:
+  - link "跳转到主要内容" [ref=f1e8] [cursor=pointer]:
+    - /url: "#control-ui-main"
+  - generic [ref=f1e9]:
+    - button "折叠侧边栏" [expanded] [ref=f1e11]
+    - button "打开命令面板" [ref=f1e16]
+  - complementary [ref=f1e22]:
+    - generic [ref=f1e23]:
+      - generic [ref=f1e24]:
+        - button "main · 智能体菜单" [ref=f1e27]:
+          - generic [ref=f1e28]: M
+          - generic [ref=f1e30]:
+            - generic [ref=f1e31]: main
+            - generic [ref=f1e35]: 可以开始聊天
+        - link "新建会话" [disabled] [ref=f1e39]
+      - generic [ref=f1e43]:
+        - navigation [ref=f1e44]:
+          - generic [ref=f1e45]:
+            - generic [ref=f1e46]: 页面
+            - button "自定义侧边栏" [ref=f1e47]
+          - generic [ref=f1e50]:
+            - link "主页" [ref=f1e51]:
+              - /url: /chat/main
+            - link "定时任务" [ref=f1e60]:
+              - /url: /automations
+            - link "插件" [ref=f1e68]:
+              - /url: /settings/plugins
+        - generic [ref=f1e74]:
+          - generic [ref=f1e75]: 会话
+          - button "筛选与排序" [ref=f1e76]
+          - link "新建会话" [disabled] [ref=f1e79]
+      - generic [ref=f1e82]:
+        - generic [ref=f1e83]: sunlit/pr-134886
+        - 'button "账户 的身份和应用菜单: sunlit/pr-1348…@c235b48* · 5小时前" [ref=f1e93]':
+          - generic "账户" [ref=f1e95]: 账
+          - generic "账户" [ref=f1e98]
+  - separator "调整侧边栏大小" [ref=f1e99]
+  - main [ref=f1e100]:
+    - status [ref=f1e101]:
+      - generic [ref=f1e109]: 在 Gateway 重新连接期间无法执行操作。
+    - status [ref=f1e111]:
+      - button "服务器已更新 刷新以获取完整功能" [ref=f1e112]:
+        - generic [ref=f1e116]:
+          - generic [ref=f1e117]: 服务器已更新
+          - generic [ref=f1e118]: 刷新以获取完整功能
+    - generic [ref=f1e120]:
+      - generic [ref=f1e121]: 工作板
+      - status "加载中…" [ref=f1e125]

@@ -12,8 +12,10 @@ New PR preparation follows this path:
 3. `openclaw-preflight.mjs` validates Git state, identity, PR body, merge risk,
    focused tests, and the selected lint/type lane. Successful heavy work is
    cached by a HEAD/base/toolchain fingerprint.
-4. `openclaw-gate-summary.mjs` creates the human approval packet.
-5. `publish-openclaw-pr.mjs` revalidates the approved HEAD/body, pushes once,
+4. `openclaw-gate-summary.mjs` creates the human approval packet. An explicit
+   user-directed workflow-rule override may authorize the next step without a
+   second approval after recording the bypass reason.
+5. `publish-openclaw-pr.mjs` revalidates the approved/current HEAD/body, pushes once,
    creates or updates the PR through REST, and verifies the remote body and
    maintainer-edit setting.
 
@@ -60,7 +62,7 @@ at one while the test counter advances to two.
 
 Existing-PR intake now reads the PR before selecting its owner-matching account
 and configures GitHub authentication once afterward. Publishing still pushes
-and performs the mandatory final verification, but skips the REST PATCH when
+and performs the mandatory final body/target verification, but skips the REST PATCH when
 both the already-read remote body and optional title are unchanged.
 
 ## Next optimization priorities

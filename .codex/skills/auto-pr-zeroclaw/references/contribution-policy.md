@@ -39,3 +39,17 @@ Source of truth: the checked-out repository files and the official upstream docu
 - Explain security/privacy impact, compatibility, blast radius, and rollback honestly. Use repository-root paths only.
 - Do not add `Co-authored-by`, `Created with ...`, `Generated with ...`, or other bot/AI attribution footers. AI collaboration is allowed, but the contribution must remain human-owned and policy-compliant.
 - Use conventional commits and squash before merge. Do not rewrite another contributor's authorship merely to normalize metadata.
+
+## Explicit user-directed workflow override
+
+The rules above are the default contribution and publication workflow. If the
+user explicitly instructs Codex to bypass the workflow rules and publish, or to
+bypass all local publication gates, use the shared publisher with
+`--allow-workflow-rule-bypass --workflow-rule-bypass-reason "<user reason>"`.
+The one-attempt override may bypass local validation, template, identity,
+intake, duplicate, review/CI, dirty-worktree, and maintainer-edit gates. Record
+the reason and bypassed checks in `workflow.json` and report them before the
+write. It does not bypass higher-priority instructions, secret/PII protections,
+authenticated account ownership, target repository/branch/PR identity, current
+HEAD/body binding, remote-head lease protection, GitHub/API failures, or final
+remote body verification. It does not authorize comments or review requests.

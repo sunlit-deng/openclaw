@@ -138,6 +138,107 @@ test("normal publisher rejects a preflight validated against another base before
   assert.doesNotMatch(result.stderr, /gh auth|git push/);
 });
 
+test("explicit workflow-rule bypass publishes and records bypassed local gates", (t) => {
+  const temp = fs.mkdtempSync(path.join(os.tmpdir(), "auto-pr-publish-bypass-"));
+  t.after(() => fs.rmSync(temp, { recursive: true, force: true }));
+  const repo = path.join(temp, "repo");
+  const output = path.join(temp, "output");
+  const fakeBin = path.join(temp, "fake-bin");
+  fs.mkdirSync(repo, { recursive: true });
+  fs.mkdirSync(output, { recursive: true });
+  fs.mkdirSync(fakeBin, { recursive: true });
+  git(repo, "init", "-b", "feature");
+  git(repo, "config", "user.name", "sunlit-deng");
+  git(repo, "config", "user.email", "yang.jiajun1@xydigit.com");
+  fs.writeFileSync(path.join(repo, "file.txt"), "content\n");
+  git(repo, "add", ".");
+  git(repo, "commit", "-m", "test");
+  const head = git(repo, "rev-parse", "HEAD");
+
+  const bodyPath = path.join(output, "pr-body.md");
+  const workflowPath = path.join(output, "workflow.json");
+  const body = "intentionally incomplete body\n";
+  fs.writeFileSync(bodyPath, body);
+  fs.writeFileSync(workflowPath, `${JSON.stringify({
+    schemaVersion: 2,
+    root: temp,
+    repoPath: repo,
+    outputPath: output,
+    branch: "feature",
+    baseSha: head,
+    validationBaseSha: head,
+    prBodyPath: bodyPath,
+    prBodySha256: "stale-body-sha",
+    preflightPath: path.join(output, "missing-preflight.json"),
+  }, null, 2)}\n`);
+  git(repo, "remote", "add", "sunlit", "https://github.com/sunlit-deng/openclaw.git");
+
+  const realGit = spawnSync("which", ["git"], { encoding: "utf8" }).stdout.trim();
+  const fakeGit = path.join(fakeBin, "git");
+  fs.writeFileSync(fakeGit, `#!/usr/bin/env node
+const { spawnSync } = require("node:child_process");
+if (process.argv[2] === "push") process.exit(0);
+const result = spawnSync(${JSON.stringify(realGit)}, process.argv.slice(2), { stdio: "inherit" });
+process.exit(result.status ?? 1);
+`);
+  fs.chmodSync(fakeGit, 0o755);
+
+  const fakeGh = path.join(fakeBin, "gh");
+  fs.writeFileSync(fakeGh, `#!/usr/bin/env node
+const args = process.argv.slice(2);
+if (args[0] === "auth" && args[1] === "setup-git") process.exit(0);
+if (args[0] === "api" && args[1] === "user") {
+  console.log(JSON.stringify({ login: "sunlit-deng" }));
+  process.exit(0);
+}
+if (args[0] === "api" && args[1] === "--method" && args[2] === "POST" && args[3] === "repos/openclaw/openclaw/pulls") {
+  console.log(JSON.stringify({ number: 123, url: "https://github.com/openclaw/openclaw/pull/123" }));
+  process.exit(0);
+}
+if (args[0] === "pr" && args[1] === "view") {
+  console.log(JSON.stringify({
+    number: 123,
+    url: "https://github.com/openclaw/openclaw/pull/123",
+    title: "test",
+    body: ${JSON.stringify(body)},
+    maintainerCanModify: false,
+    headRefName: "feature",
+    headRefOid: ${JSON.stringify(head)},
+    headRepositoryOwner: { login: "sunlit-deng" },
+  }));
+  process.exit(0);
+}
+process.exit(1);
+`);
+  fs.chmodSync(fakeGh, 0o755);
+
+  const result = spawnSync(process.execPath, [
+    publisher,
+    "--workflow", workflowPath,
+    "--allow-workflow-rule-bypass",
+    "--workflow-rule-bypass-reason", "user explicitly requested publication despite local gates",
+    "--push-remote", "sunlit",
+    "--title", "test",
+    "--head", "sunlit-deng:feature",
+  ], {
+    encoding: "utf8",
+    env: {
+      ...process.env,
+      AUTO_PR_ACCOUNTS_FILE: path.join(temp, "no-accounts.json"),
+      PATH: `${fakeBin}${path.delimiter}${process.env.PATH}`,
+    },
+  });
+  assert.equal(result.status, 0, result.stderr || result.stdout);
+  const published = JSON.parse(fs.readFileSync(workflowPath, "utf8"));
+  assert.equal(published.pr, 123);
+  assert.equal(published.workflowRuleBypass.status, "used");
+  assert.equal(published.workflowRuleBypass.reason, "user explicitly requested publication despite local gates");
+  assert.ok(published.workflowRuleBypass.bypassedChecks.some((check) => /preflight/.test(check)));
+  assert.ok(published.workflowRuleBypass.bypassedChecks.some((check) => /PR body/.test(check)));
+  assert.ok(published.workflowRuleBypass.bypassedChecks.some((check) => /maintainer_can_modify/.test(check)));
+  assert.equal(JSON.parse(result.stdout).maintainerCanModify, false);
+});
+
 test("score calibration exposes false-positive high predictions and signal lift", (t) => {
   const temp = fs.mkdtempSync(path.join(os.tmpdir(), "auto-pr-calibration-"));
   t.after(() => fs.rmSync(temp, { recursive: true, force: true }));

@@ -1,0 +1,16 @@
+[    1092ms] [VERBOSE] [DOM] Password field is not contained in a form: (More info: https://goo.gl/9p2vKq) @ http://127.0.0.1:51976/workboard:0
+[    1092ms] [VERBOSE] [DOM] Password field is not contained in a form: (More info: https://goo.gl/9p2vKq) %o @ http://127.0.0.1:51976/workboard:0
+[   46970ms] [ERROR] WebSocket connection to 'ws://127.0.0.1:51976/' failed: Error in connection establishment: net::ERR_CONNECTION_REFUSED @ http://127.0.0.1:51976/assets/control-ui-core-CgST7-dg.js:1
+[   61972ms] [ERROR] WebSocket connection to 'ws://127.0.0.1:51976/' failed: Error in connection establishment: net::ERR_CONNECTION_REFUSED @ http://127.0.0.1:51976/assets/control-ui-core-CgST7-dg.js:1
+[   76976ms] [ERROR] WebSocket connection to 'ws://127.0.0.1:51976/' failed: Error in connection establishment: net::ERR_CONNECTION_REFUSED @ http://127.0.0.1:51976/assets/control-ui-core-CgST7-dg.js:1
+[   91979ms] [ERROR] WebSocket connection to 'ws://127.0.0.1:51976/' failed: Error in connection establishment: net::ERR_CONNECTION_REFUSED @ http://127.0.0.1:51976/assets/control-ui-core-CgST7-dg.js:1
+[  106980ms] [ERROR] WebSocket connection to 'ws://127.0.0.1:51976/' failed: Error in connection establishment: net::ERR_CONNECTION_REFUSED @ http://127.0.0.1:51976/assets/control-ui-core-CgST7-dg.js:1
+[  121983ms] [ERROR] WebSocket connection to 'ws://127.0.0.1:51976/' failed: Error in connection establishment: net::ERR_CONNECTION_REFUSED @ http://127.0.0.1:51976/assets/control-ui-core-CgST7-dg.js:1
+[  136985ms] [ERROR] WebSocket connection to 'ws://127.0.0.1:51976/' failed: Error in connection establishment: net::ERR_CONNECTION_REFUSED @ http://127.0.0.1:51976/assets/control-ui-core-CgST7-dg.js:1
+[  151986ms] [ERROR] WebSocket connection to 'ws://127.0.0.1:51976/' failed: Error in connection establishment: net::ERR_CONNECTION_REFUSED @ http://127.0.0.1:51976/assets/control-ui-core-CgST7-dg.js:1
+[  166987ms] [ERROR] WebSocket connection to 'ws://127.0.0.1:51976/' failed: Error in connection establishment: net::ERR_CONNECTION_REFUSED @ http://127.0.0.1:51976/assets/control-ui-core-CgST7-dg.js:1
+[  181990ms] [ERROR] WebSocket connection to 'ws://127.0.0.1:51976/' failed: Error in connection establishment: net::ERR_CONNECTION_REFUSED @ http://127.0.0.1:51976/assets/control-ui-core-CgST7-dg.js:1
+[  196992ms] [ERROR] WebSocket connection to 'ws://127.0.0.1:51976/' failed: Error in connection establishment: net::ERR_CONNECTION_REFUSED @ http://127.0.0.1:51976/assets/control-ui-core-CgST7-dg.js:1
+[  211995ms] [ERROR] WebSocket connection to 'ws://127.0.0.1:51976/' failed: Error in connection establishment: net::ERR_CONNECTION_REFUSED @ http://127.0.0.1:51976/assets/control-ui-core-CgST7-dg.js:1
+[  226998ms] [ERROR] WebSocket connection to 'ws://127.0.0.1:51976/' failed: Error in connection establishment: net::ERR_CONNECTION_REFUSED @ http://127.0.0.1:51976/assets/control-ui-core-CgST7-dg.js:1
+[  242001ms] [ERROR] WebSocket connection to 'ws://127.0.0.1:51976/' failed: Error in connection establishment: net::ERR_CONNECTION_REFUSED @ http://127.0.0.1:51976/assets/control-ui-core-CgST7-dg.js:1

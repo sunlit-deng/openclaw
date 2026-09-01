@@ -1,0 +1,190 @@
+- generic [ref=e7]:
+  - link "跳转到主要内容" [ref=e8] [cursor=pointer]:
+    - /url: "#control-ui-main"
+  - generic [ref=e9]:
+    - button "折叠侧边栏" [expanded] [ref=e11]
+    - button "打开命令面板" [ref=e16]
+  - complementary [ref=e25]:
+    - generic [ref=e26]:
+      - generic [ref=e27]:
+        - button "Assistant · 智能体菜单" [ref=e30]:
+          - generic [ref=e31]: A
+          - generic [ref=e33]:
+            - generic [ref=e34]: Assistant
+            - generic [ref=e38]: 可以开始聊天
+        - link "新建会话" [ref=e42]:
+          - /url: /new?agent=main
+      - generic [ref=e46]:
+        - navigation [ref=e47]:
+          - generic [ref=e48]:
+            - generic [ref=e49]: 页面
+            - button "自定义侧边栏" [ref=e50]
+          - generic [ref=e53]:
+            - link "主页" [ref=e54]:
+              - /url: /chat/main
+            - link "定时任务" [ref=e63]:
+              - /url: /automations
+            - link "插件" [ref=e71]:
+              - /url: /settings/plugins
+            - link "工作板" [ref=e77]:
+              - /url: /workboard
+        - generic [ref=e83]:
+          - generic [ref=e84]: 会话
+          - button "筛选与排序" [ref=e85]
+          - link "新建会话" [ref=e88]:
+            - /url: /new?agent=main
+      - generic [ref=e91]:
+        - generic [ref=e92]: sunlit/pr-134886
+        - generic [ref=e101]:
+          - 'button "账户 的身份和应用菜单: sunlit/pr-1348…@c235b48* · 5小时前" [ref=e102]':
+            - generic "账户" [ref=e104]: 账
+            - generic "账户" [ref=e107]
+          - generic [ref=e108]:
+            - button "与你的 Home 智能体对话" [ref=e110]
+            - generic [ref=e114]:
+              - status [ref=e115]: 0 个收件箱项目
+              - button "0 个收件箱项目" [ref=e116]
+  - separator "调整侧边栏大小" [ref=e21]
+  - main [ref=e22]:
+    - generic [ref=e121]:
+      - generic [ref=e122]: 工作板
+      - generic [ref=e127]:
+        - generic [ref=e128]:
+          - generic [ref=e129]:
+            - searchbox "搜索卡片" [ref=e130]
+            - generic [ref=e132]:
+              - generic [ref=e133]: 工作板视图
+              - generic [ref=e137]:
+                - combobox "工作板视图" [ref=e138]: 全部卡片
+                - textbox [ref=e139]: all
+            - generic [ref=e145]:
+              - generic [ref=e146]: 所有优先级
+              - generic [ref=e150]:
+                - combobox "所有优先级" [ref=e151]
+                - textbox [ref=e152]: all
+            - button "Archived" [ref=e157]
+            - generic [ref=e160]:
+              - group "Card layout" [ref=e161]:
+                - button "紧凑卡片密度" [pressed] [ref=e163]
+                - button "宽松卡片密度" [ref=e170]
+              - generic [ref=e174]: 已更新 19:40
+            - generic [ref=e176]:
+              - generic [ref=e177]: 空列
+              - generic [ref=e181]:
+                - combobox "空列" [ref=e182]: 显示全部
+                - textbox [ref=e183]: show
+          - generic [ref=e188]:
+            - button "刷新" [disabled] [ref=e189]
+            - button "提醒调度器" [disabled] [ref=e190]
+            - button "新建卡片" [ref=e193]
+        - generic "工作板健康状况" [ref=e196]:
+          - button "0 运行中" [ref=e197]:
+            - strong [ref=e198]: "0"
+            - text: 运行中
+          - button "0 已阻塞" [ref=e199]:
+            - strong [ref=e200]: "0"
+            - text: 已阻塞
+          - button "0 已过期" [ref=e201]:
+            - strong [ref=e202]: "0"
+            - text: 已过期
+          - button "1 就绪未分配" [ref=e203]:
+            - strong [ref=e204]: "1"
+            - text: 就绪未分配
+          - button "0 缺少凭证" [ref=e445]:
+            - strong [ref=e206]: "0"
+            - text: 缺少凭证
+          - button "0 失败尝试" [ref=e207]:
+            - strong [ref=e208]: "0"
+            - text: 失败尝试
+        - generic [ref=e209]:
+          - region "Triage, 0" [ref=e210]:
+            - generic [ref=e211]:
+              - heading "Triage" [level=2] [ref=e212]
+              - generic [ref=e213]:
+                - generic [ref=e214]: "0"
+                - button "折叠 Triage 列" [expanded] [ref=e216]
+            - generic [ref=e222]: 将工作拖放到此处
+          - region "待办池, 0" [ref=e224]:
+            - generic [ref=e225]:
+              - heading "待办池" [level=2] [ref=e226]
+              - generic [ref=e227]:
+                - generic [ref=e228]: "0"
+                - button "折叠 待办池 列" [expanded] [ref=e230]
+            - generic [ref=e236]: 将工作拖放到此处
+          - region "待办, 0" [ref=e238]:
+            - generic [ref=e239]:
+              - heading "待办" [level=2] [ref=e240]
+              - generic [ref=e241]:
+                - generic [ref=e242]: "0"
+                - button "折叠 待办 列" [expanded] [ref=e244]
+            - generic [ref=e250]: 将工作拖放到此处
+          - region "已计划, 0" [ref=e252]:
+            - generic [ref=e253]:
+              - heading "已计划" [level=2] [ref=e254]
+              - generic [ref=e255]:
+                - generic [ref=e256]: "0"
+                - button "折叠 已计划 列" [expanded] [ref=e258]
+            - generic [ref=e264]: 将工作拖放到此处
+          - region "就绪, 1" [ref=e266]:
+            - generic [ref=e267]:
+              - heading "就绪" [level=2] [ref=e268]
+              - generic [ref=e269]:
+                - generic [ref=e270]: "1"
+                - button "折叠 就绪 列" [expanded] [ref=e272]
+            - button "已更新：9月1日 19:37 运行默认代理 编辑卡片 归档卡片 Normal main Move dependent child (live proof) 无会话 启动或关联会话 无关联会话 查看详情 就绪 删除卡片" [ref=e446]:
+              - generic [ref=e280]:
+                - generic "已更新：9月1日 19:37" [ref=e281]: 9月1日 19:37
+                - generic [ref=e287]:
+                  - button "运行默认代理" [ref=e290]
+                  - button "编辑卡片" [ref=e295]
+                  - button "归档卡片" [ref=e300]
+              - generic [ref=e304]:
+                - generic [ref=e305]: Normal
+                - generic "Using default agent main" [ref=e306]: main
+              - heading "Move dependent child (live proof)" [level=3] [ref=e307]
+              - generic [ref=e308]:
+                - generic [ref=e309]: 无会话
+                - generic [ref=e310]: 启动或关联会话
+              - generic [ref=e313]: 无关联会话
+              - generic [ref=e315]:
+                - button "查看详情" [ref=e318]
+                - generic "状态" [ref=e326]:
+                  - 'combobox "状态: Move dependent child (live proof)" [ref=e327]':
+                    - option "Triage"
+                    - option "待办池"
+                    - option "待办"
+                    - option "已计划"
+                    - option "就绪" [selected]
+                    - option "运行中"
+                    - option "查看"
+                    - option "已阻挡"
+                    - option "已完成"
+                - button "删除卡片" [ref=e330]
+          - region "运行中, 0" [ref=e333]:
+            - generic [ref=e334]:
+              - heading "运行中" [level=2] [ref=e335]
+              - generic [ref=e336]:
+                - generic [ref=e337]: "0"
+                - button "折叠 运行中 列" [expanded] [ref=e339]
+            - generic [ref=e345]: 将工作拖放到此处
+          - region "查看, 0" [ref=e347]:
+            - generic [ref=e348]:
+              - heading "查看" [level=2] [ref=e349]
+              - generic [ref=e350]:
+                - generic [ref=e351]: "0"
+                - button "折叠 查看 列" [expanded] [ref=e353]
+            - generic [ref=e359]: 将工作拖放到此处
+          - region "已阻挡, 0" [ref=e361]:
+            - generic [ref=e362]:
+              - heading "已阻挡" [level=2] [ref=e363]
+              - generic [ref=e364]:
+                - generic [ref=e365]: "0"
+                - button "折叠 已阻挡 列" [expanded] [ref=e367]
+            - generic [ref=e373]: 将工作拖放到此处
+          - region "已完成, 0" [ref=e447]:
+            - generic [ref=e376]:
+              - heading "已完成" [level=2] [ref=e377]
+              - generic [ref=e378]:
+                - generic [ref=e379]: "0"
+                - button "折叠 已完成 列" [expanded] [ref=e381]
+            - generic [ref=e387]: 将工作拖放到此处

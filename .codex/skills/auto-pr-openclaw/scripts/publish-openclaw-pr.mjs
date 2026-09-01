@@ -22,11 +22,17 @@ function parseArgs(argv) {
     repo: "",
     allowFailedPreflight: false,
     failedPreflightBypassReason: "",
+    allowWorkflowRuleBypass: false,
+    workflowRuleBypassReason: "",
   };
   for (let index = 0; index < argv.length; index += 1) {
     const arg = argv[index];
     if (arg === "--allow-failed-preflight") {
       result.allowFailedPreflight = true;
+      continue;
+    }
+    if (arg === "--allow-workflow-rule-bypass") {
+      result.allowWorkflowRuleBypass = true;
       continue;
     }
     const key = {
@@ -39,6 +45,7 @@ function parseArgs(argv) {
       "--push-remote": "pushRemote",
       "--repo": "repo",
       "--failed-preflight-bypass-reason": "failedPreflightBypassReason",
+      "--workflow-rule-bypass-reason": "workflowRuleBypassReason",
     }[arg];
     if (!key) throw new Error(`Unknown argument: ${arg}`);
     result[key] = argv[++index] ?? "";
@@ -99,11 +106,22 @@ try {
   process.exit(2);
 }
 
-for (const key of ["workflow", "approvedHead", "approvedBodySha"]) {
+for (const key of ["workflow"]) {
   if (!args[key]) {
     console.error(`--${key.replace(/[A-Z]/g, (letter) => `-${letter.toLowerCase()}`)} is required`);
     process.exit(2);
   }
+}
+if (!args.allowWorkflowRuleBypass) {
+  for (const key of ["approvedHead", "approvedBodySha"]) {
+    if (!args[key]) {
+      console.error(`--${key.replace(/[A-Z]/g, (letter) => `-${letter.toLowerCase()}`)} is required`);
+      process.exit(2);
+    }
+  }
+} else if (!args.workflowRuleBypassReason.trim()) {
+  console.error("--workflow-rule-bypass-reason is required with --allow-workflow-rule-bypass");
+  process.exit(2);
 }
 
 const workflowPath = path.resolve(args.workflow);
@@ -118,15 +136,35 @@ if (!args.pushRemote) {
   console.error("--push-remote is required");
   process.exit(2);
 }
-const preflight = JSON.parse(fs.readFileSync(path.resolve(workflow.preflightPath), "utf8"));
+let preflight = null;
+let preflightReadError = null;
+if (workflow.preflightPath) {
+  try {
+    preflight = JSON.parse(fs.readFileSync(path.resolve(workflow.preflightPath), "utf8"));
+  } catch (error) {
+    preflightReadError = error.message;
+  }
+}
 const repoPath = path.resolve(workflow.repoPath);
 const body = normalizeNewlines(fs.readFileSync(path.resolve(workflow.prBodyPath), "utf8"));
 const bodySha = sha256(body);
 const currentHead = execute("git", ["rev-parse", "HEAD"], { cwd: repoPath });
 const currentBranch = execute("git", ["branch", "--show-current"], { cwd: repoPath });
 const remoteHeadRef = workflow.headRef || currentBranch;
+args.approvedHead ||= currentHead;
+args.approvedBodySha ||= bodySha;
 
 const failures = [];
+const bypassedChecks = [];
+const workflowRuleBypass = args.allowWorkflowRuleBypass;
+const bypassReason = args.workflowRuleBypassReason.trim();
+
+function bypassableFailure(condition, message) {
+  if (!condition) return;
+  if (workflowRuleBypass) bypassedChecks.push(message);
+  else failures.push(message);
+}
+
 const preflightValidation = validateWorkflowReceipt(preflight, {
   kind: "preflight",
   schemaVersions: [2],
@@ -135,15 +173,25 @@ const preflightValidation = validateWorkflowReceipt(preflight, {
   headSha: currentHead,
   validationBaseSha: workflow.validationBaseSha || workflow.baseSha,
 });
-const failedPreflightBypass = args.allowFailedPreflight && preflight.status === "failed";
-if (args.allowFailedPreflight && preflight.status !== "failed") failures.push("--allow-failed-preflight only applies when preflight status is failed");
+const failedPreflightBypass = args.allowFailedPreflight && preflight?.status === "failed";
+if (args.allowFailedPreflight && preflight?.status !== "failed") failures.push("--allow-failed-preflight only applies when preflight status is failed");
 if (args.allowFailedPreflight && !args.failedPreflightBypassReason.trim()) failures.push("--failed-preflight-bypass-reason is required with --allow-failed-preflight");
-if (preflight.status !== "passed" && !failedPreflightBypass) failures.push("preflight status is not passed");
-failures.push(...preflightValidation.problems);
+if (preflight?.status !== "passed") {
+  if (failedPreflightBypass || workflowRuleBypass) {
+    bypassedChecks.push(`preflight status is ${preflight?.status ?? "missing"}`);
+  } else {
+    failures.push(`preflight status is ${preflight?.status ?? "missing"}`);
+  }
+}
+const preflightProblems = [
+  ...preflightValidation.problems,
+  ...(preflightReadError ? [`preflight could not be read: ${preflightReadError}`] : []),
+];
+for (const problem of preflightProblems) bypassableFailure(true, problem);
 if (workflow.branch !== currentBranch) failures.push("current branch does not match workflow.json");
 if (args.approvedHead !== currentHead) failures.push("current HEAD does not match the human-approved HEAD");
 if (args.approvedBodySha !== bodySha) failures.push("current PR body does not match the human-approved SHA-256");
-if (workflow.prBodySha256 !== bodySha) failures.push("PR body has changed since validation");
+if (workflow.prBodySha256 !== bodySha) bypassableFailure(true, "PR body has changed since workflow validation");
 try {
   const bodyValidation = validatePrBody({
     bodyPath: workflow.prBodyPath,
@@ -155,12 +203,12 @@ try {
     project,
   });
   if (bodyValidation.status !== "passed") {
-    failures.push(`current PR body failed validation: ${bodyValidation.errors.join("; ")}`);
+    bypassableFailure(true, `current PR body failed validation: ${bodyValidation.errors.join("; ")}`);
   }
 } catch (error) {
-  failures.push(`current PR body validation failed: ${error.message}`);
+  bypassableFailure(true, `current PR body validation failed: ${error.message}`);
 }
-if (execute("git", ["status", "--porcelain"], { cwd: repoPath })) failures.push("working tree is not clean");
+if (execute("git", ["status", "--porcelain"], { cwd: repoPath })) bypassableFailure(true, "working tree is not clean");
 if (failures.length > 0) {
   console.error(failures.map((failure) => `- ${failure}`).join("\n"));
   process.exit(1);
@@ -200,7 +248,8 @@ let existing = null;
 if (prNumber) {
   existing = viewPr(prNumber, args.repo, accountEnv);
   if (existing.maintainerCanModify !== true) {
-    throw new Error("maintainer_can_modify is not true; restore maintainer edit access before push");
+    if (workflowRuleBypass) bypassedChecks.push("maintainer_can_modify is not true before push");
+    else throw new Error("maintainer_can_modify is not true; restore maintainer edit access before push");
   }
   if (ownerLogin(existing.headRepositoryOwner)?.toLowerCase() !== ghLogin.toLowerCase() || existing.headRefName !== remoteHeadRef) {
     throw new Error("existing PR head owner or branch does not match the authenticated push target");
@@ -266,7 +315,8 @@ if (remoteBody !== body) {
   throw new Error(`GitHub PR body differs after REST write (local=${bodySha}, remote=${sha256(remoteBody)})`);
 }
 if (remote.maintainerCanModify !== true) {
-  throw new Error("maintainer_can_modify is not true; restore maintainer edit access before review requests");
+  if (workflowRuleBypass) bypassedChecks.push("maintainer_can_modify is not true after write");
+  else throw new Error("maintainer_can_modify is not true; restore maintainer edit access before review requests");
 }
 
 workflow.pr = prNumber;
@@ -286,6 +336,17 @@ if (failedPreflightBypass) {
     usedAt: new Date().toISOString(),
   };
 }
+if (workflowRuleBypass) {
+  workflow.workflowRuleBypass = {
+    status: "used",
+    reason: bypassReason,
+    scope: "current publish attempt",
+    bypassedChecks: [...new Set(bypassedChecks)],
+    approvedHead: args.approvedHead,
+    approvedBodySha256: args.approvedBodySha,
+    usedAt: new Date().toISOString(),
+  };
+}
 workflow.updatedAt = new Date().toISOString();
 fs.writeFileSync(workflowPath, `${JSON.stringify(workflow, null, 2)}\n`, "utf8");
 console.log(JSON.stringify({
@@ -293,7 +354,8 @@ console.log(JSON.stringify({
   url: workflow.prUrl,
   headSha: currentHead,
   bodySha256: workflow.remoteBodySha256,
-  maintainerCanModify: true,
+  maintainerCanModify: remote.maintainerCanModify === true,
   prWriteSkipped,
   failedPreflightBypass: failedPreflightBypass ? workflow.failedPreflightBypass : null,
+  workflowRuleBypass: workflowRuleBypass ? workflow.workflowRuleBypass : null,
 }, null, 2));

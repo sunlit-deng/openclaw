@@ -2,6 +2,17 @@
 
 Follow `.github/pull_request_template.md` and `CONTRIBUTING.md`.
 
+## PR title
+
+Choose the PR title independently from the commit subject. Read `.github/pull_request_template.md` and use its `type(scope): user-facing description` format and allowed types. Classify by the change that will ship:
+
+- `feat`: a new user-facing capability or an issue requesting a feature.
+- `fix`: incorrect existing behavior or a regression; describe the user-visible symptom and trigger.
+- `improve`: a meaningful non-bug improvement to existing behavior.
+- `refactor`, `docs`, and `chore`: only when the change matches that type.
+
+Issue labels such as `queueable-fix` or `clawsweeper:*`, branch names, and a stale `fix(...)` commit subject do not make a feature issue a `fix` PR. Review the final title before candidate scoring and preflight, and pass that exact title explicitly to the publisher. A gate-summary title inferred from the head commit is only a starting proposal.
+
 ## Style
 
 - Write like a human contributor, not a report generator.

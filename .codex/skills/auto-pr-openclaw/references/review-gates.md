@@ -36,9 +36,10 @@ Use these gates before pushing or updating an OpenClaw PR.
 - For an explicit "rebase then publish" request, fetch once, record the exact rebase target SHA, rebase to that SHA, and keep that SHA as `validationBaseSha` through validation and publish. If main advances while checks are running, do not chase it. Publish the validated HEAD unless preflight reports a real merge conflict, the overlapping-file report changes the risk decision, or the user explicitly asks for another rebase after seeing the current gate state.
 - Reuse cached heavy checks only when the receipt fingerprint matches HEAD, `validationBaseSha`, package/lockfile content, lanes, targeted planner implementation, toolchain, platform, and relevant execution environment. Focused changed-test results may also be reused across profile switches when their focused-test fingerprint matches. Always recompute latest-main merge risk even on a cache hit.
 - Avoid the default `pnpm check:changed` remote delegation path. Preflight sets `OPENCLAW_CHECK_CHANGED_REMOTE_CHILD=1 OPENCLAW_CHANGED_LANES_RAW_SYNC=1 PNPM_CONFIG_VERIFY_DEPS_BEFORE_RUN=false` and intentionally omits `CI=1` so changed lanes run locally. When checking manually, use the same environment; Testbox/Blacksmith runs are optional supplemental proof, not the default local gate.
-- A passing `preflight.json` is required. Missing, skipped, stale, or failed checks do not pass based on an agent's prose summary.
+- A passing `preflight.json` is required by default. Missing, skipped, stale, or failed checks do not pass based on an agent's prose summary.
 - Receipt identity is part of the gate. `workflowPath`, `repoPath`, `headSha`, `validationBaseSha`, and supported `schemaVersion` must match where applicable; copying a passing receipt from another workflow or base does not pass.
 - A user may explicitly approve a temporary bypass for `preflight.status === "failed"` after seeing the human gate packet. This bypass is scoped to the same workflow task, approved HEAD, and approved PR body hash. It must be passed to `scripts/publish-openclaw-pr.mjs` as `--allow-failed-preflight --failed-preflight-bypass-reason "<user reason>"`. It does not apply to missing preflight, stale preflight, changed HEAD/body, dirty worktree, identity failures, maintainer edit failures, duplicate blockers on unpublished candidates, or proof/re-review blockers.
+- If the user explicitly instructs the workflow to bypass its local rules and publish, use `--allow-workflow-rule-bypass --workflow-rule-bypass-reason "<user reason>"` with the normal publisher. This broader one-attempt override may bypass local process gates, including the human gate, missing/stale/failed preflight, PR-body policy, identity policy, dirty-worktree warning, duplicate/intake/score/review/CI blockers, and maintainer-edit policy. A request naming only one gate must stay scoped to that gate; use the narrow failed-preflight flag where applicable. Record the reason and bypassed checks in `workflow.json` and report them before the write. Keep authenticated account ownership, target repository/branch/PR identity, current HEAD/body binding, remote-head lease protection, secret/privacy protections, and final remote body verification mandatory. It does not authorize comments or re-review.
 - For live external behavior, execute the real path when feasible and summarize only redacted proof.
 - If true live external proof is infeasible, run `scripts/openclaw-proof-plan.sh --workflow <outputs>/workflow.json` and use the highest real local boundary: CLI command, server/route handler, provider/client entrypoint, sandbox/subprocess path, or production module boundary. Substitute unavailable external dependencies only at the network/process boundary with localhost, loopback, or fixtures.
 - Do not treat isolated helper calls, copied parser logic, `node -e` simulations, or test output as real-call-chain fallback proof.
@@ -196,10 +197,11 @@ validation.
 
 ## Human Gate
 
-This gate does not apply to the clean rebase-only fast path. An explicit
-rebase/catch-up request plus a passing patch-equivalence receipt authorizes its
-branch-only force-push. Conflict-resolved rebases and every other GitHub write
-still use this gate.
+This gate applies by default. It does not apply to the clean rebase-only fast
+path or to an explicit workflow-rule override. An explicit rebase/catch-up
+request plus a passing patch-equivalence receipt authorizes the clean path's
+branch-only force-push. Conflict-resolved rebases and every other normal
+GitHub write use this gate.
 
 Before any GitHub write, show the user:
 
@@ -214,11 +216,11 @@ Before any GitHub write, show the user:
 - maintainer edit status for existing PRs, or the post-create maintainer edit check plan for new PRs
 - unresolved risks or blocked checks
 
-Do not push, update PR body, comment, or request re-review until the user explicitly confirms. Confirmation covers only the branch push and PR create/update; it does not authorize `@clawsweeper re-review`. Post re-review only when the user separately and explicitly asks for it.
-After confirmation, use `scripts/publish-openclaw-pr.mjs` for branch push and PR create/update unless the script is unavailable or fails for a concrete reason you report. It verifies the approved body and maintainer edit access after the write. Use direct `gh` only for comments, review requests, reads, or fallback operations that the publisher cannot perform. After publish, report the result and wait for an explicit re-review request; do not post `@clawsweeper re-review` automatically.
-Create new PRs as ready for review by default. Use draft only when the user explicitly requests draft, the PR is intentionally incomplete, or the user approved a failed-preflight bypass and review should not be requested yet.
-If the user explicitly says to bypass the failed-preflight blocker, include the
-failed preflight result in the approval record and use the publish script's
-failed-preflight bypass flags. Treat the override as consumed after that publish
-attempt; rerun the gate or get a new explicit approval if HEAD or the PR body
-changes.
+By default, do not push or update PR body until the user explicitly confirms. An explicit workflow-rule bypass may proceed without a second confirmation after the bypassed checks and reason are shown. Comments and review requests still require a separate explicit request; neither path authorizes `@clawsweeper re-review` automatically.
+After confirmation or an explicit override, use `scripts/publish-openclaw-pr.mjs` for branch push and PR create/update unless the script is unavailable or fails for a concrete reason you report. It verifies the current or approved body and remote target after the write. Use direct `gh` only for comments, review requests, reads, or fallback operations that the publisher cannot perform. After publish, report the result and wait for an explicit re-review request; do not post `@clawsweeper re-review` automatically.
+Create new PRs as ready for review by default. Use draft only when the user explicitly requests draft, the PR is intentionally incomplete, or an explicitly bypassed gate leaves review premature.
+If the user explicitly says to bypass a workflow rule, include the failed or
+skipped check in the publish record and use
+`--allow-workflow-rule-bypass --workflow-rule-bypass-reason "<user reason>"`.
+Treat the override as consumed after that publish attempt; rerun the gate or
+get a new explicit instruction if HEAD or the PR body changes.

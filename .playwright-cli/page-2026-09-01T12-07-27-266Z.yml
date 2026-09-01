@@ -1,0 +1,8 @@
+- generic [ref=f5e7]:
+  - link "Skip to main content" [ref=f5e8] [cursor=pointer]:
+    - /url: "#control-ui-main"
+  - generic [ref=f5e9]:
+    - button "Collapse sidebar" [expanded] [ref=f5e11]
+    - button "Open command palette" [ref=f5e16]
+  - separator "Resize sidebar" [ref=f5e21]
+  - main [ref=f5e22]

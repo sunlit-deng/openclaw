@@ -1,0 +1,163 @@
+- generic [ref=f2e7]:
+  - link "跳转到主要内容" [ref=f2e8] [cursor=pointer]:
+    - /url: "#control-ui-main"
+  - complementary [ref=f2e10]:
+    - generic [ref=f2e11]:
+      - button "返回应用" [ref=f2e12]:
+        - text: 返回应用
+        - generic [ref=f2e16]: esc
+      - heading "设置" [level=1] [ref=f2e17]
+    - search [ref=f2e18]:
+      - searchbox "搜索设置" [ref=f2e19]
+    - navigation "设置分区" [ref=f2e20]:
+      - generic [ref=f2e21]:
+        - link "询问 OpenClaw" [ref=f2e22] [cursor=pointer]:
+          - /url: /custodian
+        - link "个人资料" [ref=f2e35] [cursor=pointer]:
+          - /url: /settings/profile
+        - link "外观与设置" [ref=f2e42] [cursor=pointer]:
+          - /url: /settings/appearance
+        - link "通知" [ref=f2e51] [cursor=pointer]:
+          - /url: /settings/notifications
+      - generic [ref=f2e56]:
+        - generic [ref=f2e57]: 连接
+        - link "连接" [ref=f2e58] [cursor=pointer]:
+          - /url: /settings/connection
+        - link "频道" [ref=f2e64] [cursor=pointer]:
+          - /url: /settings/channels
+        - link "通信" [ref=f2e70] [cursor=pointer]:
+          - /url: /settings/communications
+        - link "语音" [ref=f2e75] [cursor=pointer]:
+          - /url: /settings/talk
+        - link "节点" [ref=f2e80] [cursor=pointer]:
+          - /url: /settings/devices
+        - link "云工作器" [ref=f2e86] [cursor=pointer]:
+          - /url: /settings/cloud-workers
+      - generic [ref=f2e92]:
+        - generic [ref=f2e93]: 代理与工具
+        - link "代理" [ref=f2e94] [cursor=pointer]:
+          - /url: /settings/agents
+        - link "实验室" [ref=f2e100] [cursor=pointer]:
+          - /url: /settings/labs
+        - link "模型提供商" [ref=f2e105] [cursor=pointer]:
+          - /url: /settings/model-providers
+        - link "MCP" [ref=f2e110] [cursor=pointer]:
+          - /url: /settings/mcp
+        - link "记忆" [ref=f2e115] [cursor=pointer]:
+          - /url: /settings/memory
+        - link "自动化" [ref=f2e120] [cursor=pointer]:
+          - /url: /settings/automation
+      - generic [ref=f2e125]:
+        - generic [ref=f2e126]: 隐私与安全
+        - link "隐私与安全" [ref=f2e127] [cursor=pointer]:
+          - /url: /settings/security
+        - link "Secrets" [ref=f2e132] [cursor=pointer]:
+          - /url: /settings/secrets
+        - link "审批" [ref=f2e139] [cursor=pointer]:
+          - /url: /settings/approvals
+      - generic [ref=f2e145]:
+        - generic [ref=f2e146]: 系统
+        - link "基础设施" [ref=f2e147] [cursor=pointer]:
+          - /url: /settings/infrastructure
+        - link "高级" [ref=f2e153] [cursor=pointer]:
+          - /url: /settings/advanced
+        - link "调试" [ref=f2e160] [cursor=pointer]:
+          - /url: /debug
+        - link "日志" [ref=f2e172] [cursor=pointer]:
+          - /url: /logs
+        - link "更新" [ref=f2e178] [cursor=pointer]:
+          - /url: /settings/updates
+        - link "关于" [ref=f2e184] [cursor=pointer]:
+          - /url: /settings/about
+    - link "Control UI 构建详细信息" [ref=f2e193] [cursor=pointer]:
+      - /url: /settings/about
+      - generic [ref=f2e194]: 2026.8.1 · sunlit/pr-1305…@d85d130
+  - main [ref=f2e195]:
+    - generic [ref=f2e196]:
+      - status [ref=f2e197]: 0 个收件箱项目
+      - button "0 个收件箱项目" [ref=f2e198]
+    - generic [ref=f2e204]:
+      - generic [ref=f2e205]:
+        - generic [ref=f2e206]:
+          - generic [ref=f2e207]: 模型提供商
+          - generic [ref=f2e208]:
+            - text: Model providers with auth, plan, quota, and cost data.
+            - link "了解更多" [ref=f2e209] [cursor=pointer]:
+              - /url: https://docs.openclaw.ai/concepts/model-providers
+        - button "模型设置" [ref=f2e211]
+      - generic [ref=f2e214]:
+        - generic [ref=f2e216]:
+          - heading "AI 设置" [level=2] [ref=f2e218]
+          - generic [ref=f2e220]:
+            - generic [ref=f2e221]:
+              - generic [ref=f2e222]: 连接已验证的 AI 模型
+              - generic [ref=f2e223]: 选择提供商并验证 OpenClaw 将使用的模型。
+            - generic [ref=f2e224]:
+              - generic [ref=f2e225]: 需要模型
+              - button "连接您的 AI" [ref=f2e227]
+        - generic [ref=f2e229]:
+          - heading "模型与思考" [level=2] [ref=f2e231]
+          - generic [ref=f2e232]:
+            - generic [ref=f2e233]:
+              - generic [ref=f2e234]:
+                - generic [ref=f2e235]: 思考
+                - generic [ref=f2e236]: 使用默认值：模型策略
+              - radiogroup [ref=f2e239]:
+                - generic [ref=f2e241]:
+                  - radio "默认" [checked] [ref=f2e242]
+                  - radio "关闭" [ref=f2e244]
+                  - radio "低" [ref=f2e246]
+                  - radio "中" [ref=f2e248]
+                  - radio "高" [ref=f2e250]
+            - generic [ref=f2e252]:
+              - generic [ref=f2e253]:
+                - generic [ref=f2e254]: 快速模式
+                - generic [ref=f2e255]: 使用默认值：模型策略
+              - radiogroup [ref=f2e258]:
+                - generic [ref=f2e260]:
+                  - radio "默认" [checked] [ref=f2e261]
+                  - radio "自动" [ref=f2e263]
+                  - radio "快速" [ref=f2e265]
+                  - radio "标准" [ref=f2e267]
+        - generic [ref=f2e269]:
+          - generic [ref=f2e270]:
+            - heading "Configured providers 1" [level=2] [ref=f2e271]:
+              - text: Configured providers
+              - generic [ref=f2e272]: "1"
+            - button "刷新" [ref=f2e274]
+          - paragraph [ref=f2e275]: 已更新 08:48:56
+          - generic [ref=f2e277]:
+            - generic [ref=f2e278]:
+              - generic [ref=f2e281]:
+                - generic [ref=f2e282]: openai
+                - generic [ref=f2e283]: openai · 0 of 1 models available
+              - generic [ref=f2e284]: 凭据已配置
+            - generic [ref=f2e287]:
+              - generic [ref=f2e288]: main 的凭据
+              - strong [ref=f2e289]: 已在配置中设置 API 密钥
+            - generic [ref=f2e290]:
+              - button "测试连接" [ref=f2e291]
+              - button "替换密钥" [ref=f2e292]
+              - button "移除密钥" [ref=f2e293]
+        - generic [ref=f2e294]:
+          - generic [ref=f2e295]:
+            - heading "添加提供商" [level=2] [ref=f2e296]
+            - button "添加提供商" [disabled] [ref=f2e298]
+          - paragraph [ref=f2e299]: 选择已知模型提供商并保存其 API 密钥。
+          - generic [ref=f2e300]: 所有已知提供商均已配置。
+        - generic [ref=f2e302]:
+          - generic [ref=f2e303]:
+            - heading "供应商套餐与计费 0" [level=2] [ref=f2e304]:
+              - text: 供应商套餐与计费
+              - generic [ref=f2e305]: "0"
+            - button "Refreshing…" [disabled] [ref=f2e307]
+          - paragraph [ref=f2e308]: 已配置供应商报告的实时套餐、配额、余额和预算数据。
+          - generic [ref=f2e309]: 加载中…
+        - generic [ref=f2e312]:
+          - generic [ref=f2e313]:
+            - heading "Local session spend 0" [level=2] [ref=f2e314]:
+              - text: Local session spend
+              - generic [ref=f2e315]: "0"
+            - button "Refreshing…" [disabled] [ref=f2e317]
+          - paragraph [ref=f2e318]: Session spend · 30d
+          - generic [ref=f2e319]: 加载中…

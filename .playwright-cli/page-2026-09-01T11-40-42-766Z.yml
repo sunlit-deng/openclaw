@@ -1,0 +1,8 @@
+- generic [ref=e7]:
+  - link "跳转到主要内容" [ref=e8] [cursor=pointer]:
+    - /url: "#control-ui-main"
+  - generic [ref=e9]:
+    - button "折叠侧边栏" [expanded] [ref=e11]
+    - button "打开命令面板" [ref=e16]
+  - separator "调整侧边栏大小" [ref=e21]
+  - main [ref=e22]
