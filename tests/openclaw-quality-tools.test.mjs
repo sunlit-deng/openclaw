@@ -268,8 +268,9 @@ AI-assisted: built with Codex
   assert.equal(gateJson.headSha, head);
   assert.equal(gateJson.preflight.status, "passed");
   assert.deepEqual(gateJson.blockers, []);
+  assert.equal(gateJson.automaticPublication.eligible, true);
   assert.match(gateMd, /approved HEAD/);
-  assert.match(gateMd, /Do not push/);
+  assert.match(gateMd, /agent external-cause judgment/);
 
   run(process.execPath, [
     contextPack,
@@ -278,6 +279,9 @@ AI-assisted: built with Codex
   const contextJson = JSON.parse(fs.readFileSync(path.join(output, "context-pack.json"), "utf8"));
   const contextMd = fs.readFileSync(path.join(output, "context-pack.md"), "utf8");
   assert.equal(contextJson.headSha, head);
+  assert.equal(contextJson.receipts.gateSummary.automaticPublicationEligible, true);
+  assert.equal(contextJson.receipts.gateSummary.agentExternalBypassEligible, false);
+  assert.deepEqual(contextJson.receipts.gateSummary.agentExternalBypassBlockerIds, []);
   assert.equal(contextJson.receipts.candidateScore.verdict, scoreReceipt.verdict);
   assert.equal(contextJson.receipts.candidateScore.clawsweeperAReadiness, "high");
   assert.equal(contextJson.receipts.candidateScout.aLikelihood, "high");
@@ -290,6 +294,7 @@ AI-assisted: built with Codex
   assert.match(contextMd, /OpenClaw Context Pack/);
   assert.match(contextMd, /ClawSweeper A-readiness: high/);
   assert.match(contextMd, /structured proof: passed\/real-call-chain/);
+  assert.match(contextMd, /agent external bypass not eligible/);
   assert.match(contextMd, /Next Commands/);
 
   const workflowPath = path.join(output, "workflow.json");

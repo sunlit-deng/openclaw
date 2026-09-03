@@ -1,4 +1,4 @@
 interface:
   display_name: "ZeroClaw PR Workflow"
   short_description: "Prepare ZeroClaw PRs with Rust and Web validation"
-  default_prompt: "Use $auto-pr-zeroclaw to prepare or maintain a ZeroClaw PR with repository-policy checks, Rust/Web validation, durable evidence, clean template headings, and default human-gated publication; honor an explicit workflow-rule bypass."
+  default_prompt: "Use $auto-pr-zeroclaw to prepare or maintain a ZeroClaw PR with repository-policy checks, Rust/Web validation, durable evidence, clean template headings, and automatic publication when the gate passes. If blockers remain, use an evidence-backed agent judgment only for the shared allowlisted external causes; request human approval for repository-owned, uncertain, or exceptional blockers, and honor explicit workflow-rule bypasses."

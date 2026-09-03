@@ -28,12 +28,29 @@ import { projectForWorkflow } from "../../../auto-pr-core/project-profile.mjs";
 function usage() {
   return `Usage: openclaw-gate-summary.mjs --workflow PATH [--duplicate-check PATH] [--candidate-score PATH] [--rebase-only-check PATH] [--output-md PATH] [--output-json PATH]
 
-Generates the human pre-push gate summary. It performs read-only local checks
-and best-effort read-only gh lookups for existing PR maintainer edit status.`;
+Generates the publication gate summary. It performs read-only local checks and
+best-effort read-only gh lookups for existing PR maintainer edit status.`;
 }
 
 function mdList(items, fallback = "- none") {
   return items.length ? items.map((item) => `- ${item}`).join("\n") : fallback;
+}
+
+function addBlocker(blockers, blockerDetails, id, message, {
+  source = "gate-summary",
+  agentBypassAllowed = false,
+  allowedCauses = [],
+  evidenceRefs = [],
+} = {}) {
+  blockers.push(message);
+  blockerDetails.push({
+    id,
+    message,
+    source,
+    agentBypassAllowed,
+    allowedCauses,
+    evidenceRefs,
+  });
 }
 
 function checkStatus(preflight) {
@@ -139,11 +156,11 @@ const duplicateCheckBlocks = duplicateCheckApplicable && (
   || likelyDuplicateCount > 0
 );
 
-let maintainer = { checked: false, maintainerCanModify: context.workflow.maintainerCanModify ?? null, error: null };
+let maintainer = { checked: false, maintainerCanModify: context.workflow.maintainerCanModify ?? null, headRefOid: null, error: null };
 if (context.workflow.pr) {
   const result = run("gh", [
     "pr", "view", String(context.workflow.pr), "--repo", project.github.repo,
-    "--json", "maintainerCanModify,headRepositoryOwner,headRefName,url",
+    "--json", "maintainerCanModify,headRepositoryOwner,headRefName,headRefOid,url",
   ], { allowFailure: true, env: accountEnv });
   if (result.exitCode === 0) {
     try {
@@ -153,6 +170,7 @@ if (context.workflow.pr) {
         maintainerCanModify: parsed.maintainerCanModify === true,
         headOwner: typeof parsed.headRepositoryOwner === "string" ? parsed.headRepositoryOwner : parsed.headRepositoryOwner?.login,
         headRefName: parsed.headRefName,
+        headRefOid: parsed.headRefOid ?? null,
         url: parsed.url,
         error: null,
       };
@@ -165,41 +183,101 @@ if (context.workflow.pr) {
 }
 
 const blockers = [];
-if (!clean) blockers.push("worktree is not clean");
-if (diffCheck.exitCode !== 0) blockers.push("git diff --check failed");
+const blockerDetails = [];
+if (!clean) addBlocker(blockers, blockerDetails, "worktree-clean", "worktree is not clean", { source: "git" });
+if (diffCheck.exitCode !== 0) addBlocker(blockers, blockerDetails, "diff-check", "git diff --check failed", { source: "git" });
 if (!preflightPassed && !rebaseOnlyPassedForHead) {
-  blockers.push(preflight?.status === "passed" ? "preflight receipt is invalid" : `preflight is ${checkStatus(preflight)}`);
-}
-if (project.id === "zeroclaw" && context.workflow.mode === "new-issue") {
-  if (!intake) blockers.push("ZeroClaw issue intake receipt is missing");
-  else if ((intake.blockers?.length ?? 0) > 0) blockers.push(...intake.blockers.map((item) => `issue intake: ${item}`));
-}
-if (reviewIntakeApplicable) {
-  if (!reviewIntake) blockers.push("ZeroClaw review and CI intake receipt is missing");
-  else {
-    if (reviewIntake.kind !== "zeroclaw-review-intake") blockers.push("review intake receipt kind is invalid");
-    if (reviewIntake.pr?.number !== context.workflow.pr) blockers.push("review intake PR does not match workflow PR");
-    if (reviewIntake.pr?.state !== "OPEN") blockers.push("review intake was not captured while the PR was open");
-    if (reviewIntake.pr?.headRefOid !== headSha) blockers.push("review intake head does not match current HEAD");
-    if (reviewIntake.pr?.baseRefName !== project.github.defaultBranch) blockers.push(`review intake base is not ${project.github.defaultBranch}`);
-    if (reviewIntake.untrustedGithubInput !== true) blockers.push("review intake does not record untrusted GitHub input handling");
-    if ((reviewIntake.lookupErrors ?? []).length > 0) blockers.push(...reviewIntake.lookupErrors);
+  if (preflight?.status === "passed") {
+    addBlocker(blockers, blockerDetails, "preflight-receipt", "preflight receipt is invalid", {
+      source: "preflight",
+      evidenceRefs: [context.preflightPath],
+    });
+  } else {
+    addBlocker(blockers, blockerDetails, "preflight-status", `preflight is ${checkStatus(preflight)}`, {
+      source: "preflight",
+      agentBypassAllowed: preflight?.status === "failed" && preflightValidation.valid,
+      allowedCauses: ["upstream", "infrastructure", "tooling", "unrelated-ci"],
+      evidenceRefs: [context.preflightPath],
+    });
   }
 }
-if (!rebaseOnlyPassedForHead) blockers.push(...preflightValidation.problems);
-if (rebaseOnlyGateRequired && rebaseOnlyCheck && rebaseOnlyCheck.status !== "passed") blockers.push(`rebase-only check is ${rebaseOnlyCheck.status}`);
-if (rebaseOnlyGateRequired && rebaseOnlyCheck?.headSha && rebaseOnlyCheck.headSha !== headSha) blockers.push("rebase-only check head does not match current HEAD");
-if (context.workflow.pr && maintainer.maintainerCanModify !== true) blockers.push("maintainerCanModify is not confirmed true");
-if (body.sha256 !== context.workflow.prBodySha256 && context.workflow.prBodySha256) blockers.push("PR body changed since workflow validation");
-for (const problem of commitIdentityProblems(identities, account)) blockers.push(problem);
-if (duplicateCheckApplicable && !duplicateCheck) blockers.push("duplicate-check receipt is missing");
-else if (duplicateCheck?.offline === true) blockers.push("duplicate-check is offline planning only");
-else if ((duplicateCheck?.summary?.errors?.length ?? 0) > 0) blockers.push("duplicate-check has unresolved GitHub lookup errors");
-else if (duplicateCheckBlocks) blockers.push("duplicate-check found likely duplicates");
-if (duplicateCheckApplicable) blockers.push(...duplicateCheckValidation.problems);
-if (openclawDiagnostics && candidateScore && !candidateScoreStaleForExistingPr) blockers.push(...candidateScoreValidation.problems);
+if (project.id === "zeroclaw" && context.workflow.mode === "new-issue") {
+  if (!intake) {
+    addBlocker(blockers, blockerDetails, "zeroclaw-intake-missing", "ZeroClaw issue intake receipt is missing", { source: "issue-intake" });
+  } else {
+    for (const [index, item] of (intake.blockers ?? []).entries()) {
+      addBlocker(blockers, blockerDetails, `zeroclaw-intake-${index + 1}`, `issue intake: ${item}`, { source: "issue-intake" });
+    }
+  }
+}
+if (reviewIntakeApplicable) {
+  if (!reviewIntake) {
+    addBlocker(blockers, blockerDetails, "zeroclaw-review-intake-missing", "ZeroClaw review and CI intake receipt is missing", { source: "review-intake" });
+  }
+  else {
+    if (reviewIntake.kind !== "zeroclaw-review-intake") addBlocker(blockers, blockerDetails, "zeroclaw-review-intake-kind", "review intake receipt kind is invalid", { source: "review-intake" });
+    if (reviewIntake.pr?.number !== context.workflow.pr) addBlocker(blockers, blockerDetails, "zeroclaw-review-intake-pr", "review intake PR does not match workflow PR", { source: "review-intake" });
+    if (reviewIntake.pr?.state !== "OPEN") addBlocker(blockers, blockerDetails, "zeroclaw-review-intake-state", "review intake was not captured while the PR was open", { source: "review-intake" });
+    if (reviewIntake.pr?.headRefOid !== headSha) addBlocker(blockers, blockerDetails, "zeroclaw-review-intake-head", "review intake head does not match current HEAD", { source: "review-intake" });
+    if (reviewIntake.pr?.baseRefName !== project.github.defaultBranch) addBlocker(blockers, blockerDetails, "zeroclaw-review-intake-base", `review intake base is not ${project.github.defaultBranch}`, { source: "review-intake" });
+    if (reviewIntake.untrustedGithubInput !== true) addBlocker(blockers, blockerDetails, "zeroclaw-review-intake-trust", "review intake does not record untrusted GitHub input handling", { source: "review-intake" });
+    for (const [index, item] of (reviewIntake.lookupErrors ?? []).entries()) {
+      addBlocker(blockers, blockerDetails, `zeroclaw-review-intake-lookup-${index + 1}`, item, {
+        source: "review-intake",
+        agentBypassAllowed: true,
+        allowedCauses: ["infrastructure", "upstream"],
+        evidenceRefs: [reviewIntakePath],
+      });
+    }
+  }
+}
+if (!rebaseOnlyPassedForHead) {
+  for (const [index, problem] of preflightValidation.problems.entries()) {
+    addBlocker(blockers, blockerDetails, `preflight-receipt-${index + 1}`, problem, {
+      source: "preflight",
+      evidenceRefs: [context.preflightPath],
+    });
+  }
+}
+if (rebaseOnlyGateRequired && rebaseOnlyCheck && rebaseOnlyCheck.status !== "passed") {
+  addBlocker(blockers, blockerDetails, "rebase-only-status", `rebase-only check is ${rebaseOnlyCheck.status}`, { source: "rebase-only" });
+}
+if (rebaseOnlyGateRequired && rebaseOnlyCheck?.headSha && rebaseOnlyCheck.headSha !== headSha) {
+  addBlocker(blockers, blockerDetails, "rebase-only-head", "rebase-only check head does not match current HEAD", { source: "rebase-only" });
+}
+if (context.workflow.pr && (maintainer.checked !== true || maintainer.maintainerCanModify !== true)) {
+  addBlocker(blockers, blockerDetails, "maintainer-edit-access", "maintainerCanModify is not confirmed true", { source: "maintainer-policy" });
+}
+if (body.sha256 !== context.workflow.prBodySha256 && context.workflow.prBodySha256) {
+  addBlocker(blockers, blockerDetails, "pr-body-current", "PR body changed since workflow validation", { source: "pr-body" });
+}
+for (const [index, problem] of commitIdentityProblems(identities, account).entries()) {
+  addBlocker(blockers, blockerDetails, `commit-identity-${index + 1}`, problem, { source: "commit-identity" });
+}
+if (duplicateCheckApplicable && !duplicateCheck) {
+  addBlocker(blockers, blockerDetails, "duplicate-check-missing", "duplicate-check receipt is missing", { source: "duplicate-check" });
+}
+else if (duplicateCheck?.offline === true) {
+  addBlocker(blockers, blockerDetails, "duplicate-check-offline", "duplicate-check is offline planning only", { source: "duplicate-check" });
+}
+else if ((duplicateCheck?.summary?.errors?.length ?? 0) > 0) {
+  addBlocker(blockers, blockerDetails, "duplicate-check-lookup", "duplicate-check has unresolved GitHub lookup errors", { source: "duplicate-check" });
+}
+else if (duplicateCheckBlocks) {
+  addBlocker(blockers, blockerDetails, "duplicate-check-match", "duplicate-check found likely duplicates", { source: "duplicate-check" });
+}
+if (duplicateCheckApplicable) {
+  for (const [index, problem] of duplicateCheckValidation.problems.entries()) {
+    addBlocker(blockers, blockerDetails, `duplicate-check-receipt-${index + 1}`, problem, { source: "duplicate-check", evidenceRefs: [duplicateCheckPath] });
+  }
+}
+if (openclawDiagnostics && candidateScore && !candidateScoreStaleForExistingPr) {
+  for (const [index, problem] of candidateScoreValidation.problems.entries()) {
+    addBlocker(blockers, blockerDetails, `candidate-score-receipt-${index + 1}`, problem, { source: "candidate-score", evidenceRefs: [candidateScorePath] });
+  }
+}
 if (openclawDiagnostics && !candidateScoreStaleForExistingPr && candidateScore?.verdict && ["needs-work", "poor-fit"].includes(candidateScore.verdict)) {
-  blockers.push(`candidate score verdict is ${candidateScore.verdict}`);
+  addBlocker(blockers, blockerDetails, "candidate-score-verdict", `candidate score verdict is ${candidateScore.verdict}`, { source: "candidate-score" });
 }
 
 const summary = {
@@ -292,6 +370,7 @@ const summary = {
   } : null,
   maintainer,
   blockers,
+  blockerDetails,
   publishInputs: {
     approvedHead: headSha,
     approvedBodySha256: body.sha256,
@@ -304,10 +383,31 @@ const summary = {
   },
 };
 
-// Ready-to-copy normal publish command for the human gate. New PR creation also
+const outputJson = path.resolve(args.outputJson || path.join(context.outputPath, "gate-summary.json"));
+const outputMd = path.resolve(args.outputMd || path.join(context.outputPath, "gate-summary.md"));
+const automaticPublicationEligible = blockers.length === 0 && !rebaseOnlyPassedForHead;
+const agentExternalBypassEligible = blockers.length > 0
+  && blockerDetails.length === blockers.length
+  && blockerDetails.every((detail) => detail.agentBypassAllowed === true);
+summary.automaticPublication = {
+  eligible: automaticPublicationEligible,
+  gateSummaryPath: outputJson,
+  reason: automaticPublicationEligible
+    ? "all publication gate blockers passed"
+    : rebaseOnlyPassedForHead
+      ? "clean rebase-only fast path requires its dedicated publisher"
+    : "one or more publication gate blockers remain",
+};
+summary.agentExternalBypass = {
+  eligible: agentExternalBypassEligible,
+  blockerIds: blockerDetails.filter((detail) => detail.agentBypassAllowed).map((detail) => detail.id),
+  policy: "agent may bypass only listed blockers with allowed external causes and evidence; repository/identity/HEAD/body/remote safety blockers remain hard stops",
+};
+
+// Ready-to-copy normal publish command for the manual fallback. New PR creation also
 // needs --title and --head; propose them from the head commit subject and the
-// selected account so approval never stalls on publisher argument discovery.
-// The title is provisional: the human gate must check it against the issue's
+// selected account so the fallback never stalls on publisher argument discovery.
+// The title is provisional: review it against the issue's
 // semantic type and .github/pull_request_template.md before publishing.
 // An explicit workflow-rule bypass may omit the approval-input flags.
 const publishCommandParts = [
@@ -324,11 +424,22 @@ if (!context.workflow.pr) {
 const publishCommand = publishCommandParts.join(" \\\n  ");
 summary.publishInputs.command = publishCommand;
 
-const outputJson = path.resolve(args.outputJson || path.join(context.outputPath, "gate-summary.json"));
-const outputMd = path.resolve(args.outputMd || path.join(context.outputPath, "gate-summary.md"));
+const automaticPublishCommandParts = [
+  "node ./.codex/skills/auto-pr-openclaw/scripts/publish-openclaw-pr.mjs",
+  `--workflow ${context.workflowPath}`,
+  "--auto-if-ready",
+  `--gate-summary ${outputJson}`,
+  `--push-remote ${account.pushRemote || account.profile}`,
+];
+if (!context.workflow.pr) {
+  automaticPublishCommandParts.push(`--title ${JSON.stringify(headSubject)}`);
+  automaticPublishCommandParts.push(`--head ${account.login}:${branch}`);
+}
+summary.publishInputs.automaticCommand = automaticPublishCommandParts.join(" ");
+
 writeJson(outputJson, summary);
 
-const md = `# ${projectName} Human Gate Summary
+const md = `# ${projectName} Publication Gate Summary
 
 Generated: ${summary.generatedAt}
 
@@ -353,7 +464,7 @@ ${mdList(nameStatus.map((line) => `\`${line}\``))}
 - preflight receipt: \`${context.preflightPath}\`
 - issue intake: ${summary.intake ? (summary.intake.present ? `${summary.intake.relatedOpenPrCount} related open PRs` : "missing") : "not applicable"}
 - review/CI intake: ${summary.reviewIntake ? (summary.reviewIntake.present ? `${summary.reviewIntake.activeChangeRequestCount} active change requests, ${summary.reviewIntake.failedCheckCount} failed or pending checks${summary.reviewIntake.lookupErrorCount ? `, ${summary.reviewIntake.lookupErrorCount} lookup errors` : ""}` : "missing") : "not applicable"}
-- failed-preflight bypass: ${preflight?.status === "failed" && preflight.headSha === headSha ? "available only with explicit user approval for this HEAD and body hash" : "not applicable"}
+- failed-preflight bypass: ${preflight?.status === "failed" && preflight.headSha === headSha ? "available with a valid external-cause judgment or explicit user approval for this HEAD and body hash" : "not applicable"}
 - workflow-rule bypass: available only after an explicit user instruction for this publish; add \`--allow-workflow-rule-bypass --workflow-rule-bypass-reason \"<reason>\"\`
 - rebase-only check: ${rebaseOnlyCheck ? `${rebaseOnlyCheck.status}${rebaseOnlyPassedForHead ? " (active fast path)" : ""}` : "missing"}
 - rebase-only receipt: \`${rebaseOnlyCheckPath}\`
@@ -382,20 +493,33 @@ ${mdList(identities.map((identity) => `\`${identity.sha.slice(0, 12)}\` author=$
 
 ## Blockers
 
-${mdList(blockers)}
+${mdList(blockerDetails.map((detail) => `\`${detail.id}\`: ${detail.message}`))}
+
+## Agent External-Cause Judgment
+
+- eligible: **${agentExternalBypassEligible ? "yes" : "no"}**
+- eligible blocker IDs: ${agentExternalBypassEligible ? blockerDetails.map((detail) => `\`${detail.id}\``).join(", ") : "none"}
+- allowed causes: upstream state, external infrastructure, tooling/environment, or unrelated CI; each requires an agent reason and evidence reference
+- hard stops: worktree, diff, identity, PR body, duplicate certainty, maintainer access, target, current HEAD, and remote lease/integrity checks
 
 ## Publish Approval Inputs
 
 - approved HEAD: \`${headSha}\`
 - approved body SHA-256: \`${body.sha256}\`
 
-### Publish command (run after explicit approval, or after an explicit workflow-rule override)
+### Automatic publish command (run when the gate is eligible)
+
+\`\`\`bash
+${summary.publishInputs.automaticCommand}
+\`\`\`
+
+### Manual publish command (run when blockers remain and the user confirms)
 
 \`\`\`bash
 ${publishCommand}
 \`\`\`
 
-Do not push or update the PR body until the user explicitly approves this HEAD and body hash, unless the user has explicitly instructed this workflow to bypass its local rules. Comments and review requests always require a separate explicit request. A workflow-rule bypass covers only this publish attempt and does not authorize \`@clawsweeper re-review\` or other unrelated writes.
+Automatic publication eligibility: **${automaticPublicationEligible ? "yes" : "no"}**. If it is yes, publish with the automatic command without requesting a second confirmation. If it is no and agent external-cause judgment is eligible, the agent may publish only after writing a bound high-confidence judgment with evidence for every listed blocker and passing it as \`--agent-judgment\`; otherwise do not push or update the PR body automatically, show the blockers, and request human confirmation before using the manual command. Comments and review requests always require a separate explicit request. A workflow-rule bypass covers only that publish attempt and does not authorize \`@clawsweeper re-review\` or other unrelated writes.
 `;
 
 fs.writeFileSync(outputMd, md, "utf8");
@@ -403,6 +527,9 @@ console.log(JSON.stringify({
   outputMd,
   outputJson,
   blockers: blockers.length,
+  automaticPublicationEligible,
+  agentExternalBypassEligible,
+  agentExternalBypassBlockerIds: summary.agentExternalBypass.blockerIds,
   approvedHead: headSha,
   approvedBodySha256: body.sha256,
 }, null, 2));

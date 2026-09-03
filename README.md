@@ -1,6 +1,6 @@
 # auto-pr
 
-Personal Codex and Claude Code workflows for preparing OpenClaw and ZeroClaw pull requests with repeatable local gates on macOS and Linux. Project-specific policy and validation live in `.codex/auto-pr-core/projects/*.json`; the guarded workflow remains shared, with an explicit one-attempt user override for local publication gates.
+Personal Codex and Claude Code workflows for preparing OpenClaw and ZeroClaw pull requests with repeatable local gates on macOS and Linux. Project-specific policy and validation live in `.codex/auto-pr-core/projects/*.json`; the guarded workflow remains shared, with automatic publication when every gate passes, evidence-backed agent bypass for allowlisted external blockers, and a human fallback for repository-owned or uncertain attempts.
 
 ## Layout
 
@@ -39,7 +39,10 @@ tests. Start a workflow with:
 For an existing PR, use `prepare-zeroclaw-pr-worktree.mjs`. Draft the body from
 `.codex/skills/auto-pr-zeroclaw/references/pr-body.md`, then run the ZeroClaw
 body validator, preflight, and gate summary. The publisher uses `master` from
-the project profile and remains behind the same human approval gate by default.
+the project profile and publishes automatically when the gate summary has no
+blockers. If blockers remain, the agent may publish only with a bound,
+evidence-backed judgment for the shared external-cause allowlist; it falls back
+to the human approval path for repository-owned or uncertain requirements.
 When the user explicitly directs a workflow-rule bypass, pass
 `--allow-workflow-rule-bypass --workflow-rule-bypass-reason "<user reason>"` to
 the publisher; the bypass is recorded in `workflow.json` and does not relax
@@ -81,7 +84,7 @@ large, so old PR/candidate worktrees are usually the main disk-pressure source.
 
 Repository download uses `gh repo clone` with `gh auth setup-git`. Existing PR
 heads use `gh pr checkout`, and the publication step creates or attaches the
-fork remote with `gh repo fork --remote` after the human gate. Fetch failure is
+fork remote with `gh repo fork --remote` after the publication gate. Fetch failure is
 a hard stop; cached refs are never described as current main.
 
 ## GitHub Accounts
@@ -155,7 +158,7 @@ node ./.codex/skills/auto-pr-openclaw/scripts/openclaw-set-account.mjs \
 For existing PR workflows, this refuses to switch to an account whose `login`
 does not match the recorded PR head owner unless `--force` is used.
 
-The selected profile is written to `workflow.json`. Preflight and the human
+The selected profile is written to `workflow.json`. Preflight and the publication
 gate enforce that commits use the profile's `username <email>`, and publish
 scripts run `gh` with the profile token. Without an account profile, the
 previous `gh` login behavior and `sunlit-deng <yang.jiajun1@xydigit.com>` check
@@ -191,7 +194,7 @@ instead of an isolated helper:
   --workflow workspace/openclaw/outputs/issue-94432/workflow.json
 ```
 
-Run deterministic checks before the human publication gate:
+Run deterministic checks before the publication gate:
 
 ```bash
 ./.codex/skills/auto-pr-openclaw/scripts/openclaw-preflight.sh \
@@ -227,16 +230,37 @@ the same HEAD and validation base. Use `--profile full` only for an intentional
 full-repository `pnpm check`. Local AI reviews are optional diagnostics rather
 than gates.
 
-Generate the human approval packet before any GitHub write:
+Generate the publication gate summary before any GitHub write:
 
 ```bash
 ./.codex/skills/auto-pr-openclaw/scripts/openclaw-gate-summary.sh \
   --workflow workspace/openclaw/outputs/issue-94432/workflow.json
 ```
 
-This writes `gate-summary.md` and `gate-summary.json` with the approved HEAD,
+This writes `gate-summary.md` and `gate-summary.json` with the current HEAD,
 PR body hash, changed files, commit identity, preflight status, duplicate
-receipt, candidate score, maintainer edit status, and blockers.
+receipt, candidate score, maintainer edit status, and structured blockers. When
+`automaticPublication.eligible` is true and `blockers` is empty, publish
+without a second confirmation:
+
+```bash
+node ./.codex/skills/auto-pr-openclaw/scripts/publish-openclaw-pr.mjs \
+  --workflow workspace/openclaw/outputs/issue-94432/workflow.json \
+  --auto-if-ready \
+  --gate-summary workspace/openclaw/outputs/issue-94432/gate-summary.json \
+  --title "<reviewed PR title>" \
+  --head "<github-account>:<branch>"
+```
+
+For an existing PR, omit `--title` and `--head`; the workflow supplies the
+current PR and branch identity.
+
+If blockers remain, inspect `blockerDetails` and `agentExternalBypass`. For a
+gate containing only allowlisted external blockers, write the bound
+`agent-publication-judgment.json` receipt with high-confidence reasons and
+evidence for every blocker, then add `--agent-judgment <path>` to the same
+`--auto-if-ready` publisher command. Repository-owned, uncertain, identity,
+lease, target, and remote-integrity blockers still require human confirmation.
 
 Generate a compact low-token handoff packet after intake or after validation
 state changes:
@@ -271,14 +295,18 @@ checkouts:
   --prune-node-modules --older-than-days 14 --yes
 ```
 
-After the human gate, `publish-openclaw-pr.mjs` requires the approved HEAD and
-body SHA-256 and pushes through an explicitly named SSH remote associated with
-the `gh` identity. An explicit workflow-rule bypass may omit those two
-approval-input flags; the publisher binds them to the current HEAD/body at
-startup and records the bypass reason. Both new PR creation and existing PR
-body updates use `gh api` with the REST pulls API so the body is preserved
-verbatim. The script re-reads the PR with `gh pr view` and verifies the body
-and remote target.
+After the publication gate, `publish-openclaw-pr.mjs --auto-if-ready` binds the
+gate summary to the current HEAD and body SHA-256, then pushes through an
+explicitly named SSH remote associated with the `gh` identity. If the summary
+is stale or contains a non-allowlisted blocker, it stops before any GitHub write
+so the human path can be used. A valid `--agent-judgment` can authorize only
+the gate's evidence-backed external blockers for that one attempt; the judgment
+path, hash, reason, and blocker IDs are recorded in `workflow.json`. Both new
+PR creation and existing PR body updates use `gh api` with the REST pulls API
+so the body is preserved verbatim. The script re-reads the PR with `gh pr view`
+and verifies the body, remote target, and maintainer edit access. An explicit
+workflow-rule bypass remains available for exceptional user-directed attempts
+and is recorded separately.
 
 `workspace/` is local working state and is ignored by git.
 

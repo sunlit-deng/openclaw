@@ -3,3 +3,4 @@ outputs/
 .pnpm-store/
 .codegraph/
 .tmp/
+.playwright-cli/

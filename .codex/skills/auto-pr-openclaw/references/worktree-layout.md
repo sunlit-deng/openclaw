@@ -202,4 +202,5 @@ Keep generated evidence outside the repository checkout:
 - `preflight.json`
 - `ci-notes.md`
 
-Only copy evidence into the PR body or comments after the human gate approves the GitHub write.
+Only copy evidence into the PR body or comments after the publication gate
+permits the GitHub write.

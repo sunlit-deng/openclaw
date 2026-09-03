@@ -15,7 +15,7 @@ function usage() {
     "forms); base SHA references are historical records and are left untouched.",
     "This is a local file edit only: it never pushes, updates the PR body on",
     "GitHub, posts comments, or requests review. Rerun validate-pr-body.mjs after",
-    "this edit, then continue through the normal human gate and publish with",
+    "this edit, then regenerate the publication gate and publish automatically",
     "publish-openclaw-pr.mjs.",
   ].join("\n");
 }
@@ -85,7 +85,7 @@ if (result.replacements.length > 0) {
     dryRun: Boolean(args.dryRun),
     replacements: result.replacements,
     bodySha256: args.dryRun ? null : nextSha,
-    next: "run scripts/validate-pr-body.mjs --workflow <workflow.json>, then the normal human gate and publish-openclaw-pr.mjs",
+    next: "run scripts/validate-pr-body.mjs --workflow <workflow.json>, regenerate the publication gate, then publish-openclaw-pr.mjs --auto-if-ready",
   }, null, 2));
 } else {
   console.log(JSON.stringify({

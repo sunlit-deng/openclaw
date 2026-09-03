@@ -12,12 +12,15 @@ New PR preparation follows this path:
 3. `openclaw-preflight.mjs` validates Git state, identity, PR body, merge risk,
    focused tests, and the selected lint/type lane. Successful heavy work is
    cached by a HEAD/base/toolchain fingerprint.
-4. `openclaw-gate-summary.mjs` creates the human approval packet. An explicit
-   user-directed workflow-rule override may authorize the next step without a
-   second approval after recording the bypass reason.
-5. `publish-openclaw-pr.mjs` revalidates the approved/current HEAD/body, pushes once,
-   creates or updates the PR through REST, and verifies the remote body and
-   maintainer-edit setting.
+4. `openclaw-gate-summary.mjs` creates the publication gate receipt. When its
+   blockers are empty and `automaticPublication.eligible` is true, the normal
+   path proceeds without a second approval. If blockers remain, the agent can
+   create a bound judgment receipt only for allowlisted, evidence-backed
+   external causes; all other blocked or stale receipts use the human fallback.
+5. `publish-openclaw-pr.mjs --auto-if-ready` revalidates the gate-bound
+   current HEAD/body, optionally validates the agent external-cause judgment,
+   pushes once, creates or updates the PR through REST, and verifies the remote
+   body and maintainer-edit setting.
 
 Existing PR maintenance starts at `prepare-openclaw-pr-worktree.mjs`, then uses
 the same proof, preflight, gate, and publisher stages. A conflict-free rebase

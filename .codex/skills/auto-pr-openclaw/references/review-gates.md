@@ -23,7 +23,7 @@ Use these gates before pushing or updating an OpenClaw PR.
 - Run `scripts/openclaw-candidate-score.sh --workflow <outputs>/workflow.json` after the PR body draft and changed files exist. This writes `candidate-score.json`.
 - Inspect `clawsweeperAReadiness` when ranking candidates or intentionally preparing a high-confidence final review. `high` requires a passing structured `proof-receipt.json`, real-call-chain proof, comparable base/head output, an exact-head negative control, canonical precedent, passing deterministic validation, a focused surface, stable integration, and no detected unresolved policy choice. PR-body keywords alone cannot yield `high`. This is advisory and must not block an otherwise merge-ready PR.
 - Treat `strong` and `promising` as publishable only when the applicable gates pass: duplicate and validation for unpublished candidates, validation for existing PR maintenance.
-- Treat `needs-work` as a local fix signal: tighten scope, add matching proof, add focused tests, or, for an unpublished candidate, resolve exact duplicate risk before publication. If the only remaining score issue is broad same-file overlap that has been manually classified as non-duplicate, disclose it in the human gate instead of downgrading the PR to draft.
+- Treat `needs-work` as a local fix signal: tighten scope, add matching proof, add focused tests, or, for an unpublished candidate, resolve exact duplicate risk before publication. If the only remaining score issue is broad same-file overlap that has been manually classified as non-duplicate, disclose it in the publication gate summary instead of downgrading the PR to draft.
 - Treat `poor-fit` as a likely drop or redesign signal unless the user explicitly wants to pursue a high-risk PR.
 - The score is advisory; deterministic blockers from preflight, applicable unpublished-candidate duplicate checks, identity, maintainer edit access, and proof requirements still win.
 
@@ -36,9 +36,9 @@ Use these gates before pushing or updating an OpenClaw PR.
 - For an explicit "rebase then publish" request, fetch once, record the exact rebase target SHA, rebase to that SHA, and keep that SHA as `validationBaseSha` through validation and publish. If main advances while checks are running, do not chase it. Publish the validated HEAD unless preflight reports a real merge conflict, the overlapping-file report changes the risk decision, or the user explicitly asks for another rebase after seeing the current gate state.
 - Reuse cached heavy checks only when the receipt fingerprint matches HEAD, `validationBaseSha`, package/lockfile content, lanes, targeted planner implementation, toolchain, platform, and relevant execution environment. Focused changed-test results may also be reused across profile switches when their focused-test fingerprint matches. Always recompute latest-main merge risk even on a cache hit.
 - Avoid the default `pnpm check:changed` remote delegation path. Preflight sets `OPENCLAW_CHECK_CHANGED_REMOTE_CHILD=1 OPENCLAW_CHANGED_LANES_RAW_SYNC=1 PNPM_CONFIG_VERIFY_DEPS_BEFORE_RUN=false` and intentionally omits `CI=1` so changed lanes run locally. When checking manually, use the same environment; Testbox/Blacksmith runs are optional supplemental proof, not the default local gate.
-- A passing `preflight.json` is required by default. Missing, skipped, stale, or failed checks do not pass based on an agent's prose summary.
+- A passing `preflight.json` is required by default. Missing, skipped, stale, or failed checks do not pass based on an agent's prose summary. A failed but identity-valid receipt may use the bounded external-cause judgment described below; that judgment must be bound to the exact workflow, HEAD, body hash, and validation base and cannot waive any repository-owned or remote-safety check.
 - Receipt identity is part of the gate. `workflowPath`, `repoPath`, `headSha`, `validationBaseSha`, and supported `schemaVersion` must match where applicable; copying a passing receipt from another workflow or base does not pass.
-- A user may explicitly approve a temporary bypass for `preflight.status === "failed"` after seeing the human gate packet. This bypass is scoped to the same workflow task, approved HEAD, and approved PR body hash. It must be passed to `scripts/publish-openclaw-pr.mjs` as `--allow-failed-preflight --failed-preflight-bypass-reason "<user reason>"`. It does not apply to missing preflight, stale preflight, changed HEAD/body, dirty worktree, identity failures, maintainer edit failures, duplicate blockers on unpublished candidates, or proof/re-review blockers.
+- A user may explicitly approve a temporary bypass for `preflight.status === "failed"` after seeing the human gate packet. This bypass is scoped to the same workflow task, approved HEAD, and approved PR body hash. It must be passed to `scripts/publish-openclaw-pr.mjs` as `--allow-failed-preflight --failed-preflight-bypass-reason "<user reason>"`. An agent may use the narrower external-cause judgment only when the receipt is identity-valid and evidence shows the failure is upstream, infrastructure, tooling, or unrelated CI. Neither path applies to missing preflight, stale preflight, changed HEAD/body, dirty worktree, identity failures, maintainer edit failures, duplicate blockers on unpublished candidates, or proof/re-review blockers.
 - If the user explicitly instructs the workflow to bypass its local rules and publish, use `--allow-workflow-rule-bypass --workflow-rule-bypass-reason "<user reason>"` with the normal publisher. This broader one-attempt override may bypass local process gates, including the human gate, missing/stale/failed preflight, PR-body policy, identity policy, dirty-worktree warning, duplicate/intake/score/review/CI blockers, and maintainer-edit policy. A request naming only one gate must stay scoped to that gate; use the narrow failed-preflight flag where applicable. Record the reason and bypassed checks in `workflow.json` and report them before the write. Keep authenticated account ownership, target repository/branch/PR identity, current HEAD/body binding, remote-head lease protection, secret/privacy protections, and final remote body verification mandatory. It does not authorize comments or re-review.
 - For live external behavior, execute the real path when feasible and summarize only redacted proof.
 - If true live external proof is infeasible, run `scripts/openclaw-proof-plan.sh --workflow <outputs>/workflow.json` and use the highest real local boundary: CLI command, server/route handler, provider/client entrypoint, sandbox/subprocess path, or production module boundary. Substitute unavailable external dependencies only at the network/process boundary with localhost, loopback, or fixtures.
@@ -54,8 +54,9 @@ patch-equivalent force-push; there is no second human gate. A body whose
 Evidence pins the pre-rebase head SHA is a stop condition, not a rebase-only
 case: the force-push would leave exact-head proof stale and ClawSweeper would
 flag it. Refresh the SHA with `scripts/refresh-pr-body-sha.sh`, rerun
-`scripts/validate-pr-body.mjs` (body-only edit), then use the normal Human Gate
-and `scripts/publish-openclaw-pr.mjs`.
+`scripts/validate-pr-body.mjs` (body-only edit), regenerate the publication gate,
+then use automatic publication when it is clear or the normal publisher when it
+is blocked.
 
 Fetch once, pin the exact target SHA, and run `git rebase <target-sha>`. If Git
 reports a conflict, stop immediately. Do not resolve conflicts under this path;
@@ -91,8 +92,12 @@ an automatic push.
 ### Conflict-Resolution Fast Path
 
 Use this only for an existing PR rebase that actually stops on conflicts. It
-does not inherit the clean rebase-only authorization: publication still
-requires the Human Gate.
+does not inherit the clean rebase-only mechanics: publication still requires
+the publication gate. When the user explicitly asked to maintain or update
+this existing PR, that request is the human authorization for the requested
+publication once the gate is clear; do not ask for a duplicate confirmation
+solely because conflict resolution was required. Analysis, drafting, or
+local-only requests do not authorize a GitHub write.
 
 Start the operation before rebasing so the original patch series is retained:
 
@@ -184,7 +189,7 @@ Use this gate only when the user explicitly asks for a ClawSweeper re-review. Ne
 - Only proceed with `@clawsweeper re-review` when: (a) ClawSweeper's verdict is not blocking on proof, or (b) the requested proof has been genuinely added to the PR body and/or branch since the last review SHA.
 - Do not request re-review solely to chase B→A. For an intentional A-readiness attempt, require a material confidence change since the prior review: newly green exact-head CI, newly added comparable base/head real-path proof, a resolved prior finding or compatibility choice, or a newly merged canonical precedent. If none changed, keep the merge-ready rating and avoid another review cycle.
 
-When the pre-re-review gate passes, proceed to the Human Gate below before any GitHub write.
+When the pre-re-review gate passes, proceed to the publication gate below before any GitHub write.
 
 
 ## Optional Local AI Review
@@ -195,15 +200,18 @@ preflight checks and their absence or infrastructure failure is not a release
 gate. Actionable findings that are accepted still need normal implementation and
 validation.
 
-## Human Gate
+## Conditional Publication Gate
 
-This gate applies by default. It does not apply to the clean rebase-only fast
-path or to an explicit workflow-rule override. An explicit rebase/catch-up
-request plus a passing patch-equivalence receipt authorizes the clean path's
-branch-only force-push. Conflict-resolved rebases and every other normal
-GitHub write use this gate.
+This gate applies to every normal PR publication. The clean rebase-only fast
+path remains separately authorized by an explicit rebase/catch-up request plus
+a passing patch-equivalence receipt. For an existing PR, an explicit request
+to maintain or update that PR supplies the normal publication authorization;
+the gate determines whether the write is safe and eligible. Conflict-resolved
+rebases therefore do not require a second conversational confirmation when
+the gate is clear, but a blocked or ambiguous gate still stops the operation.
 
-Before any GitHub write, show the user:
+Before any GitHub write, generate and inspect `gate-summary.json` and show the
+full packet when it is blocked. It must include:
 
 - generated `gate-summary.md` from `scripts/openclaw-gate-summary.sh --workflow <outputs>/workflow.json`
 - branch and head SHA
@@ -216,8 +224,33 @@ Before any GitHub write, show the user:
 - maintainer edit status for existing PRs, or the post-create maintainer edit check plan for new PRs
 - unresolved risks or blocked checks
 
-By default, do not push or update PR body until the user explicitly confirms. An explicit workflow-rule bypass may proceed without a second confirmation after the bypassed checks and reason are shown. Comments and review requests still require a separate explicit request; neither path authorizes `@clawsweeper re-review` automatically.
-After confirmation or an explicit override, use `scripts/publish-openclaw-pr.mjs` for branch push and PR create/update unless the script is unavailable or fails for a concrete reason you report. It verifies the current or approved body and remote target after the write. Use direct `gh` only for comments, review requests, reads, or fallback operations that the publisher cannot perform. After publish, report the result and wait for an explicit re-review request; do not post `@clawsweeper re-review` automatically.
+When `automaticPublication.eligible` is true and `blockers` is empty, invoke
+`scripts/publish-openclaw-pr.mjs --auto-if-ready --gate-summary <gate-summary.json>`
+without asking for a second confirmation. The publisher revalidates the
+gate-bound HEAD/body and remote target before writing. If any blocker remains,
+inspect `blockerDetails` and `agentExternalBypass`. When every remaining blocker
+is listed as agent-bypassable and the agent has high-confidence evidence that
+the cause is upstream state, external infrastructure, tooling/environment, or
+unrelated CI, write the bound judgment receipt described in
+`references/evidence-receipts.md` and invoke the automatic path with
+`--agent-judgment <agent-publication-judgment.json>`. The publisher revalidates
+the gate-bound HEAD/body and remote target before writing. If any blocker is
+not eligible or the external cause cannot be established, show the packet and
+ask for explicit user confirmation before using the normal publisher with the
+displayed HEAD and body hash. A judgment is not an implicit workflow-rule
+bypass. Comments and review requests still require a separate explicit request;
+neither publication path authorizes `@clawsweeper re-review` automatically.
+After publish, report the result and wait for an explicit re-review request; do
+not post `@clawsweeper re-review` automatically.
+For an existing PR, the canonical local worktree branch name (for example,
+`sunlit/pr-120860`) may differ from the remote PR `headRefName`. Validate the
+workflow `headRef` against the live PR remote ref and authenticated owner;
+never treat the local naming difference itself as a publication blocker. If a
+blocker-free automatic attempt rejects only that expected difference, re-check
+the live owner, remote ref, head SHA, and `maintainerCanModify`, then retry the
+normal publisher with the gate-bound `--approved-head` and
+`--approved-body-sha`. Do not use `--allow-workflow-rule-bypass` for this local
+naming mismatch, and keep remote lease and final body/head verification.
 Create new PRs as ready for review by default. Use draft only when the user explicitly requests draft, the PR is intentionally incomplete, or an explicitly bypassed gate leaves review premature.
 If the user explicitly says to bypass a workflow rule, include the failed or
 skipped check in the publish record and use

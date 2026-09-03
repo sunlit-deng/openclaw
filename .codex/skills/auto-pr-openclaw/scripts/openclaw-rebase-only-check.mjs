@@ -218,7 +218,7 @@ if (targetSha) {
     "PR body does not pin a stale head SHA",
     bodyInfo.staleHeadShaRefs.length === 0,
     bodyInfo.staleHeadShaRefs.length > 0
-      ? `${staleDetail}; refresh pr-body.md with scripts/refresh-pr-body-sha.sh, rerun validate-pr-body.mjs, then use the normal human gate and publish-openclaw-pr.mjs`
+      ? `${staleDetail}; refresh pr-body.md with scripts/refresh-pr-body-sha.sh, rerun validate-pr-body.mjs, then regenerate the publication gate and publish-openclaw-pr.mjs --auto-if-ready`
       : bodyInfo.path
         ? `${staleDetail} (${path.basename(bodyInfo.path)})`
         : "no canonical PR body file",

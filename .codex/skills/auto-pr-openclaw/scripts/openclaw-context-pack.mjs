@@ -145,7 +145,13 @@ const packet = {
       valid: candidateScoreValidation.valid,
       problems: candidateScoreValidation.problems,
     } : null,
-    gateSummary: gateSummary ? { path: gateSummaryPath, blockers: gateSummary.blockers?.length ?? null } : null,
+    gateSummary: gateSummary ? {
+      path: gateSummaryPath,
+      blockers: gateSummary.blockers?.length ?? null,
+      automaticPublicationEligible: gateSummary.automaticPublication?.eligible ?? null,
+      agentExternalBypassEligible: gateSummary.agentExternalBypass?.eligible ?? null,
+      agentExternalBypassBlockerIds: gateSummary.agentExternalBypass?.blockerIds ?? [],
+    } : null,
   },
   prBody: {
     path: context.prBodyPath,
@@ -201,7 +207,7 @@ ${packet.changedFiles.length ? packet.changedFiles.map((file) => `- \`${file}\``
 - structured proof: ${packet.receipts.proof ? `${packet.receipts.proof.status}/${packet.receipts.proof.kind}${packet.receipts.proof.valid ? "" : " (stale or invalid)"}` : "missing"}
 - score: ${packet.receipts.candidateScore ? (packet.receipts.candidateScore.staleForExistingPr ? "stale pre-existing-PR receipt (ignored; rerun scoring)" : `${packet.receipts.candidateScore.score} (${packet.receipts.candidateScore.verdict})`) : "missing"}
 - ClawSweeper A-readiness: ${packet.receipts.candidateScore?.clawsweeperAReadiness ?? "missing"} (advisory)
-- gate: ${packet.receipts.gateSummary ? `${packet.receipts.gateSummary.blockers} blockers` : "missing"}
+- gate: ${packet.receipts.gateSummary ? `${packet.receipts.gateSummary.blockers} blockers; automatic publication ${packet.receipts.gateSummary.automaticPublicationEligible === true ? "eligible" : "blocked or unavailable"}; agent external bypass ${packet.receipts.gateSummary.agentExternalBypassEligible === true ? `eligible (${packet.receipts.gateSummary.agentExternalBypassBlockerIds.join(", ")})` : "not eligible"}` : "missing"}
 
 ## PR Body
 

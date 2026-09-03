@@ -190,7 +190,7 @@ if (workflow.prBodyPath && fs.existsSync(path.resolve(workflow.prBodyPath))) {
   });
   if (staleRefs.length > 0) {
     failures.push(
-      `PR body pins a stale head SHA (${staleRefs.map((ref) => `${ref.kind} ${ref.token}`).join(", ")}); refresh-pr-body-sha.sh + normal human gate required`,
+      `PR body pins a stale head SHA (${staleRefs.map((ref) => `${ref.kind} ${ref.token}`).join(", ")}); refresh-pr-body-sha.sh + publication gate required`,
     );
   }
 }

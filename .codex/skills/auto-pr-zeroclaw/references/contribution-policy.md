@@ -18,7 +18,7 @@ Source of truth: the checked-out repository files and the official upstream docu
 
 ## Implementation and validation
 
-- Preserve trust boundaries, privacy guarantees, user confirmation, and existing security behavior. Never add secrets or PII to code, logs, fixtures, proof, or the PR body.
+- Preserve trust boundaries, privacy guarantees, confirmation for blocked or exceptional writes, and existing security behavior. A fully passing publication gate may authorize the routine PR write automatically; an agent may bypass only an explicitly allowlisted, evidence-backed external blocker through the shared judgment receipt. Never add secrets or PII to code, logs, fixtures, proof, or the PR body.
 - Keep user-facing runtime text in the existing Fluent/i18n path; keep Markdown source in English.
 - Prefer the smallest implementation and a regression test at the real behavior boundary.
 - The default local Rust lane is:

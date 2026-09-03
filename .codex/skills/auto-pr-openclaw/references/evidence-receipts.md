@@ -5,6 +5,7 @@
 - Candidate plan
 - Comparable proof input
 - Calibration samples
+- Agent external-cause judgment
 - Interpretation and safety
 
 ## Candidate Plan
@@ -100,6 +101,63 @@ Use `production-module-boundary` only when a real call chain is genuinely
 infeasible. It can support a merge-ready PR but does not qualify for local
 `high` A-readiness.
 
+## Agent External-Cause Judgment
+
+When a publication gate has blockers, inspect `blockerDetails` rather than
+classifying raw blocker text. An agent may request automatic publication only
+when `agentExternalBypass.eligible` is true and every blocker has an explicit
+allowlist entry. The supported causes are `upstream`, `infrastructure`,
+`tooling`, and `unrelated-ci`. The current allowlist covers a valid but failed
+preflight receipt and ZeroClaw review-intake lookup failures. It does not cover
+dirty worktrees, diff failures, identity or PR-body mismatches, duplicate
+uncertainty, maintainer access, target/branch identity, remote leases, or
+unknown/missing receipts.
+
+Write `agent-publication-judgment.json` bound to the exact gate summary:
+
+```json
+{
+  "schemaVersion": 1,
+  "kind": "agent-publication-judgment",
+  "generatedAt": "2026-09-03T00:00:00.000Z",
+  "agent": "codex",
+  "decision": "publish",
+  "confidence": "high",
+  "reason": "The valid preflight receipt contains only an unrelated external infrastructure failure.",
+  "workflowPath": "<absolute workflow path>",
+  "gateSummaryPath": "<absolute gate summary path>",
+  "repoPath": "<absolute repository path>",
+  "headSha": "<exact HEAD SHA>",
+  "bodySha256": "<exact PR body SHA-256>",
+  "validationBaseSha": "<pinned validation base SHA>",
+  "bypassedBlockers": [
+    {
+      "blockerId": "preflight-status",
+      "message": "preflight is failed",
+      "cause": "infrastructure",
+      "confidence": "high",
+      "reason": "The failing check is outside the changed surface and the receipt remains identity-valid.",
+      "evidence": [
+        {
+          "source": "preflight.checks",
+          "reference": "<preflight receipt or redacted log reference>",
+          "observation": "The exact failure and why it is unrelated to this change."
+        }
+      ]
+    }
+  ],
+  "residualBlockers": []
+}
+```
+
+Every current blocker must appear exactly once with the exact ID and message,
+and every entry needs a reason plus evidence with `source`, `reference`, and
+`observation`. The publisher binds the judgment to workflow, repository, HEAD,
+validation base, body hash, and gate-summary path. It still hard-blocks all
+repository-owned and remote-safety checks and records the judgment path, hash,
+and bypassed blocker IDs in `workflow.json`. If the cause is uncertain, use the
+normal human-confirmation path.
+
 ## Calibration Samples
 
 Use the latest local prediction recorded before review and the actual
@@ -137,6 +195,8 @@ Do not rewrite historical predictions after seeing the rating.
 - A receipt validates structure and workflow identity. It does not make a false
   observation true; retain the actual reproduction command and output.
 - `candidate-scout.json` and `proof-receipt.json` are advisory quality evidence.
-  Deterministic preflight and the human GitHub write gate remain mandatory by
-  default; an explicit workflow-rule override may bypass those local gates for
-  one publish attempt, with the reason recorded in `workflow.json`.
+  Deterministic preflight and the guarded GitHub write gate remain mandatory by
+  default. An evidence-backed agent judgment may bypass only the documented
+  external-cause blockers for one publish attempt; an explicit workflow-rule
+  override may bypass broader local gates, with the reason recorded in
+  `workflow.json`.

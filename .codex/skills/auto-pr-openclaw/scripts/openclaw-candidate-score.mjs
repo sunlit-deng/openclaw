@@ -196,7 +196,7 @@ const receipt = {
   duplicateCheckPath: duplicateCheck ? duplicateCheckPath : null,
   flags,
   recommendations: [
-    ...(duplicateCheckApplicable && !duplicateCheck ? ["Run openclaw-duplicate-check before the human gate."] : []),
+    ...(duplicateCheckApplicable && !duplicateCheck ? ["Run openclaw-duplicate-check before the publication gate."] : []),
     ...(preflight?.status === "passed" ? [] : ["Run openclaw-preflight and fix blockers before publishing."]),
     ...(!candidateScout
       ? ["Run openclaw-candidate-scout before implementation for future candidates; this candidate has no structured early-screen receipt."]

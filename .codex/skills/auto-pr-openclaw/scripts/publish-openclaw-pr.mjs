@@ -7,6 +7,10 @@ import { spawnSync } from "node:child_process";
 import { ghEnv, publicAccount, resolveAccount } from "./lib/account-utils.mjs";
 import { validatePrBody } from "./lib/pr-body-validator.mjs";
 import { prUpdateRequired } from "./lib/publish-utils.mjs";
+import {
+  automaticPublicationProblems,
+  validateAgentPublicationJudgment,
+} from "./lib/publication-gate.mjs";
 import { validateWorkflowReceipt } from "./lib/receipt-utils.mjs";
 import { projectForWorkflow } from "../../../auto-pr-core/project-profile.mjs";
 
@@ -24,6 +28,9 @@ function parseArgs(argv) {
     failedPreflightBypassReason: "",
     allowWorkflowRuleBypass: false,
     workflowRuleBypassReason: "",
+    autoIfReady: false,
+    gateSummary: "",
+    agentJudgment: "",
   };
   for (let index = 0; index < argv.length; index += 1) {
     const arg = argv[index];
@@ -33,6 +40,10 @@ function parseArgs(argv) {
     }
     if (arg === "--allow-workflow-rule-bypass") {
       result.allowWorkflowRuleBypass = true;
+      continue;
+    }
+    if (arg === "--auto-if-ready") {
+      result.autoIfReady = true;
       continue;
     }
     const key = {
@@ -46,6 +57,8 @@ function parseArgs(argv) {
       "--repo": "repo",
       "--failed-preflight-bypass-reason": "failedPreflightBypassReason",
       "--workflow-rule-bypass-reason": "workflowRuleBypassReason",
+      "--gate-summary": "gateSummary",
+      "--agent-judgment": "agentJudgment",
     }[arg];
     if (!key) throw new Error(`Unknown argument: ${arg}`);
     result[key] = argv[++index] ?? "";
@@ -112,15 +125,29 @@ for (const key of ["workflow"]) {
     process.exit(2);
   }
 }
-if (!args.allowWorkflowRuleBypass) {
+if (args.allowWorkflowRuleBypass) {
+  if (!args.workflowRuleBypassReason.trim()) {
+    console.error("--workflow-rule-bypass-reason is required with --allow-workflow-rule-bypass");
+    process.exit(2);
+  }
+} else if (!args.autoIfReady) {
   for (const key of ["approvedHead", "approvedBodySha"]) {
     if (!args[key]) {
       console.error(`--${key.replace(/[A-Z]/g, (letter) => `-${letter.toLowerCase()}`)} is required`);
       process.exit(2);
     }
   }
-} else if (!args.workflowRuleBypassReason.trim()) {
-  console.error("--workflow-rule-bypass-reason is required with --allow-workflow-rule-bypass");
+}
+if (args.autoIfReady && args.allowWorkflowRuleBypass) {
+  console.error("--auto-if-ready cannot be combined with --allow-workflow-rule-bypass");
+  process.exit(2);
+}
+if (args.autoIfReady && args.allowFailedPreflight) {
+  console.error("--auto-if-ready cannot be combined with --allow-failed-preflight");
+  process.exit(2);
+}
+if (args.agentJudgment && !args.autoIfReady) {
+  console.error("--agent-judgment requires --auto-if-ready");
   process.exit(2);
 }
 
@@ -151,6 +178,94 @@ const bodySha = sha256(body);
 const currentHead = execute("git", ["rev-parse", "HEAD"], { cwd: repoPath });
 const currentBranch = execute("git", ["branch", "--show-current"], { cwd: repoPath });
 const remoteHeadRef = workflow.headRef || currentBranch;
+let automaticPublication = null;
+let agentJudgmentPath = null;
+let agentJudgmentSha256 = null;
+let agentBypassApproved = false;
+let agentBypassedBlockerIds = [];
+if (args.autoIfReady) {
+  const gateSummaryPath = path.resolve(args.gateSummary || path.join(path.dirname(workflowPath), "gate-summary.json"));
+  let gateSummary;
+  try {
+    gateSummary = JSON.parse(fs.readFileSync(gateSummaryPath, "utf8"));
+  } catch (error) {
+    console.error(`automatic publication blocked: cannot read gate summary ${gateSummaryPath}: ${error.message}`);
+    process.exit(1);
+  }
+  let agentJudgment = null;
+  let agentJudgmentProblems = [];
+  let agentJudgmentParsed = false;
+  if (args.agentJudgment) {
+    agentJudgmentPath = path.resolve(args.agentJudgment);
+    let rawJudgment;
+    try {
+      rawJudgment = fs.readFileSync(agentJudgmentPath, "utf8");
+      agentJudgmentSha256 = sha256(rawJudgment);
+      agentJudgment = JSON.parse(rawJudgment);
+      agentJudgmentParsed = true;
+    } catch (error) {
+      agentJudgmentProblems = [`cannot read agent publication judgment ${agentJudgmentPath}: ${error.message}`];
+    }
+    if (agentJudgmentParsed) {
+      const judgmentValidation = validateAgentPublicationJudgment({
+        judgment: agentJudgment,
+        summary: gateSummary,
+        workflow,
+        workflowPath,
+        gateSummaryPath,
+        repoPath,
+        currentHead,
+        bodySha,
+      });
+      agentJudgmentProblems = judgmentValidation.problems;
+      if (judgmentValidation.valid) {
+        agentBypassApproved = true;
+        agentBypassedBlockerIds = judgmentValidation.bypassedBlockerIds;
+      }
+    }
+  }
+  const gateProblems = automaticPublicationProblems({
+    summary: gateSummary,
+    workflow,
+    workflowPath,
+    gateSummaryPath,
+    repoPath,
+    currentHead,
+    currentBranch,
+    bodySha,
+    account,
+    pushRemote: args.pushRemote,
+    project,
+    agentBypassApproved,
+    agentBypassedBlockerIds,
+  });
+  gateProblems.push(...agentJudgmentProblems);
+  if (args.approvedHead && args.approvedHead !== gateSummary.headSha) {
+    gateProblems.push("--approved-head does not match the gate summary HEAD");
+  }
+  if (args.approvedBodySha && args.approvedBodySha !== gateSummary.prBody?.sha256) {
+    gateProblems.push("--approved-body-sha does not match the gate summary body hash");
+  }
+  if (gateProblems.length > 0) {
+    console.error("automatic publication blocked; human confirmation is required for these gate results:");
+    console.error(gateProblems.map((problem) => `- ${problem}`).join("\n"));
+    process.exit(1);
+  }
+  args.approvedHead = gateSummary.headSha;
+  args.approvedBodySha = gateSummary.prBody.sha256;
+  automaticPublication = {
+    status: "ready",
+    mode: agentBypassApproved ? "agent-judged-external-bypass" : "gate-ready",
+    gateSummaryPath,
+    gateSummaryGeneratedAt: gateSummary.generatedAt ?? null,
+    expectedRemoteHead: gateSummary.maintainer?.headRefOid ?? null,
+    agentJudgmentPath,
+    agentJudgmentSha256,
+    agentJudgmentAgent: agentJudgment?.agent ?? null,
+    agentJudgmentReason: agentJudgment?.reason ?? null,
+    agentBypassedBlockerIds,
+  };
+}
 args.approvedHead ||= currentHead;
 args.approvedBodySha ||= bodySha;
 
@@ -174,11 +289,14 @@ const preflightValidation = validateWorkflowReceipt(preflight, {
   validationBaseSha: workflow.validationBaseSha || workflow.baseSha,
 });
 const failedPreflightBypass = args.allowFailedPreflight && preflight?.status === "failed";
+const agentBypassedPreflight = agentBypassApproved && agentBypassedBlockerIds.includes("preflight-status");
 if (args.allowFailedPreflight && preflight?.status !== "failed") failures.push("--allow-failed-preflight only applies when preflight status is failed");
 if (args.allowFailedPreflight && !args.failedPreflightBypassReason.trim()) failures.push("--failed-preflight-bypass-reason is required with --allow-failed-preflight");
 if (preflight?.status !== "passed") {
-  if (failedPreflightBypass || workflowRuleBypass) {
-    bypassedChecks.push(`preflight status is ${preflight?.status ?? "missing"}`);
+  if (failedPreflightBypass || workflowRuleBypass || agentBypassedPreflight) {
+    bypassedChecks.push(agentBypassedPreflight
+      ? `preflight status is ${preflight?.status ?? "missing"} (agent judged external)`
+      : `preflight status is ${preflight?.status ?? "missing"}`);
   } else {
     failures.push(`preflight status is ${preflight?.status ?? "missing"}`);
   }
@@ -189,8 +307,8 @@ const preflightProblems = [
 ];
 for (const problem of preflightProblems) bypassableFailure(true, problem);
 if (workflow.branch !== currentBranch) failures.push("current branch does not match workflow.json");
-if (args.approvedHead !== currentHead) failures.push("current HEAD does not match the human-approved HEAD");
-if (args.approvedBodySha !== bodySha) failures.push("current PR body does not match the human-approved SHA-256");
+if (args.approvedHead !== currentHead) failures.push(`current HEAD does not match the ${args.autoIfReady ? "automatic gate" : "human-approved"} HEAD`);
+if (args.approvedBodySha !== bodySha) failures.push(`current PR body does not match the ${args.autoIfReady ? "automatic gate" : "human-approved"} SHA-256`);
 if (workflow.prBodySha256 !== bodySha) bypassableFailure(true, "PR body has changed since workflow validation");
 try {
   const bodyValidation = validatePrBody({
@@ -247,6 +365,9 @@ let prNumber = workflow.pr;
 let existing = null;
 if (prNumber) {
   existing = viewPr(prNumber, args.repo, accountEnv);
+  if (automaticPublication?.expectedRemoteHead && existing.headRefOid !== automaticPublication.expectedRemoteHead) {
+    throw new Error("existing PR remote HEAD changed since the automatic gate summary; regenerate the gate summary");
+  }
   if (existing.maintainerCanModify !== true) {
     if (workflowRuleBypass) bypassedChecks.push("maintainer_can_modify is not true before push");
     else throw new Error("maintainer_can_modify is not true; restore maintainer edit access before push");
@@ -347,6 +468,15 @@ if (workflowRuleBypass) {
     usedAt: new Date().toISOString(),
   };
 }
+if (automaticPublication) {
+  workflow.automaticPublication = {
+    ...automaticPublication,
+    status: "used",
+    approvedHead: args.approvedHead,
+    approvedBodySha256: args.approvedBodySha,
+    usedAt: new Date().toISOString(),
+  };
+}
 workflow.updatedAt = new Date().toISOString();
 fs.writeFileSync(workflowPath, `${JSON.stringify(workflow, null, 2)}\n`, "utf8");
 console.log(JSON.stringify({
@@ -356,6 +486,7 @@ console.log(JSON.stringify({
   bodySha256: workflow.remoteBodySha256,
   maintainerCanModify: remote.maintainerCanModify === true,
   prWriteSkipped,
+  automaticPublication: automaticPublication ? workflow.automaticPublication : null,
   failedPreflightBypass: failedPreflightBypass ? workflow.failedPreflightBypass : null,
   workflowRuleBypass: workflowRuleBypass ? workflow.workflowRuleBypass : null,
 }, null, 2));
