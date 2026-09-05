@@ -68,6 +68,73 @@ and configures GitHub authentication once afterward. Publishing still pushes
 and performs the mandatory final body/target verification, but skips the REST PATCH when
 both the already-read remote body and optional title are unchanged.
 
+### Preflight process topology
+
+Preflight previously started every child with `spawnSync`, so the network-bound
+`git fetch origin <defaultBranch>` blocked all local git reads and every heavy
+lane waited for the previous one. The fetch now starts inside a worker thread
+(`spawnSync` stays synchronous, so the main thread can keep running the rest of
+the flow) and is joined only when the freshness section needs
+`origin/<defaultBranch>`. The fetch overlaps the rev-parse, status, merge-base,
+diff, log, and identity reads.
+
+A handful of repeated spawns were removed:
+
+- The three `rev-parse` calls for HEAD, the validation base, and the observed
+  upstream ref became one batched call for the local pair plus one post-fetch
+  call.
+- `git branch --show-current` merged into `git status --porcelain --branch`.
+- `pnpm --version` and `pnpm store path` results are cached for 24 hours in
+  `outputs/.preflight-tool-cache.json`; both fall back to a live run on any
+  doubt.
+
+`OPENCLAW_PREFLIGHT_FETCH_TTL_MS` (default `0` = always fetch) reuses a recent
+`origin/<defaultBranch>` snapshot instead of re-fetching, recorded in
+`outputs/.preflight-fetch-state.json`. Freshness checks stay advisory, so a
+reused snapshot never blocks publication; it only means drift risk is observed
+slightly stale. Set it while iterating quickly on a branch, leave it off for
+publication-gating runs.
+
+### Preflight timing receipts
+
+Every preflight receipt now records `timing: { networkMs, gitMs, validationMs,
+otherMs, processSpawns, totalMs }` so future changes optimize observed
+bottlenecks instead of command counts. `networkMs` covers the fetch, `gitMs`
+all local git calls, and `validationMs` the heavy lanes (check, focused tests,
+type and extra lanes, Cargo/docs commands). Because overlapped lanes make the
+per-category sums exceed elapsed time, the receipt also records
+`wallNetworkMs`, `wallGitMs`, `wallValidationMs`, and `wallOtherMs`: the union
+of each category's active intervals, tracked with a depth counter (first enter
+stamps the start, last exit settles the elapsed time).
+
+## Heavy lane overlap (implemented)
+
+The check lane and focused-test lane now run concurrently. Each heavy lane
+command executes inside a worker thread (`startAsyncRun`) that spawns the child
+asynchronously, streams up to 1 MB of output, and reports back through a
+shared `SharedArrayBuffer` flag; the main thread joins lanes with
+`Atomics.wait`. When the check lane fails, the main thread sends an abort
+message and the worker kills the whole child process group (POSIX) before the
+test-lane result is recorded as the usual
+`skipped because the selected check lane failed` entry, so receipt semantics
+are unchanged. Lanes whose results are already cached are not started, and the
+git fetch overlap from the previous iteration keeps working through the same
+worker mechanism.
+
+## Failure diagnostics (implemented)
+
+Heavy-lane failures no longer force a full manual re-run for diagnosis. The
+main-thread `run()` helper accepts `captureFullOutput` and the worker keeps
+its untruncated capture (up to 1 MB); when any heavy check fails,
+`persistFailedCheckArtifacts` writes the complete stdout/stderr to
+`outputs/<issue>/<lane-slug>.failed.log` (one file per lane, overwritten on
+each run) and the receipt records on the failed check: `logPath`,
+`failureSummary` (up to 20 failure marker lines plus up to 20 distinct source
+file paths), and `repro` (`command` + `cwd`) so the exact failing command can
+be re-run verbatim if truly needed. Heavy checks keep their existing
+`includeOutput: false` receipt behavior — the receipt stays small, the log
+file carries the evidence.
+
 ## Next optimization priorities
 
 1. Generate `context-pack.md` automatically from in-memory preflight/gate data
@@ -76,8 +143,32 @@ both the already-read remote body and optional title are unchanged.
 2. Measure CodeGraph sync and dependency installation separately on real
    OpenClaw worktrees before running them concurrently. Both are disk-heavy, so
    parallel execution should be evidence-driven rather than assumed faster.
-3. Add per-phase timing totals to receipts (`networkMs`, `gitMs`, `validationMs`)
-   so future changes optimize observed bottlenecks instead of command counts.
+3. Upstream OpenClaw: add a fail-only replay mode to the focused test runner so
+   failure-driven iterations re-run just the failing tests.
+
+## Content-addressed cache keys and history hygiene (2026-09-04)
+
+Rebases and squashes change `headSha` constantly while the actual file contents
+usually stay identical, so the old commit-SHA-keyed heavy cache almost never hit
+(real-world hit rate: 6/128 receipts). The cache keys are now content
+addressed:
+
+- Check lane (lint/format/types): keyed on the SHA-256 of `git diff --binary
+  <base>...<head>` plus root config blobs (tsconfig/lint configs). Any rebase,
+  amend, or squash that preserves file contents reuses a passing check lane.
+- Focused tests: keyed on `HEAD^{tree}`. Content-preserving history rewrites
+  reuse passing tests; a rebase onto advanced main changes the tree and
+  correctly misses.
+- The whole-array `heavyFingerprint` (commit-SHA-keyed) remains as the
+  conservative fast path.
+
+Squashing before publication is now a first-class step:
+`scripts/openclaw-squash-pr-commits.mjs` collapses multi-commit branches when
+every commit between the pinned base and HEAD is authored and committed by the
+selected account (remote PR commits are verified by login via `gh`). The squash
+is tree-preserving, so the post-squash preflight runs entirely from cache.
+Iterate-and-fix loops are guided to `--profile targeted`, reserving the default
+`auto` escalation for the publication attempt.
 
 ## Verification
 
