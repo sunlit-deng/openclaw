@@ -1,0 +1,14 @@
+version = 1
+id = "openclaw-pr-2"
+kind = "cron"
+name = "OpenClaw 候选筛选与 PR 自动提交"
+prompt = "使用 $auto-pr-openclaw 技能，在当前项目的 OpenClaw 工作区中持续筛选 openclaw/openclaw 的本地或远程候选，并为符合条件的候选创建、验证和发布 contributor PR。每次运行都是一次独立任务；在开始、候选筛选、intake、实现、验证、门禁、发布和结束时输出简短进度，只输出候选/PR 编号、状态、阶段、结果和链接，不输出令牌或其他秘密。此任务只处理尚未发布的新候选，不修改或重复维护已经发布的 PR；另一个维护任务负责已有 PR。\n\n1. 每次运行开始时读取 workspace/openclaw/accounts.json 中的两个配置账号 sunlit 和 jjy（登录名分别为 sunlit-deng 与 RileyJJY）。所有 GitHub 读取、提交、推送和 PR 创建都必须使用对应账号的凭据；不要使用错误账号的默认 gh 会话，也不要输出凭据。若账号配置或认证不可用，停止并报告阻塞，不要改用未授权账号。\n2. 在候选实现前分别使用匹配账号的实时凭据统计 openclaw/openclaw 中作者为 sunlit-deng 和 RileyJJY 的 open PR 数量。账号选择规则严格为：sunlit 当前少于 20 个时优先选择 sunlit；只有 sunlit 已达到 20 个时才选择 jjy；只有两者都达到 20 个时才停止本轮新候选实现和发布并报告额度已满。为每个候选单独选择账号；每次创建 PR 前立即重新统计所选账号的 open PR 数量，必须仍然小于 20。若 sunlit 在本轮达到 20 个，后续候选才可切换到仍少于 20 个的 jjy；不得因并发、缓存、旧计数或竞态绕过 20 个上限。提交和 PR 创建后再次核对作者、head owner 和远端 PR 状态。\n3. 先按 auto-pr-openclaw 的 candidate mining 流程从当前 origin/main、开放 issue/PR 信号、近期合并模式和本地代码缺口中筛选候选。先刷新上游并确认当前工作区状态；候选必须有明确的用户或运维影响、可复现的行为缺口、聚焦且可验证的最小补丁形状。对每个具体候选先运行 openclaw-candidate-scout.sh，再进行重复/同形状 PR 检查和 candidate-score；丢弃重复、拥挤、猜测性默认值或上限、宽泛重构、无真实风险的样式改动以及无法获得真实行为证据的候选。候选排序优先考虑小范围、已有仓库模式或合并先例、可做 base/head 对照证明且合并风险低的候选。每轮最多成功发布一个新的 PR；若首选候选明确不适合或门禁阻塞，可按排序尝试下一个，但成功发布一个后结束本轮，剩余候选留待后续运行。\n4. 选定候选后，按技能创建 canonical per-issue 或 local-candidate worktree，记录选定账号 profile，并阅读仓库及相关目录的 AGENTS.md、CONTRIBUTING.md、issue/PR 上下文和 .github/pull_request_template.md。根据实际接受标准确定语义 PR 类型和标题，使用最小改动完成一个用户可见或运维问题；不要创建 issue 来凑链接，不要触碰用户未完成的本地改动，不要与已发布 PR 重复实现。\n5. 实现后运行聚焦测试、真实生产路径的 base/head proof、proof receipt、candidate score 和技能规定的 preflight。新 PR 发布前必须生成并检查 openclaw-gate-summary，确认提交作者与提交者身份都属于选定账号，HEAD/body/目标分支/远端 head/maintainer edit 权限和验证证据均绑定且有效。只有 automaticPublication.eligible=true 且 blockers 为空时，才使用技能指定的自动 publisher 创建并发布 ready-for-review PR，并在发布后核对远端 PR 的精确 body、head、作者和 maintainerCanModify。若所有剩余 blocker 都有技能允许的、证据充分的外部原因，才可写 agent judgment 后发布；测试、验证、重复、身份、权限、目标、head、body、dirty worktree、租约、范围或政策问题不得绕过。无人值守运行遇到不能证明为外部原因的 blocker 时，只报告并停止，不请求隐式批准，也不使用 broad workflow-rule bypass。\n6. 创建 PR 时使用选定账号的 `--account` 工作流和技能指定的 REST publisher，不手工拼接 git push 与 gh pr create/edit。新 PR 默认 ready for review；不要自动评论、创建 issue、请求 review 或请求 ClawSweeper re-review。若发布后发现 maintainerCanModify=false，立即停止后续动作并报告，不自动修复网页权限。\n7. 每轮结束汇总候选总数、跳过及原因、使用的账号和当时的 open PR 计数、已创建 PR、门禁阻塞和链接；绝不输出令牌、cookie、账号密钥或本机秘密路径。"
+status = "ACTIVE"
+rrule = "RRULE:FREQ=DAILY;BYHOUR=0,2,4,6,8,10,12,14,16,18,20,22;BYMINUTE=0;BYSECOND=0"
+model = "gpt-5.6-luna"
+reasoning_effort = "xhigh"
+execution_environment = "local"
+target = { type = "project", project_id = "local-526f53af4e6ce6c78b3525da65ec542e" }
+cwds = ["/Volumes/Sunlit/auto-pr"]
+created_at = 1788420194114
+updated_at = 1788534219823

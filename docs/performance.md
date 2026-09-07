@@ -135,6 +135,37 @@ be re-run verbatim if truly needed. Heavy checks keep their existing
 `includeOutput: false` receipt behavior — the receipt stays small, the log
 file carries the evidence.
 
+## Cold-start typecheck elimination (2026-09-05)
+
+2026-09-05 receipts exposed the remaining dominant cost: the first targeted
+preflight in a freshly created worktree paid a cold `tsgo:core:test` shard
+typecheck of 587 s (issue-127809) and 1201 s (issue-138620, which also
+included a 689 s cold type-aware oxlint pass on two files), while the focused
+test lane itself stayed fast (2-45 s). tsgo lanes are already incremental, but
+their `.artifacts/tsgo-cache/*.tsbuildinfo` snapshots live per worktree, so
+every new worktree rebuilt from scratch. The tsbuildinfo format stores source
+paths relative to the tsbuildinfo file, so caches are portable across
+worktrees.
+
+Fixes:
+
+1. `seed-openclaw-tsgo-cache.sh` copies the newest sibling worktree's
+   tsbuildinfo snapshot into a freshly created worktree. tsgo re-validates the
+   snapshot against current file hashes and rebuilds only stale files; a fully
+   stale snapshot degrades to a normal full build, so seeding is
+   correctness-safe. Both `new-openclaw-worktree.sh` and
+   `prepare-openclaw-pr-worktree.mjs` call it right after `git worktree add`.
+2. Fixed a targeted-planner bug found via the pr-138819 failed receipt: the
+   extensions surface was mapped to the nonexistent
+   `config/tsconfig/oxlint.extensions.json` (guaranteeing a failed lint lane
+   on every extensions-surface PR after wasting the run). Upstream's own
+   constant is `extensions/tsconfig.json`; the planner now matches it.
+
+Remaining observed bottlenecks: cold type-aware oxlint (up to 689 s on two
+files, likely CPU-starved while tsgo shards run concurrently) and the
+`tsgo:core:test` shard wall time even when warm — both live inside the
+upstream targeted check script and would need upstream changes.
+
 ## Next optimization priorities
 
 1. Generate `context-pack.md` automatically from in-memory preflight/gate data

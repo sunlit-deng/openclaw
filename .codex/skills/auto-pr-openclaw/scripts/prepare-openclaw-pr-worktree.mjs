@@ -98,6 +98,17 @@ execute("git", ["switch", "main"], { cwd: mainRepo });
 execute("git", ["worktree", "add", worktreePath, localBranch], { cwd: mainRepo });
 execute("git", ["config", "user.name", account.username], { cwd: worktreePath });
 execute("git", ["config", "user.email", account.email], { cwd: worktreePath });
+const seedResult = spawnSync(
+  path.join(scriptDir, "seed-openclaw-tsgo-cache.sh"),
+  ["--repo-path", worktreePath, "--root", root],
+  { encoding: "utf8", shell: false },
+);
+if (seedResult.status !== 0) {
+  process.stderr.write(`Warning: tsgo cache seeding failed; the first preflight typecheck will run cold.\n`);
+  process.stderr.write(String(seedResult.stderr || seedResult.stdout || "").slice(-2000));
+} else if (seedResult.stdout.trim()) {
+  process.stdout.write(seedResult.stdout);
+}
 executeOptional(path.join(scriptDir, "ensure-openclaw-codegraph.sh"), [
   "--repo-path", worktreePath,
   "--main-repo", mainRepo,

@@ -1,0 +1,34 @@
+{
+  "schemaVersion": 1,
+  "candidate": "accept boolean launchctl print-disabled states on older macOS",
+  "mergeFit": "strong",
+  "expectedFiles": [
+    "src/daemon/launchd-runtime.ts",
+    "src/daemon/launchd.test.ts"
+  ],
+  "currentMainRepro": {
+    "status": "passed",
+    "command": "pnpm exec tsx -e 'import { parseLaunchAgentEnabled } from \"./src/daemon/launchd-runtime.ts\"; parseLaunchAgentEnabled(\"\\\"ai.openclaw.gateway\\\" => false\", \"ai.openclaw.gateway\")'",
+    "observation": "Current main throws the unrecognized-state error for the boolean false form emitted by older macOS launchctl."
+  },
+  "canonicalPrecedent": {
+    "kind": "existing-launchctl-state-contract",
+    "reference": "src/daemon/launchd-runtime.ts: parseLaunchAgentEnabled already maps launchctl => enabled/disabled states and defaults missing entries to enabled."
+  },
+  "comparableProof": {
+    "status": "feasible",
+    "entrypoint": "parseLaunchAgentEnabled in the production launchd runtime module",
+    "command": "pnpm exec tsx -e 'import { parseLaunchAgentEnabled } from \"./src/daemon/launchd-runtime.ts\"; console.log(parseLaunchAgentEnabled(\"\\\"ai.openclaw.gateway\\\" => false\", \"ai.openclaw.gateway\"))'",
+    "input": "The same launchctl line for the selected service label, using => false on base and head.",
+    "boundary": "The production launchd runtime parser boundary; native launchctl is unavailable on this host.",
+    "negativeControl": "The existing unexpected state remains rejected, proving malformed output is still fail-closed."
+  },
+  "policy": {
+    "introducesNewPolicy": false,
+    "unresolvedChoices": []
+  },
+  "duplicateRisk": { "status": "clear" },
+  "mainOverlap": { "status": "none" },
+  "dependencyChurn": false,
+  "broadRefactor": false
+}

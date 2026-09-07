@@ -39,6 +39,15 @@ Do active coding in `worktrees/issue-<number>`. Existing PR maintenance uses
 `worktrees/pr-<number>` with its fork owner and remote head recorded separately
 in `workflow.json`.
 
+For resumed maintenance, compare the saved starting remote SHA, current remote
+SHA, local commits, and dirty files before re-running intake. A locally repaired
+HEAD is expected to differ from the remote. Preserve that progress. A dirty
+main checkout does not require another clone: keep its files untouched and use
+non-checkout Git operations and isolated worktrees. Inspect any helper refusal
+before recovery. If a recovery worktree is necessary, preserve the old branch,
+patch and required untracked artifacts, reuse this clone/store, and record the
+recovery path. Do not create a dated full workspace and package store each run.
+
 ## CodeGraph
 
 Each active worktree keeps its own `.codegraph` database. Do not symlink or
@@ -122,6 +131,8 @@ It reads the PR through `gh pr view`, checks out its actual fork head through
 reports whether the PR already contains the observed `origin/main`. That SHA is
 pinned as the validation base. Do not rebase merely because main moves again;
 rebase for a real conflict, risky file overlap, or an explicit up-to-date rule.
+Scheduled review-driven code repair has that explicit up-to-date rule at its
+start, before new implementation begins.
 
 For an existing worktree:
 

@@ -162,6 +162,12 @@ git -C "$main_repo" worktree add -b "$branch" "$worktree_path" "$base_sha"
 git -C "$worktree_path" config user.name "$OPENCLAW_ACCOUNT_USERNAME"
 git -C "$worktree_path" config user.email "$OPENCLAW_ACCOUNT_EMAIL"
 
+if ! "$script_dir/seed-openclaw-tsgo-cache.sh" \
+  --repo-path "$worktree_path" \
+  --root "$root"; then
+  echo "Warning: tsgo cache seeding failed; the first preflight typecheck will run cold." >&2
+fi
+
 if ! "$script_dir/ensure-openclaw-codegraph.sh" \
   --repo-path "$worktree_path" \
   --main-repo "$main_repo" \

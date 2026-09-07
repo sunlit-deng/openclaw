@@ -103,7 +103,7 @@ export function targetedValidationPlan(files, projectInput = "openclaw") {
   const surface = decision.surfaces[0];
   if (lintable.length > 0) {
     const lintArgs = surface === "extensions"
-      ? ["scripts/run-oxlint.mjs", "--tsconfig", "config/tsconfig/oxlint.extensions.json", ...lintable]
+      ? ["scripts/run-oxlint.mjs", "--tsconfig", "extensions/tsconfig.json", ...lintable]
       : surface === "scripts"
         ? ["scripts/run-oxlint.mjs", "--tsconfig", "config/tsconfig/oxlint.scripts.json", ...lintable]
         : surface === "tests"

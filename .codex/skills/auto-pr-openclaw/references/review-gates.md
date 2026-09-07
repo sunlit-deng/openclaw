@@ -60,7 +60,9 @@ is blocked.
 
 Fetch once, pin the exact target SHA, and run `git rebase <target-sha>`. If Git
 reports a conflict, stop immediately. Do not resolve conflicts under this path;
-conflict resolution returns to normal validation and the Human Gate.
+conflict resolution switches to the scoped conflict-resolution path below.
+An existing-PR maintenance request supplies publication authorization once
+that path and its publication gate pass.
 
 Run the lightweight receipt first:
 
@@ -165,9 +167,16 @@ The finish receipt is allowed only when all of these invariants hold:
 `--profile conflict` requires that current receipt and repeats no pnpm,
 dependency-fingerprint, lint, type, or test lane. It still checks current Git
 state, identity, PR body/proof, and merge compatibility. If any invariant
-fails, stop and show the exact reason and expected heavier lanes. Never start
-`auto`, `targeted`, `changed`, broad types, or affected-test expansion until
-the user explicitly approves that time/cost escalation.
+fails, stop publication and inspect the exact failed check and patch difference.
+A failure does not forbid diagnosis or an evidence-backed repair within the
+authorized scope: preserve the failed receipt and original patch, correct the
+identified error, and regenerate the receipt. Do not expand scope just to make
+equivalence pass. If a scope or semantic refusal remains after bounded repair,
+report the exact decision needed and expected heavier lanes; a local tooling
+failure remains a tooling blocker. Never start `auto`, `targeted`, `changed`,
+broad types, or affected-test expansion until the user explicitly approves
+that time/cost escalation. For unattended retry and resume behavior, use
+`scheduled-maintenance.md`.
 
 ## Maintainer Edit and Secrets Gate
 
