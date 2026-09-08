@@ -277,6 +277,19 @@ Prune dependency directories from clean inactive worktrees:
   --prune-node-modules --older-than-days 14 --yes
 ```
 
+Resolve mergeability before scheduled existing-PR selection:
+
+```bash
+node ./.codex/skills/auto-pr-openclaw/scripts/openclaw-pr-mergeability.mjs \
+  --root workspace/openclaw \
+  --output ~/.codex/automations/openclaw-pr/mergeability-report.json
+```
+
+Treat `scanStatus: "partial"` as an incomplete scan, preserve its `errors`,
+and never interpret failed or omitted PRs as clean. Known conflicts may be
+selected from a partial report; if none are known, retry the scan instead of
+reporting that there are no conflicts.
+
 Run read-only duplicate/canonical searches and candidate scoring:
 
 ```bash

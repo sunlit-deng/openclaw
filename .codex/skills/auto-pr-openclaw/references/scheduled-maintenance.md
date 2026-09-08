@@ -10,6 +10,22 @@ new PRs, comments, review requests, or gate bypasses unless explicitly stated.
   reviews, unresolved inline threads, changed hunks, and failed CI logs only
   for the selected PR. Include edited comments and check reruns when detecting
   changes; a comment count or PR `updatedAt` alone is not a reliable cursor.
+- Resolve real mergeability before ranking candidates: a bulk
+  `gh pr list --json mergeable` returns `UNKNOWN` for every PR because GitHub
+  computes it asynchronously, so a list alone can never reveal a conflict.
+  Run `scripts/openclaw-pr-mergeability.mjs --root <accounts root>
+  --output <automation-dir>/mergeability-report.json` once; it queries per
+  profile and resolves each PR's `mergeable` through bounded concurrent
+  per-PR view retries, printing `conflicting`, `unknown`, and `mergeable`
+  groups. Only a resolved `CONFLICTING` (or `DIRTY` merge state) counts as a
+  real conflict input for selection; PRs still `UNKNOWN` after the retries are
+  neither conflicts nor clean and stay out of conflict priority until
+  resolved. A report with `scanStatus: "partial"` is not a no-conflict result:
+  keep its `errors`, persist the report, and do not treat failed or omitted PRs
+  as clean. Known conflicts in a partial report may still be selected, but if
+  no known conflict is available, record the scan as externally blocked and
+  retry it rather than reporting `no-action`. Record the resolved state and
+  scan status per PR in the maintenance index.
 - Work on a real conflict, actionable reviewer finding, PR-caused CI failure,
   or specifically requested missing proof. A non-Platinum grade alone is not
   a repair request. Check older findings against current code before discarding
@@ -17,6 +33,11 @@ new PRs, comments, review requests, or gate bypasses unless explicitly stated.
 - Prefer finishing a safely resumable validated change, then concrete P1s,
   real conflicts, and remaining actionable findings. Within the same priority,
   use oldest last-attempt time so one newer PR cannot starve the rest.
+- A resumable workflow may preempt conflict work only when it has a concrete
+  next step and the current run makes material progress. If its head, finding,
+  blocker, and next action are unchanged, perform only a lightweight recheck
+  and allow the oldest resolved conflict to be selected; do not let an
+  unchanged `in-progress` record permanently preempt the conflict queue.
 - Default to one PR through publication per run. If it has a documented hard
   blocker, select at most one alternative. Do not deeply analyze every PR
   before starting the selected repair.
