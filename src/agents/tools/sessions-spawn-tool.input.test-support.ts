@@ -4,16 +4,24 @@ import { finalizeAgentToolAvailability } from "../agent-tool-availability.js";
 import { createAgentsWaitTool } from "./agents-wait-tool.js";
 import type { InProcessGatewayCaller } from "./in-process-gateway.js";
 import type { createSessionsSpawnTool as SpawnToolFactory } from "./sessions-spawn-tool.js";
+import { registerSessionsSpawnVisibleThinkingTests } from "./sessions-spawn-visible-thinking.test-support.js";
 
 export function registerSessionsSpawnInputTests({
   createTool,
   registerAcpBackendForTest,
   mockGateway,
+  mockCallArg,
   mocks: hoisted,
 }: {
   createTool: typeof SpawnToolFactory;
   registerAcpBackendForTest: () => void;
   mockGateway: (response: Record<string, unknown>) => InProcessGatewayCaller;
+  mockCallArg: (
+    mock: unknown,
+    callIndex: number,
+    argIndex: number,
+    label: string,
+  ) => Record<string, unknown>;
   mocks: {
     spawnSubagentDirectMock: Mock;
     spawnAcpDirectMock: Mock;
@@ -31,6 +39,12 @@ export function registerSessionsSpawnInputTests({
       );
     },
   );
+
+  registerSessionsSpawnVisibleThinkingTests({
+    createTool,
+    inProcessCreationMock: hoisted.inProcessCreationMock,
+    mockCallArg,
+  });
 
   it.each([
     ["private ACP", { completionTarget: "parent", runtime: "acp" }, /completionTarget/],
