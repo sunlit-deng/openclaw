@@ -65,6 +65,7 @@ async function resolveEquivalentMessagingToolTarget(
   }
   const bindingRoute = resolveAgentRoute({
     cfg: params.cfg,
+    // SAFETY: the registered plugin lookup above returned this channel's route resolver.
     channel: channel as ChannelId,
     defaultAgentId: agentId,
     accountId,

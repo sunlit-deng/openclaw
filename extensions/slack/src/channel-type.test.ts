@@ -42,11 +42,15 @@ const {
   createSlackWebClient: createSlackWebClientMock,
 } = slackClientMocks;
 
-vi.mock("./client.js", () => ({
-  createSlackLookupClient: slackClientMocks.createSlackLookupClient,
-  createSlackReadClient: slackClientMocks.createSlackReadClient,
-  createSlackWebClient: slackClientMocks.createSlackWebClient,
-}));
+vi.mock("./client.js", async () => {
+  const actual = await vi.importActual<typeof import("./client.js")>("./client.js");
+  return {
+    ...actual,
+    createSlackLookupClient: slackClientMocks.createSlackLookupClient,
+    createSlackReadClient: slackClientMocks.createSlackReadClient,
+    createSlackWebClient: slackClientMocks.createSlackWebClient,
+  };
+});
 
 describe("resolveSlackChannelType", () => {
   beforeEach(() => {

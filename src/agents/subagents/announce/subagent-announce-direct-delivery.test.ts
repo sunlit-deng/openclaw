@@ -1,6 +1,6 @@
 import { describe, expect, it, onTestFinished, vi } from "vitest";
-import { createSessionWorkStartChangedError } from "../../../config/sessions/lifecycle.js";
 import type { ChannelMessagingAdapter } from "../../../channels/plugins/types.public.js";
+import { createSessionWorkStartChangedError } from "../../../config/sessions/lifecycle.js";
 import * as sessionEntryWorker from "../../../config/sessions/session-entry-read-runtime.js";
 import type { SessionEntry } from "../../../config/sessions/types.js";
 import type { OpenClawConfig } from "../../../config/types.openclaw.js";
