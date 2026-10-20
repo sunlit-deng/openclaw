@@ -132,8 +132,21 @@ export async function completeReplyAgentRun(input: {
   if (trailingPluginStatusPayload) {
     finalPayloads = [...finalPayloads, trailingPluginStatusPayload];
   }
+  const sourceReplyPolicy = resolveSourceReplyPolicy({
+    cfg,
+    sessionCtx,
+    sessionEntry: activeSessionEntry,
+    sessionKey,
+    runtimePolicySessionKey,
+    opts,
+  });
   if (responseUsageLine) {
-    finalPayloads = appendUsageLine(finalPayloads, responseUsageLine);
+    finalPayloads = appendUsageLine(finalPayloads, responseUsageLine, {
+      completedSourceReply:
+        sourceReplyPolicy.sourceReplyDeliveryMode === "message_tool_only" &&
+        completedSourceReplyDelivery &&
+        prepared.replyCompletion.outcome === "delivered",
+    });
   }
   if (isHookBlockedRun) {
     finalPayloads = markBeforeAgentRunBlockedPayloads(finalPayloads);
@@ -151,14 +164,6 @@ export async function completeReplyAgentRun(input: {
       isStrandedReplyRetryRun ||
       runResult.meta?.terminalReply !== undefined)
   ) {
-    const sourceReplyPolicy = resolveSourceReplyPolicy({
-      cfg,
-      sessionCtx,
-      sessionEntry: activeSessionEntry,
-      sessionKey,
-      runtimePolicySessionKey,
-      opts,
-    });
     const assistantFinalText = normalizeAssistantFinalDeliveryText(
       runResult.meta?.finalAssistantVisibleText ?? rawAssistantText ?? "",
     );

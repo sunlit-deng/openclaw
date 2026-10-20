@@ -10,6 +10,7 @@ import {
 import {
   copyReplyPayloadMetadata,
   getReplyPayloadMetadata,
+  markReplyPayloadForSourceSuppressionDelivery,
   setReplyPayloadMetadata,
 } from "../reply-payload.js";
 import { resolveEffectiveResponseUsage } from "../thinking.js";
@@ -95,8 +96,31 @@ export const resolveResponseUsageLine = (params: {
   return rendered || formatted || undefined;
 };
 
-export const appendUsageLine = (payloads: ReplyPayload[], line: string): ReplyPayload[] => {
-  const index = payloads.findLastIndex((payload) => payload?.text);
+export const appendUsageLine = (
+  payloads: ReplyPayload[],
+  line: string,
+  options?: { completedSourceReply?: boolean },
+): ReplyPayload[] => {
+  const sourceReplyIndex = options?.completedSourceReply
+    ? payloads.findLastIndex(
+        (payload) =>
+          payload.text &&
+          getReplyPayloadMetadata(payload)?.sourceReplyTranscriptMirror &&
+          getReplyPayloadMetadata(payload)?.deliverDespiteSourceReplySuppression === true,
+      )
+    : -1;
+  if (options?.completedSourceReply && sourceReplyIndex === -1) {
+    // A confirmed tool reply is already visible; decorate its completion without
+    // making any accompanying private assistant text eligible for delivery.
+    const footer = markReplyPayloadForSourceSuppressionDelivery({
+      text: line,
+      isStatusNotice: true,
+    });
+    setReplyPayloadMetadata(footer, { responseUsageLine: line });
+    return [...payloads, footer];
+  }
+  const index =
+    sourceReplyIndex >= 0 ? sourceReplyIndex : payloads.findLastIndex((payload) => payload?.text);
   if (index === -1) {
     return [...payloads, { text: line, isStatusNotice: true }];
   }
